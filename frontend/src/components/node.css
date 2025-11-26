@@ -1,0 +1,10 @@
+.node { position: absolute; background: #161a20; border: 1px solid #2a2e39; border-radius: 6px; min-width: 220px; cursor: move; z-index: 10; }
+.node-header { padding: 6px 10px; background: #131722; border-bottom: 1px solid #2a2e39; border-radius: 6px 6px 0 0; display:flex; align-items:center; gap:6px; }
+.node-icon { width: 20px; height: 20px; border-radius: 4px; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+.node-title { flex:1; font-size:12px; font-weight:600; color:#f8f9fa; }
+.node-body { padding:8px 10px; display:flex; justify-content:space-between; gap:12px; }
+.node-inputs, .node-outputs { display:flex; flex-direction:column; gap:4px; }
+.node-port { font-size:10px; color:#787b86; display:flex; align-items:center; gap:6px; position:relative; padding:2px 0; }
+.port-dot { width:10px; height:10px; border-radius:50%; background:#2a2e39; border:2px solid #787b86; }
+.node-delete { width:24px; height:24px; border-radius:4px; background:transparent; border:1px solid #2a2e39; color:#787b86; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.node.selected { border-color:#2962ff; }
