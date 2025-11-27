@@ -2,6 +2,8 @@ import requests
 import datetime
 import os
 
+//
+
 def get_alpaca_prices(symbol, start, end, timeframe='1Hour', api_key=None, api_secret=None):
     """
     Fetch historical close prices from Alpaca Markets API.
