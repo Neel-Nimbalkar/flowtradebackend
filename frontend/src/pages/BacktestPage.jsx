@@ -43,7 +43,9 @@ const BacktestPage = () => {
     }
     const workflow = (fileData.blocks || []).map(b => ({ id: b.id || b.block_id || 0, type: b.type || b.block_type || b.name, params: (b.outputs && b.outputs.params) || {} }));
     try {
-      const resp = await fetch('http://localhost:5000/execute_workflow_v2', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol, timeframe, days, workflow }) });
+      const alpacaKeyId = localStorage.getItem('alpaca_key_id') || null;
+      const alpacaSecretKey = localStorage.getItem('alpaca_secret_key') || null;
+      const resp = await fetch('http://localhost:5000/execute_workflow_v2', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol, timeframe, days, workflow, alpacaKeyId, alpacaSecretKey }) });
       const data = await resp.json();
       if (data.error) throw new Error(data.error);
       setResults(data);

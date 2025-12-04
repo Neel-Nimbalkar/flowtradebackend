@@ -3,7 +3,7 @@ import React, { useRef, useEffect, useState } from 'react';
 // Lightweight canvas line chart. Expects `data` as array of numbers or objects with `v`.
 // Adds a small pulsating marker on the latest point when new data arrives to visually
 // indicate incoming updates without heavy animation work.
-const LineChart = ({ data = [], height = 140, stroke = '#5e8cff', fill = true, grid = true, highlightNew = true, showXAxis = false }) => {
+const LineChart = ({ data = [], height = 140, stroke = '#5e8cff', fill = true, grid = true, highlightNew = true, showXAxis = false, overlays = [] }) => {
   const ref = useRef(null);
   const prevLastRef = useRef(null);
   const animRef = useRef(null);
@@ -169,6 +169,44 @@ const LineChart = ({ data = [], height = 140, stroke = '#5e8cff', fill = true, g
       ctx.arc(last.x, last.y, 3, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
+    }
+
+    // Draw overlays (each overlay has series: [{t,v}] or array of numbers mapped similarly)
+    try {
+      if (Array.isArray(overlays) && overlays.length) {
+        overlays.forEach((ov) => {
+          const s = ov.series || [];
+          if (!s || s.length === 0) return;
+          // map overlay points to same x/y using main `min`, `range`, and time mapping
+          ctx.beginPath();
+          let first = true;
+          s.forEach(pt => {
+            const tVal = pt.t || null;
+            let x = 0;
+            if (hasTimestamps) {
+              const tpos = Number.isFinite(tVal) ? tVal : null;
+              const tnorm = tpos != null ? (tpos - (items[0].t || items[0].t || 0)) : null;
+              const minT = Math.min(...items.map(it=>it.t||0));
+              const maxT = Math.max(...items.map(it=>it.t||0));
+              const tRange = Math.max(1, maxT - minT);
+              const tUsed = Number.isFinite(pt.t) ? pt.t : minT;
+              x = ((tUsed - minT) / tRange) * w;
+            } else {
+              // align by index if no timestamps: find best index by nearest time using point count
+              const idx = Math.floor((s.indexOf(pt) / Math.max(1, s.length - 1)) * (points.length - 1));
+              x = points[Math.max(0, Math.min(points.length - 1, idx))].x;
+            }
+            const y = h - ((pt.v - min) / range) * h;
+            if (first) { ctx.moveTo(x, y); first = false; } else ctx.lineTo(x, y);
+          });
+          ctx.strokeStyle = ov.stroke || '#ff8a00';
+          ctx.lineWidth = 1.6;
+          ctx.setLineDash([]);
+          ctx.stroke();
+        });
+      }
+    } catch (e) {
+      // guard against overlay drawing errors
     }
 
     // If highlightNew, detect last value change and kick off a pulse

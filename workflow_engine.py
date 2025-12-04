@@ -320,6 +320,18 @@ class WorkflowEngine:
             block_time = (time.time() - block_start) * 1000
             status = BlockStatus.PASSED if passed else BlockStatus.FAILED
 
+            # Detailed trace logging for each block to aid debugging of signals
+            try:
+                # pick a small subset of latest_data that's relevant and safe to print
+                keys_to_log = ['close', 'price', 'rsi', 'ema', 'macd_hist', 'vol_spike', 'boll_upper', 'boll_middle', 'boll_lower', 'stoch_k', 'vwap']
+                snapshot = {k: latest_data.get(k) for k in keys_to_log if k in latest_data}
+                print(f"[TRACE] Block #{block_id} type={block_type} params={params} -> passed={passed} message={message} data={snapshot}")
+            except Exception:
+                try:
+                    print(f"[TRACE] Block #{block_id} type={block_type} params={params} -> passed={passed} message={message}")
+                except Exception:
+                    pass
+
             # Collect relevant latest_data for this block type
             relevant_keys = set(params.keys()) | set([block_type])
             block_data = {

@@ -1,6 +1,6 @@
 import React from 'react';
 
-const Toolbar = ({ onSave, onLoad, onExport, onImport, onClear, onOrganize, onRun, onSample, onToggleMonitor, onRunToggle, onBacktest, liveRunning }) => {
+const Toolbar = ({ onSave, onLoad, onExport, onImport, onClear, onOrganize, onRun, onSample, onToggleMonitor, onRunToggle, onBacktest, liveRunning, extraBefore = null }) => {
   const callOrLegacy = (id, cb) => () => {
     if (cb) return cb();
     const el = document.getElementById(id);
@@ -13,6 +13,7 @@ const Toolbar = ({ onSave, onLoad, onExport, onImport, onClear, onOrganize, onRu
 
   return (
     <div className="toolbar">
+      {extraBefore}
       <button className="toolbar-btn" id="organizeBtn" onClick={callOrLegacy('organizeBtn', onOrganize)} title="Auto-arrange blocks">Organize</button>
       <button className="toolbar-btn" id="clearBtn" onClick={callOrLegacy('clearBtn', onClear)}>Clear</button>
       <button className="toolbar-btn" id="saveBtn" onClick={callOrLegacy('saveBtn', onSave)} title="Save workflow">Save</button>
@@ -22,11 +23,12 @@ const Toolbar = ({ onSave, onLoad, onExport, onImport, onClear, onOrganize, onRu
       <button className="toolbar-btn" id="exportBtn" onClick={callOrLegacy('exportBtn', onExport)}>Export</button>
       <button className="toolbar-btn" id="backTestingBtn" onClick={callOrLegacy('backTestingBtn', onBacktest)} title="Back Testing">Back Testing</button>
       <button className="toolbar-btn" id="monitorBtn" onClick={callOrLegacy('monitorBtn', onToggleMonitor)} title="Open Monitor">Monitor</button>
-      <button
-        className={`toolbar-btn primary ${liveRunning ? 'live' : ''}`}
-        id="runBtn"
-        onClick={onRunToggle ? onRunToggle : callOrLegacy('runBtn', onRun)}
-      >{liveRunning ? 'Stop' : 'Run Strategy'}</button>
+      <div className="toolbar-run">
+        <label id="runBtn" className={`run-switch ${liveRunning ? 'on' : 'off'}`} title="Toggle continuous run">
+          <input aria-label="Run Strategy" type="checkbox" checked={!!liveRunning} onChange={() => { if (onRunToggle) onRunToggle(); else callOrLegacy('runBtn', onRun)(); }} />
+          <span className="slider" />
+        </label>
+      </div>
     </div>
   );
 };

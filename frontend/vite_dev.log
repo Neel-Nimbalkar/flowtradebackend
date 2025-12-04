@@ -1,0 +1,31 @@
+
+> frontend@1.0.0 dev
+> vite --port 5174 --host 127.0.0.1
+
+
+  [32m[1mVITE[22m v7.2.4[39m  [2mready in [0m[1m206[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m5174[22m/[39m
+[2m[32m  ➜[39m[22m[2m  press [22m[1mh + enter[22m[2m to show help[22m
+[2m9:47:16 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/WorkflowBuilder.jsx[22m
+[2m9:47:21 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/WorkflowBuilder.jsx[22m
+[2m9:51:20 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/WorkflowBuilder.jsx[22m
+[2m10:12:22 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mpage reload [39m[2msrc/WorkflowBuilder.jsx[22m
+[2m10:12:36 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/WorkflowBuilder.jsx[22m
+[2m10:12:44 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/StrategyMonitor/StrategyMonitorDrawer.jsx[22m
+[2m10:12:54 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/StrategyMonitor/MonitorTabs.jsx[22m
+[2m10:13:06 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/StrategyMonitor/LiveMonitorTab.jsx[22m
+[2m10:13:17 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/StrategyMonitor/LineChart.jsx[22m
+[2m10:13:47 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/StrategyMonitor/MonitorTabs.jsx[22m
+[2m10:13:47 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/WorkflowBuilder.jsx[22m
+[2m10:13:47 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/StrategyMonitor/StrategyMonitorDrawer.jsx[22m
+[2m10:13:47 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/StrategyMonitor/LiveMonitorTab.jsx[22m
+[2m10:13:47 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/components/StrategyMonitor/LineChart.jsx[22m
+[2m11:06:36 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /execute_workflow_v2[39m
+Error: connect ECONNREFUSED 127.0.0.1:5000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2m11:06:41 PM[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /execute_workflow_v2[39m
+Error: connect ECONNREFUSED 127.0.0.1:5000
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[2m11:11:57 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/workflow_builder.css[22m
+[2m11:18:12 PM[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/workflow_builder.css[22m

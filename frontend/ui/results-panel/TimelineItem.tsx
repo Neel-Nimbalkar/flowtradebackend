@@ -21,7 +21,29 @@ export const TimelineItem: React.FC<Props> = ({ item, index }) => {
 
       <div className="mb-3 rounded-md border border-slate-700/40 bg-gradient-to-br from-slate-800/60 to-slate-900/60 p-3">
         <div className="flex items-center gap-2">
-          <div className="text-base leading-none">{item.emoji}</div>
+          <div className="text-base leading-none">
+            {(() => {
+              // Map block type to an icon in /icons
+              const type = (item.raw && (item.raw as any).block_type) || item.type || item.name || '';
+              const map: Record<string, string> = {
+                'rsi': '/icons/bolt.svg',
+                'ema': '/icons/bolt.svg',
+                'sma': '/icons/bolt.svg',
+                'macd': '/icons/bolt.svg',
+                'bollinger': '/icons/bolt.svg',
+                'vwap': '/icons/bolt.svg',
+                'stochastic': '/icons/bolt.svg',
+                'obv': '/icons/drop.svg',
+                'volspike': '/icons/drop.svg',
+                'ai_agent': '/icons/ai.svg',
+                'and': '/icons/plus.svg',
+                'or': '/icons/plus.svg',
+                'not': '/icons/plus.svg'
+              };
+              const icon = map[type] || '/icons/puzzle.svg';
+              return <img src={icon} alt={item.name} className="h-5 w-5 rounded-full" />;
+            })()}
+          </div>
           <div className="font-semibold text-slate-200 text-sm">{index + 1}. {item.name}</div>
           <div className="ml-auto text-xs rounded-md px-2 py-0.5 border border-slate-700/40 text-slate-400">
             {formatMs(item.executionTimeMs)}

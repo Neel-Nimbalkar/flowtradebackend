@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import blockDefs from '../blockDefs';
+import Icon from './Icon';
+import categoryMeta from '../categoryMeta';
+import blockCategoryMap from '../blockCategoryMap';
 
 const blocks = [
-  { category: 'Templates', items: [
-    { type: 'template-golden-cross', name: 'Golden Cross', desc: '50/200 SMA crossover', icon: '🔀' },
-    { type: 'template-rsi-volume', name: 'RSI + Volume Spike', desc: 'Oversold with volume confirmation', icon: '🔀' }
+    { category: 'Templates', items: [
+    { type: 'template-golden-cross', name: 'Golden Cross', desc: '50/200 SMA crossover', icon: 'puzzle' },
+    { type: 'template-rsi-volume', name: 'RSI + Volume Spike', desc: 'Oversold with volume confirmation', icon: 'puzzle' }
   ]},
   { category: 'Configuration', items: [
-    { ...blockDefs.alpaca_config, type: 'alpaca_config' },
     { ...blockDefs.input, type: 'input' },
     { ...blockDefs.price_history, type: 'price_history' },
     { ...blockDefs.volume_history, type: 'volume_history' }
@@ -67,14 +69,24 @@ const Sidebar = () => {
             <circle cx="26" cy="10" r="2" fill="#5e8cff" />
             <circle cx="24" cy="22" r="2" fill="#2962ff" />
           </svg>
-          <h2 style={{ fontSize: 16, fontWeight: 700, color: '#f8f9fa', margin: 0 }}>Flow Trades</h2>
+          <h2 style={{ fontSize: 16, fontWeight: 700, color: '#f8f9fa', margin: 0 }}>FLOWTRADE</h2>
         </div>
         <p>Drag blocks to canvas to build your strategy</p>
       </div>
 
       {blocks.map((cat) => (
         <div className={`block-category${collapsed[cat.category] ? ' collapsed' : ''}`} key={cat.category}>
-          <div className="category-title" onClick={() => toggleCollapse(cat.category)}>{cat.category}</div>
+          <div
+            className="category-title"
+            onClick={() => toggleCollapse(cat.category)}
+            title={categoryMeta[cat.category]?.desc || ''}
+            aria-label={categoryMeta[cat.category]?.desc || ''}
+          >
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ color: 'var(--text-secondary)' }}>{categoryMeta[cat.category]?.icon || null}</span>
+              <span>{cat.category}</span>
+            </span>
+          </div>
           <div className="category-blocks">
             <input
               type="text"
@@ -91,7 +103,9 @@ const Sidebar = () => {
               )
               .map(it => (
                 <div key={it.type} className="block-item" draggable="true" data-block-type={it.type} onDragStart={(e) => e.dataTransfer.setData('blockType', it.type)}>
-                  <div className={`block-icon ${it.color || ''}`}>{it.icon}</div>
+                  <div className={`block-icon ${it.color || ''}`}>
+                    {it.icon ? <Icon name={it.icon} size={14} /> : (categoryMeta[cat.category]?.icon || null)}
+                  </div>
                   <div className="block-info">
                     <div className="block-name">{it.name}</div>
                     <div className="block-desc">{it.desc}</div>

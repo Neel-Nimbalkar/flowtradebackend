@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import Icon from './Icon';
 
 const drawEquityCurve = (canvas, points) => {
   if (!canvas || !points || points.length < 2) return;
@@ -150,7 +151,7 @@ const ResultsPanel = ({ data = {}, open = true, onClose = () => {}, onRerun = ()
             <button className="output-action-btn" id="downloadBtn" onClick={onDownload}>⬇ Download</button>
             <button className="output-action-btn" id="exportChartBtn" onClick={() => {
               try { const c = canvasRef.current; if (!c) return; const url = c.toDataURL('image/png'); const a = document.createElement('a'); a.href = url; a.download = `equity-chart-${Date.now()}.png`; a.click(); } catch (e) { console.warn(e); }
-            }}>🖼 Export Chart</button>
+            }}><Icon name="bolt" size={14} style={{ marginRight: 6 }} />Export Chart</button>
             <button className="output-close" id="closeOutput" onClick={onClose}>×</button>
           </div>
         </div>
@@ -168,7 +169,7 @@ const ResultsPanel = ({ data = {}, open = true, onClose = () => {}, onRerun = ()
       {Array.isArray(data?.trades) && (
         <div className="output-section">
           <div className="output-section-header" onClick={() => toggleSection('trades')}>
-            <div className="output-section-title">📋 Trades</div>
+            <div className="output-section-title"><Icon name="puzzle" size={16} style={{ marginRight: 8 }} />Trades</div>
             <div className={`output-section-toggle ${collapsedSections.has('trades') ? 'collapsed' : ''}`}>▾</div>
           </div>
           <div className="output-section-body" style={{ display: collapsedSections.has('trades') ? 'none' : undefined }}>
@@ -231,7 +232,7 @@ const ResultsPanel = ({ data = {}, open = true, onClose = () => {}, onRerun = ()
       <div className="output-content" id="outputContent">
         <div className="output-section">
           <div className="output-section-header" onClick={() => toggleSection('ai')}>
-            <div className="output-section-title">🤖 AI Summary</div>
+            <div className="output-section-title"><Icon name="ai" size={16} style={{ marginRight: 8 }} />AI Summary</div>
             <div className={`output-section-toggle ${collapsedSections.has('ai') ? 'collapsed' : ''}`}>▾</div>
           </div>
           <div className="output-section-body" style={{ display: collapsedSections.has('ai') ? 'none' : undefined }}>
@@ -241,7 +242,7 @@ const ResultsPanel = ({ data = {}, open = true, onClose = () => {}, onRerun = ()
 
         <div className="output-section">
           <div className="output-section-header" onClick={() => toggleSection('blocks')}>
-            <div className="output-section-title">📋 Block Execution Details</div>
+            <div className="output-section-title"><Icon name="puzzle" size={16} style={{ marginRight: 8 }} />Block Execution Details</div>
             <div className={`output-section-toggle ${collapsedSections.has('blocks') ? 'collapsed' : ''}`}>▾</div>
           </div>
           <div className="output-section-body" style={{ display: collapsedSections.has('blocks') ? 'none' : undefined }}>
@@ -269,7 +270,7 @@ const ResultsPanel = ({ data = {}, open = true, onClose = () => {}, onRerun = ()
 
         <div className="output-section">
           <div className="output-section-header" onClick={() => toggleSection('signals')}>
-            <div className="output-section-title">📊 Last Signals</div>
+            <div className="output-section-title"><Icon name="bolt" size={16} style={{ marginRight: 8 }} />Last Signals</div>
             <div className={`output-section-toggle ${collapsedSections.has('signals') ? 'collapsed' : ''}`}>▾</div>
           </div>
           <div className="output-section-body" style={{ display: collapsedSections.has('signals') ? 'none' : undefined }}>
@@ -279,7 +280,7 @@ const ResultsPanel = ({ data = {}, open = true, onClose = () => {}, onRerun = ()
 
         <div className="output-section">
           <div className="output-section-header" onClick={() => toggleSection('performance')}>
-            <div className="output-section-title">📊 Strategy Performance</div>
+            <div className="output-section-title"><Icon name="bolt" size={16} style={{ marginRight: 8 }} />Strategy Performance</div>
             <div className={`output-section-toggle ${collapsedSections.has('performance') ? 'collapsed' : ''}`}>▾</div>
           </div>
           <div className="output-section-body" style={{ display: collapsedSections.has('performance') ? 'none' : undefined }}>
@@ -289,7 +290,7 @@ const ResultsPanel = ({ data = {}, open = true, onClose = () => {}, onRerun = ()
 
         <div className="output-section">
           <div className="output-section-header" onClick={() => toggleSection('market')}>
-            <div className="output-section-title">📊 Market Data</div>
+            <div className="output-section-title"><Icon name="bolt" size={16} style={{ marginRight: 8 }} />Market Data</div>
             <div className={`output-section-toggle ${collapsedSections.has('market') ? 'collapsed' : ''}`}>▾</div>
           </div>
           <div className="output-section-body" style={{ display: collapsedSections.has('market') ? 'none' : undefined }}>

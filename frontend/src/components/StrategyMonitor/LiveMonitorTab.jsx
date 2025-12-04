@@ -4,13 +4,17 @@ import LineChart from './LineChart';
 
 // Live monitor tab keeps a local series buffer of last N points so the chart can
 // animate/shift even if the backend returns only the latest datapoint.
-const LiveMonitorTab = ({ data = null }) => {
+// Accepts `nodeBuffers` prop with per-node time series for overlays.
+const LiveMonitorTab = ({ data = null, nodeBuffers = {} }) => {
   const now = (data && (data.summary?.completedAt || data.latest_data?.timestamp || data.signals?.[0]?.time)) || new Date().toISOString();
   const status = (data && (data.finalSignal || data.summary?.status)) || 'NEUTRAL';
   const latest = data?.latest_data || {};
   const MAX_SERIES = 240;
   const [series, setSeries] = useState(() => []);
   const lastTsRef = useRef(null);
+  // Build overlays from nodeBuffers. Each overlay: { id, name, series: [{t, v}], stroke }
+  const overlayPalette = ['#ff8a00', '#22c55e', '#ffd36b', '#a78bfa', '#fb7185', '#60a5fa'];
+  const overlays = Object.entries(nodeBuffers || {}).map(([id, info], idx) => ({ id, name: info.name, series: info.buf || [], stroke: overlayPalette[idx % overlayPalette.length] }));
 
   // Append latest datapoint when data updates. If backend provides a full history
   // (data.historical_bars.close), prefer that; otherwise append latest.close.
@@ -107,7 +111,7 @@ const LiveMonitorTab = ({ data = null }) => {
         <div className="card-header">Live Price Chart</div>
         <div className="card-body chart-area">
           {series && series.length ? (
-            <LineChart data={series} height={220} stroke="#5e8cff" />
+            <LineChart data={series} height={220} stroke="#5e8cff" overlays={overlays} />
           ) : (
             <StaticChartPlaceholder height={220} />
           )}

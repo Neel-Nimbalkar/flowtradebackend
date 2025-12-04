@@ -1,0 +1,13 @@
+.drawdown-chart {
+  display: flex;
+  justify-content: center;
+  padding: 20px;
+  background: var(--secondary-bg, #0d1117);
+  border-radius: 10px;
+  border: 1px solid var(--border, #2a2e39);
+}
+
+.drawdown-chart canvas {
+  max-width: 100%;
+  height: auto;
+}

@@ -2499,7 +2499,7 @@
             <div class="block-category">
                 <div class="category-title">Strategy Templates</div>
                 <div class="category-blocks">
-                <input type="text" class="category-search" placeholder="Search templates..." data-category="templates">
+                <!-- removed -->
                 <div class="block-item" draggable="true" data-block-type="template-golden-cross">
                     <div class="block-icon">🔀</div>
                     <div class="block-info">
@@ -2787,10 +2787,7 @@
                 <button class="zoom-btn" id="zoomResetBtn" title="Reset Zoom">⊙</button>
             </div>
 
-            <div class="minimap" id="minimap">
-                <canvas class="minimap-canvas" id="minimapCanvas"></canvas>
-                <div class="minimap-viewport" id="minimapViewport"></div>
-            </div>
+            <!-- minimap removed -->
 
             <div class="status-bar">
                 <div class="status-item">
@@ -5089,13 +5086,13 @@
             updateMinimap();
         }
 
-        // Minimap functionality
+        // Minimap functionality (canvas removed)
         const minimapCanvas = document.getElementById('minimapCanvas');
-        const minimapCtx = minimapCanvas.getContext('2d');
+        const minimapCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
         const minimapViewport = document.getElementById('minimapViewport');
         
         function updateMinimap() {
-            if (!minimapCanvas) return;
+            if (!minimapCanvas || !minimapCtx) return;
             
             const rect = minimapCanvas.getBoundingClientRect();
             minimapCanvas.width = rect.width * 2;
@@ -5159,6 +5156,7 @@
         }
         
         // Click minimap to navigate
+        if (minimapCanvas) {
         minimapCanvas.addEventListener('click', (e) => {
             const rect = minimapCanvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
@@ -5187,6 +5185,7 @@
             renderConnections();
             updateMinimap();
         });
+        }
 
         // Clear canvas
         document.getElementById('clearBtn').addEventListener('click', () => {

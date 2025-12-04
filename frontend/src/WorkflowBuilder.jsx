@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import './workflow_builder.css';
+import BackButton from './components/BackButton';
 import Sidebar from './components/Sidebar';
 import Toolbar from './components/Toolbar';
 import Node from './components/Node';
@@ -8,10 +9,10 @@ import Connections from './components/Connections';
 import ResultsPanel from './components/ResultsPanel';
 import NodeSettings from './components/NodeSettings';
 import PastDataViewer from './components/StrategyResults/PastDataViewer';
-import StrategyMonitorDrawer from './components/StrategyMonitor/StrategyMonitorDrawer';
 import BacktestModal from './components/BacktestModal';
+import Icon from './components/Icon';
 
-const WorkflowBuilder = () => {
+const WorkflowBuilder = ({ onNavigate }) => {
     // Zoom and pan state
     const [canvasScale, setCanvasScale] = useState(1);
     const [canvasOffset, setCanvasOffset] = useState({ x: 0, y: 0 });
@@ -27,6 +28,8 @@ const WorkflowBuilder = () => {
   // Persistence helpers
   const STORAGE_KEY = 'flowgrid_workflow_v1';
   const SAVES_KEY = `${STORAGE_KEY}::saves`;
+  const ALERTS_KEY = 'flowgrid_alerts_v1';
+  const lastAlertSignatureRef = useRef(null);
 
   // Save with a user-provided name (supports multiple named saves)
   const saveWorkflow = () => {
@@ -38,6 +41,7 @@ const WorkflowBuilder = () => {
       const map = raw ? JSON.parse(raw) : {};
       map[name] = payload;
       localStorage.setItem(SAVES_KEY, JSON.stringify(map));
+      try { localStorage.setItem('workflow_active_id', name); } catch (e) {}
       alert(`Workflow saved as "${name}"`);
     } catch (err) {
       console.error('save error', err);
@@ -64,6 +68,7 @@ const WorkflowBuilder = () => {
       const normalized = normalizeIds(parsed.nodes || [], parsed.connections || []);
       setNodes(normalized.nodes);
       setConnections(normalized.connections);
+      try { localStorage.setItem('workflow_active_id', pick); } catch (e) {}
       alert(`Loaded workflow "${pick}"`);
     } catch (err) {
       console.error('load error', err);
@@ -89,6 +94,90 @@ const WorkflowBuilder = () => {
       alert(`Deleted "${name}"`);
     } catch (e) { console.error(e); alert('Failed to delete'); }
   };
+
+  const normalizeSignalLabel = useCallback((raw) => {
+    if (!raw) return 'HOLD';
+    const text = String(raw).toUpperCase();
+    if (text.includes('BUY') || text.includes('LONG')) return 'BUY';
+    if (text.includes('SELL') || text.includes('SHORT')) return 'SELL';
+    if (text.includes('HOLD')) return 'HOLD';
+    return 'HOLD';
+  }, []);
+
+  const persistAlertEntry = useCallback((data, contextLabel = 'manual-run') => {
+    if (!data) return;
+    try {
+      const signal = normalizeSignalLabel(data.finalSignal || data.final_decision || data.summary?.status || '');
+      const latest = data.latest_data || {};
+      const priceVal = latest.price ?? latest.close ?? latest.last ?? latest.current_price ?? null;
+      const priceNum = priceVal != null && !Number.isNaN(Number(priceVal)) ? Number(priceVal) : null;
+      const activeId = (() => {
+        try { return localStorage.getItem('workflow_active_id'); } catch (e) { return null; }
+      })();
+      const strategyName = activeId || 'Builder Session';
+      const symbol = data.summary?.symbol || latest.symbol || '';
+      const timeframe = data.summary?.timeframe || '';
+      const entry = {
+        id: `${Date.now()}`,
+        strategyId: activeId,
+        strategyName,
+        signal,
+        price: priceNum,
+        symbol,
+        timeframe,
+        timestamp: new Date().toISOString(),
+        source: contextLabel
+      };
+      const priceSig = priceNum != null ? priceNum.toFixed(4) : 'na';
+      const signature = `${entry.strategyId || 'adhoc'}|${signal}|${priceSig}|${symbol}|${timeframe}`;
+      const prevSignature = lastAlertSignatureRef.current;
+      lastAlertSignatureRef.current = signature;
+
+      const raw = localStorage.getItem(ALERTS_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      let updated = Array.isArray(parsed) ? [...parsed] : [];
+      if (prevSignature === signature && updated.length) {
+        updated[0] = { ...updated[0], ...entry, signature };
+      } else if (updated.length && updated[0]?.strategyId === entry.strategyId && updated[0]?.signal === entry.signal && updated[0]?.symbol === entry.symbol) {
+        updated[0] = { ...updated[0], ...entry, signature };
+      } else {
+        updated.unshift({ ...entry, signature });
+      }
+      if (updated.length > 15) updated = updated.slice(0, 15);
+      localStorage.setItem(ALERTS_KEY, JSON.stringify(updated));
+      window.dispatchEvent(new Event('flowgrid:alerts-updated'));
+    } catch (err) {
+      console.warn('[Builder] Failed to persist alert entry', err);
+    }
+  }, [normalizeSignalLabel]);
+
+  const loadWorkflowById = useCallback((workflowId, options = {}) => {
+    if (!workflowId) return false;
+    try {
+      const raw = localStorage.getItem(SAVES_KEY) || '{}';
+      const map = JSON.parse(raw);
+      const saved = map[workflowId];
+      if (!saved || !Array.isArray(saved.nodes) || saved.nodes.length === 0) return false;
+      const normalized = normalizeIds(saved.nodes || [], saved.connections || []);
+      setNodes(normalized.nodes);
+      setConnections(normalized.connections);
+      if (options.setActive !== false) {
+        try { localStorage.setItem('workflow_active_id', workflowId); } catch (e) {}
+      }
+      const shouldEmit = options.emitLoadRequest !== false;
+      if (shouldEmit) {
+        try { localStorage.setItem('flowgrid_workflow_v1::load_request', workflowId); } catch (e) {}
+      }
+      if (options.autoStart) {
+        try { localStorage.setItem('flowgrid_pending_live_start', '1'); } catch (e) {}
+        try { localStorage.setItem('workflow_live', '1'); } catch (e) {}
+      }
+      return true;
+    } catch (err) {
+      console.error('[Builder] loadWorkflowById error', err);
+      return false;
+    }
+  }, [setNodes, setConnections]);
 
   const exportWorkflow = () => {
     const payload = { nodes, connections };
@@ -137,12 +226,11 @@ const WorkflowBuilder = () => {
   useEffect(() => {
     window.listSavedWorkflows = listSavedWorkflows;
     window.deleteSavedWorkflow = deleteSavedWorkflow;
-    // Allow other UI parts (like BacktestModal) to open the Strategy Monitor drawer
-    try { window.openStrategyMonitor = () => setChartDrawerMinimized(false); } catch (e) {}
+    // Allow other UI parts to access saved workflows utilities
     return () => {
       try { delete window.listSavedWorkflows; } catch (e) {}
       try { delete window.deleteSavedWorkflow; } catch (e) {}
-      try { delete window.openStrategyMonitor; } catch (e) {}
+      // cleanup
     };
   }, []);
 
@@ -226,6 +314,16 @@ const WorkflowBuilder = () => {
     window.displayWorkflowResultsV2 = (data) => {
       try { setResultsData(data); setResultsOpen(true); } catch (e) { console.warn(e); }
     };
+    // Expose toggle/open/close helpers for the legacy insights panel
+    try {
+      // Toggle the React-driven results panel instead of manipulating DOM directly
+      window.toggleResultsPanel = (force) => {
+        try {
+          if (typeof force === 'boolean') setResultsOpen(!!force);
+          else setResultsOpen(prev => !prev);
+        } catch (e) { console.warn('toggleResultsPanel error', e); }
+      };
+    } catch (e) {}
     return () => { try { delete window.displayWorkflowResultsV2; } catch (e) {} };
   }, []);
 
@@ -245,14 +343,19 @@ const WorkflowBuilder = () => {
     });
 
     let symbol = 'SPY', timeframe = '1Hour', days = 7;
-    const configNode = nodes.slice().reverse().find(n => n.type === 'alpaca_config');
-    if (configNode && configNode.configValues) {
-      symbol = configNode.configValues.symbol || symbol;
-      timeframe = configNode.configValues.timeframe || timeframe;
-      days = configNode.configValues.days || days;
+    // Prefer symbol/timeframe/days from the last price-input node's config (input/price_history/volume_history)
+    const inputNode = nodes.slice().reverse().find(n => priceInputTypes.has(n.type) && n.configValues && (n.configValues.symbol || n.configValues.timeframe || n.configValues.days));
+    if (inputNode && inputNode.configValues) {
+      symbol = inputNode.configValues.symbol || symbol;
+      timeframe = inputNode.configValues.timeframe || timeframe;
+      days = inputNode.configValues.days || days;
     }
 
-    return { symbol, timeframe, days, workflow: workflow_blocks, priceType: 'current' };
+    // Include Alpaca API keys from localStorage so backend can fetch price data server-side
+    let alpacaKeyId = null; let alpacaSecretKey = null;
+    try { alpacaKeyId = localStorage.getItem('alpaca_key_id') || null; alpacaSecretKey = localStorage.getItem('alpaca_secret_key') || null; } catch (e) {}
+
+    return { symbol, timeframe, days, workflow: workflow_blocks, priceType: 'current', alpacaKeyId, alpacaSecretKey };
   };
 
   // Execute a single workflow request. Returns parsed JSON or throws. Accepts optional AbortSignal.
@@ -301,9 +404,17 @@ const WorkflowBuilder = () => {
       const data = await executeWorkflowOnce(payload, null);
       if (data.error) throw new Error(data.error);
       setResultsData(data);
+      try { window.__monitor_resultsData = data; } catch (e) {}
+      try { localStorage.setItem('monitor_results', JSON.stringify(data)); } catch (e) {}
+      // Auto-save current workflow before opening analytics in a new tab so user stays in builder
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ nodes, connections })); } catch (e) {}
+      // Do not auto-open the Analytics page; user can open Analytics manually.
+      // Ensure the insights panel is visible in the builder (legacy panel)
+      try { if (window.toggleResultsPanel) window.toggleResultsPanel(true); } catch (e) {}
       setResultsOpen(true);
       if (data && data.historical_bars && Object.keys(data.historical_bars).length > 0) setPastOpen(true);
       else setPastOpen(false);
+      persistAlertEntry(data, 'manual-run');
     } catch (err) {
       console.error('runWorkflow error', err);
       try {
@@ -337,11 +448,19 @@ const WorkflowBuilder = () => {
         liveAbortRef.current = controller;
         try {
           const data = await executeWorkflowOnce(payload, controller.signal);
-          if (data && !data.error) {
+            if (data && !data.error) {
             setResultsData(data);
+            try { window.__monitor_resultsData = data; } catch (e) {}
+            try { localStorage.setItem('monitor_results', JSON.stringify(data)); } catch (e) {}
+            // Auto-save current workflow before opening analytics in a new tab so user stays in builder
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ nodes, connections })); } catch (e) {}
+              // Do not auto-open Analytics on live polling; keep updates local to the builder.
+              // Ensure the insights panel is visible in the builder (legacy panel)
+              try { if (window.toggleResultsPanel) window.toggleResultsPanel(true); } catch (e) {}
             setResultsOpen(true);
             if (data && data.historical_bars && Object.keys(data.historical_bars).length > 0) setPastOpen(true);
             else setPastOpen(false);
+            persistAlertEntry(data, 'live-tick');
           } else {
             console.warn('Live run returned error payload', data);
           }
@@ -374,13 +493,258 @@ const WorkflowBuilder = () => {
   };
 
   const toggleLive = () => {
-    if (liveRunningRef.current) stopLive(); else startLive();
+    if (liveRunningRef.current) {
+      stopLive();
+      try { localStorage.setItem('workflow_live', '0'); } catch (e) {}
+    } else {
+      startLive();
+      try { localStorage.setItem('workflow_live', '1'); } catch (e) {}
+    }
   };
+
+  useEffect(() => {
+    const bridge = {
+      loadWorkflowById,
+      startLive: () => {
+        if (!liveRunningRef.current) {
+          try { localStorage.setItem('workflow_live', '1'); } catch (e) {}
+          startLive();
+        }
+      },
+      stopLive: () => {
+        if (liveRunningRef.current) {
+          stopLive();
+          try { localStorage.setItem('workflow_live', '0'); } catch (e) {}
+        }
+      },
+      isLiveRunning: () => !!liveRunningRef.current
+    };
+    window.flowgridLiveBridge = bridge;
+    return () => {
+      if (window.flowgridLiveBridge === bridge) delete window.flowgridLiveBridge;
+    };
+  }, [loadWorkflowById, startLive, stopLive]);
 
   // cleanup on unmount
   useEffect(() => {
     return () => {
       try { stopLive(); } catch (e) {}
+    };
+  }, []);
+
+  // Start live run when nodes are populated and pending flag is set
+  useEffect(() => {
+    if (nodes.length > 0) {
+      try {
+        const pending = localStorage.getItem('flowgrid_pending_live_start');
+        if (pending === '1') {
+          console.log(`[Builder] Nodes ready (${nodes.length} nodes), starting pending live run...`);
+          localStorage.removeItem('flowgrid_pending_live_start');
+          if (!liveRunningRef.current) {
+            startLive();
+          }
+        }
+      } catch (e) { console.error('[Builder] pending live start check error', e); }
+    }
+  }, [nodes]);
+
+  // Persisted live-run: start/stop based on localStorage so the run state survives navigation/refresh.
+  useEffect(() => {
+    // On mount, read desired live state
+    console.log('[Builder] Checking workflow_live on mount...');
+    try {
+      const val = localStorage.getItem('workflow_live');
+      console.log(`[Builder] workflow_live = "${val}", liveRunning = ${liveRunningRef.current}`);
+      if (val === '1' && !liveRunningRef.current) {
+        console.log('[Builder] Starting live run from mount...');
+        startLive();
+      }
+    } catch (e) { console.error('[Builder] mount check error', e); }
+
+    const handler = (e) => {
+      try {
+        if (!e) return;
+        console.log(`[Builder] storage event: key="${e.key}", newValue="${e.newValue}"`);
+        if (e.key === 'workflow_live') {
+          const v = e.newValue;
+          if (v === '1') {
+            console.log('[Builder] workflow_live changed to 1, starting...');
+            if (!liveRunningRef.current) startLive();
+          } else {
+            console.log('[Builder] workflow_live changed to 0, stopping...');
+            if (liveRunningRef.current) stopLive();
+          }
+        }
+      } catch (err) { console.error('[Builder] storage handler error', err); }
+    };
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
+  }, []);
+
+  // Listen for dashboard load requests: when user clicks a saved strategy, dashboard writes
+  // `flowgrid_workflow_v1::load_request` with the saved name. Load it into the builder.
+  useEffect(() => {
+    const tryLoadRequest = () => {
+      try {
+        const req = localStorage.getItem('flowgrid_workflow_v1::load_request');
+        if (!req) return;
+        const raw = localStorage.getItem(SAVES_KEY) || '{}';
+        const map = JSON.parse(raw);
+        if (!map[req]) {
+          console.warn('[Builder] load_request for unknown save:', req);
+          try { localStorage.removeItem('flowgrid_workflow_v1::load_request'); } catch (e) {}
+          return;
+        }
+        const parsed = map[req];
+        const normalized = normalizeIds(parsed.nodes || [], parsed.connections || []);
+        setNodes(normalized.nodes);
+        setConnections(normalized.connections);
+        console.log(`[Builder] Loaded workflow from load_request: "${req}" with ${normalized.nodes.length} nodes`);
+        // remove the request so it doesn't reload repeatedly
+        try { localStorage.removeItem('flowgrid_workflow_v1::load_request'); } catch (e) {}
+        
+        // Mark that we should start live after nodes are set
+        if (normalized.nodes.length > 0) {
+          try {
+            const liveFlag = localStorage.getItem('workflow_live');
+            if (liveFlag === '1') {
+              console.log('[Builder] workflow_live is 1, will start after nodes render');
+              // Set a flag so the nodes effect can start live run
+              localStorage.setItem('flowgrid_pending_live_start', '1');
+            }
+          } catch (e) { console.error('[Builder] failed to check workflow_live', e); }
+        }
+      } catch (e) { console.error('[Builder] failed to process load_request', e); }
+    };
+
+    // process any pending request on mount
+    tryLoadRequest();
+
+    // watch for future requests (cross-tab)
+    const onStorage = (e) => {
+      if (!e || !e.key) return;
+      if (e.key === 'flowgrid_workflow_v1::load_request') {
+        tryLoadRequest();
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('flowgrid:load-request', tryLoadRequest);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('flowgrid:load-request', tryLoadRequest);
+    };
+  }, []);
+
+  // Listen for cross-tab stop signal from Analytics/Monitor
+  useEffect(() => {
+    const handler = (e) => {
+      try {
+        if (!e) return;
+        if (e.key === 'monitor_stop') {
+          try { stopLive(); } catch (ee) {}
+        }
+      } catch (err) {}
+    };
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
+  }, []);
+
+  // WebSocket client to receive node-emitted messages from backend broadcaster
+  // Maintain small per-node sliding buffers for time-series overlays
+  const [wsNodeBuffers, setWsNodeBuffers] = useState({}); // node_id -> { name, buf: [{t, v}], last }
+  // keep a global reference so monitor in other pages can read live updates
+  useEffect(() => {
+    try { window.__monitor_nodeBuffers = wsNodeBuffers; } catch (e) {}
+    try {
+      const simple = {};
+      Object.entries(wsNodeBuffers || {}).forEach(([k, v]) => { simple[k] = (v && v.last != null) ? v.last : null; });
+      localStorage.setItem('monitor_node_buffers', JSON.stringify(simple));
+    } catch (e) {}
+  }, [wsNodeBuffers]);
+  useEffect(() => {
+    let ws = null;
+    let closed = false;
+    let backoff = 500;
+    let shouldReconnect = true;
+    const MAX_SERIES = 240;
+
+    const connect = () => {
+      try {
+        ws = new WebSocket('ws://127.0.0.1:6789');
+      } catch (e) {
+        // Silently handle WebSocket connection failure (backend not running)
+        scheduleReconnect();
+        return;
+      }
+
+      ws.onopen = () => {
+        console.debug('[WS] connected');
+        backoff = 500;
+        try { window.__wsConnected = true; } catch (e) {}
+      };
+
+      ws.onmessage = (evt) => {
+        try {
+          const msg = JSON.parse(evt.data);
+          // expected shape: { node_id, node_name, value, tick }
+          if (!msg || !msg.node_id) return;
+          // normalize timestamp (expect tick.ts in seconds)
+          const ts = msg.tick && (msg.tick.ts || msg.tick.t || msg.tick.time) ? Number(msg.tick.ts || msg.tick.t || msg.tick.time) : null;
+          const tms = ts ? (ts > 1e12 ? ts : ts * 1000) : Date.now();
+          // determine numeric value for overlay: if value is number, use it; if object, try common fields
+          let v = msg.value;
+          if (v && typeof v === 'object') {
+            // try typical indicator fields
+            if (typeof v.v !== 'undefined') v = v.v;
+            else if (typeof v.value !== 'undefined') v = v.value;
+            else if (typeof v.macd !== 'undefined') v = v.macd; // fallback
+            else v = null;
+          }
+          const valueNum = (v == null) ? null : Number(v);
+          setWsNodeBuffers(prev => {
+            const next = { ...(prev || {}) };
+            const cur = next[msg.node_id] || { name: msg.node_name || msg.node_id, buf: [], last: null };
+            if (Number.isFinite(valueNum)) {
+              cur.buf = [...cur.buf.slice(-MAX_SERIES + 1), { t: tms, v: valueNum }];
+              cur.last = valueNum;
+            } else {
+              cur.last = (msg.value != null ? msg.value : cur.last);
+            }
+            cur.name = msg.node_name || cur.name;
+            next[msg.node_id] = cur;
+            try { window.__nodeBuffers = next; } catch (e) {}
+            return next;
+          });
+        } catch (e) { console.warn('Failed to parse WS message', e); }
+      };
+
+      ws.onclose = () => {
+        console.debug('[WS] closed');
+        try { window.__wsConnected = false; } catch (e) {}
+        if (!closed && shouldReconnect) scheduleReconnect();
+      };
+
+      ws.onerror = (err) => {
+        // Silently handle WebSocket error (backend not running)
+        try { ws.close(); } catch (e) {}
+      };
+    };
+
+    const scheduleReconnect = () => {
+      setTimeout(() => {
+        if (closed || !shouldReconnect) return;
+        backoff = Math.min(10000, backoff * 1.5);
+        connect();
+      }, backoff);
+    };
+
+    connect();
+
+    return () => {
+      closed = true;
+      shouldReconnect = false;
+      try { if (ws) ws.close(); } catch (e) {}
+      try { window.__wsConnected = false; } catch (e) {}
     };
   }, []);
 
@@ -647,18 +1011,31 @@ const WorkflowBuilder = () => {
           <button className="toolbar-btn" title="Reset Zoom" onClick={() => { setCanvasScale(1); setCanvasOffset({x:0,y:0}); }}>⦿</button>
         </div> */}
 
-        {/* Ensure top right toolbar is always above canvas */}
-        <div style={{ position: 'fixed', top: 16, right: 32, zIndex: 6000, display: 'flex', gap: 8, alignItems: 'center' }}>
-          <Toolbar onSave={saveWorkflow} onLoad={loadWorkflow} onExport={exportWorkflow} onImport={importWorkflow} onClear={clearWorkflow} onOrganize={null} onRun={runWorkflow} onSample={loadSampleWorkflow} onToggleMonitor={() => setChartDrawerMinimized(m => !m)} onRunToggle={toggleLive} onBacktest={() => setBacktestOpen(true)} liveRunning={liveRunning} />
-        </div>
+        {/* Center-top toolbar with Back to Home and other controls */}
+        <Toolbar
+          extraBefore={typeof onNavigate === 'function' ? (
+            <BackButton onBack={() => onNavigate('home')} label={'Back to Home'} />
+          ) : (
+            <BackButton onBack={() => { try { window.navigate && window.navigate('home'); } catch (e) { window.location.href = '/'; } }} label={'Back to Home'} />
+          )}
+          onSave={saveWorkflow}
+          onLoad={loadWorkflow}
+          onExport={exportWorkflow}
+          onImport={importWorkflow}
+          onClear={clearWorkflow}
+          onOrganize={null}
+          onRun={runWorkflow}
+          onSample={loadSampleWorkflow}
+          onToggleMonitor={() => setChartDrawerMinimized(m => !m)}
+          onRunToggle={toggleLive}
+          onBacktest={() => setBacktestOpen(true)}
+          liveRunning={liveRunning}
+        />
 
         <div className="canvas-container">
           {/* Minimap and zoom controls together */}
           <div style={{ position: 'absolute', bottom: 24, right: 32, zIndex: 100, display: 'flex', alignItems: 'flex-end', gap: 12 }}>
-            <div className="minimap" id="minimap">
-              <canvas className="minimap-canvas" id="minimapCanvas"></canvas>
-              <div className="minimap-viewport" id="minimapViewport"></div>
-            </div>
+            {/* minimap removed per request */}
             <div className="zoom-controls" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <button className="toolbar-btn" title="Zoom In" onClick={() => setCanvasScale(s => Math.min(2.5, +(s + 0.15).toFixed(2)))}>＋</button>
               <button className="toolbar-btn" title="Zoom Out" onClick={() => setCanvasScale(s => Math.max(0.3, +(s - 0.15).toFixed(2)))}>－</button>
@@ -697,50 +1074,28 @@ const WorkflowBuilder = () => {
           </div>
         </div>
 
-        <ResultsPanel data={resultsData} open={resultsOpen} onClose={() => setResultsOpen(false)} onRerun={runWorkflow} onDownload={downloadResults} />
-        <NodeSettings node={settingsNode} open={settingsOpen} onClose={closeNodeSettings} onSave={saveNodeSettings} />
+        {/* Merge any websocket node messages into resultsData.latest_data for live overlays */}
+        {(() => {
+          const merged = resultsData ? { ...resultsData } : {};
+          merged.latest_data = { ...(resultsData && resultsData.latest_data ? resultsData.latest_data : {}) };
+          try {
+            Object.values(wsNodeBuffers || {}).forEach(m => {
+              const key = (m.name || '').replace(/\s+/g, '_').toLowerCase() || null;
+              if (key) merged.latest_data[key] = m.last;
+            });
+          } catch (e) {}
+          return <ResultsPanel data={merged} open={resultsOpen} onClose={() => setResultsOpen(false)} onRerun={runWorkflow} onDownload={downloadResults} />;
+          })()}
+          <NodeSettings node={settingsNode} open={settingsOpen} onClose={closeNodeSettings} onSave={saveNodeSettings} />
 
-        {/* PastDataViewer is embedded into the chart drawer below */}
+          {/* PastDataViewer is embedded into the chart drawer below */}
 
-        <StrategyMonitorDrawer open={!chartDrawerMinimized} onClose={() => setChartDrawerMinimized(true)} resultsData={resultsData} />
+          {/* Strategy monitor moved to Dashboard Analytics page */}
         
-        {/* Backtest modal (MVP) */}
-        {backtestOpen ? <BacktestModal open={backtestOpen} onClose={() => setBacktestOpen(false)} /> : null}
-        <div className="results-panel" id="resultsPanel">
-          <div className="results-panel-header">
-            <div className="results-panel-title">
-              <div className="results-panel-icon">⚡</div>
-              <div>
-                Strategy Insights
-                <div className="results-section-subtitle" id="resultsPanelStatus">Ready</div>
-              </div>
-            </div>
-            <button className="results-panel-close" onClick={() => { if (window.toggleResultsPanel) window.toggleResultsPanel(); }} title="Close Panel">×</button>
-          </div>
-          <div className="results-panel-body">
-            <div className="results-section">
-              <div className="results-section-header">
-                <div className="results-section-icon" style={{ background: 'linear-gradient(135deg, #1a2a2a 0%, #0f172a 100%)' }}>🚀</div>
-                <div>
-                  <div className="results-section-title">Latest Confirmed Signal</div>
-                  <div className="results-section-subtitle">Most recent strategy decision</div>
-                </div>
-              </div>
-              <div id="latestSignalBox" className="output-section">
-                {resultsData && resultsData.latest_data ? (
-                  <div className={`output-text ${resultPulse ? 'flash' : ''}`} style={{ color: '#9ca3af' }}>
-                    <div style={{ fontWeight: 700, color: '#e5e7eb' }}>Price: {resultsData.latest_data.close}</div>
-                    <div style={{ fontSize: 12, color: '#9ca3af' }}>{resultsData.finalSignal ? `Signal: ${resultsData.finalSignal}` : (resultsData.summary && resultsData.summary.status ? `Status: ${resultsData.summary.status}` : '')}</div>
-                  </div>
-                ) : (
-                  <div className={`output-text ${resultPulse ? 'flash' : ''}`} style={{ color: '#9ca3af' }}>No confirmed signal yet. Run your workflow to see the latest decision here.</div>
-                )}
-              </div>
-            </div>
-          </div>
+          {/* Backtest modal (MVP) */}
+          {backtestOpen ? <BacktestModal open={backtestOpen} onClose={() => setBacktestOpen(false)} /> : null}
         </div>
       </div>
-    </div>
   );
 };
 

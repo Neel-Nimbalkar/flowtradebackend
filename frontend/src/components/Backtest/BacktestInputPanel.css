@@ -1,0 +1,122 @@
+.backtest-input-panel {
+  background: var(--card-bg, #161b22);
+  border-radius: 12px;
+  border: 1px solid var(--border, #2a2e39);
+  overflow: hidden;
+}
+
+.input-panel-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border, #2a2e39);
+}
+
+.input-panel-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.input-panel-body {
+  padding: 20px;
+}
+
+.input-group {
+  margin-bottom: 20px;
+}
+
+.input-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-primary, #cfe8ff);
+}
+
+.input-group input,
+.input-group select {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--secondary-bg, #0d1117);
+  border: 1px solid var(--border, #2a2e39);
+  border-radius: 6px;
+  color: var(--text-primary, #cfe8ff);
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.input-group input:focus,
+.input-group select:focus {
+  outline: none;
+  border-color: var(--accent, #2962ff);
+}
+
+.input-group input:disabled,
+.input-group select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.input-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-muted, #9aa6c6);
+}
+
+.input-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.advanced-settings {
+  margin: 24px 0;
+  border: 1px solid var(--border, #2a2e39);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.advanced-settings summary {
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  user-select: none;
+}
+
+.advanced-settings summary:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.advanced-content {
+  padding: 16px;
+}
+
+.run-backtest-btn {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(180deg, #2d6df6, #1f57d9);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.2s;
+  box-shadow: 0 2px 8px rgba(31, 87, 217, 0.3);
+}
+
+.run-backtest-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(31, 87, 217, 0.4);
+}
+
+.run-backtest-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.run-backtest-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

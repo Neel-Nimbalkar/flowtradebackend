@@ -1,0 +1,162 @@
+.stats-distribution {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.distribution-section {
+  background: var(--secondary-bg, #0d1117);
+  border-radius: 10px;
+  padding: 20px;
+  border: 1px solid var(--border, #2a2e39);
+}
+
+.distribution-section h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 20px;
+}
+
+.winloss-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bar-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bar-label {
+  width: 60px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bar {
+  height: 36px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  min-width: 60px;
+  transition: width 0.3s;
+}
+
+.bar.win {
+  background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.bar.loss {
+  background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+
+.bar-value {
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.histogram {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  justify-content: space-between;
+  height: 250px;
+}
+
+.histogram-bar-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.histogram-bar {
+  width: 100%;
+  min-height: 20px;
+  border-radius: 4px 4px 0 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 6px;
+  transition: height 0.3s;
+}
+
+.histogram-bar.positive {
+  background: linear-gradient(180deg, #10b981, #059669);
+}
+
+.histogram-bar.negative {
+  background: linear-gradient(180deg, #ef4444, #dc2626);
+}
+
+.histogram-bar.duration {
+  background: linear-gradient(180deg, #8b5cf6, #7c3aed);
+}
+
+.bar-count {
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.histogram-label {
+  font-size: 10px;
+  color: var(--text-muted, #9aa6c6);
+  text-align: center;
+}
+
+.mae-mfe-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.mae-mfe-point {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.point-mae,
+.point-mfe {
+  height: 8px;
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+
+.point-mae {
+  background: #ef4444;
+}
+
+.point-mfe {
+  background: #10b981;
+}
+
+.mae-mfe-legend {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  margin-top: 16px;
+  font-size: 13px;
+}
+
+.legend-box {
+  display: inline-block;
+  width: 16px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 6px;
+}
+
+.legend-box.mae {
+  background: #ef4444;
+}
+
+.legend-box.mfe {
+  background: #10b981;
+}

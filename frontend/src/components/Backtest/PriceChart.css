@@ -1,0 +1,40 @@
+.price-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  background: var(--secondary-bg, #0d1117);
+  border-radius: 10px;
+  border: 1px solid var(--border, #2a2e39);
+}
+
+.price-chart canvas {
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
+.chart-legend {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  font-size: 13px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legend-marker {
+  font-size: 14px;
+}
+
+.legend-marker.buy {
+  color: #10b981;
+}
+
+.legend-marker.sell {
+  color: #ef4444;
+}

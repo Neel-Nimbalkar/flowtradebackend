@@ -55,9 +55,9 @@ export const ResultsPanel: React.FC<Props> = ({ data, isOpen, onClose, onRerun, 
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button className="rounded-md border border-slate-600/40 px-2.5 py-1 text-xs text-slate-200 hover:border-sky-400/40 hover:text-white" onClick={onRerun}>Re-run</button>
-            <button className="rounded-md border border-slate-600/40 px-2.5 py-1 text-xs text-slate-200 hover:border-sky-400/40 hover:text-white" onClick={handleDownload}>Download</button>
-            <button className="ml-1 h-8 w-8 rounded-md border border-slate-600/40 text-slate-200 hover:border-sky-400/40" onClick={onClose}>×</button>
+            <button className="rounded-lg shadow-sm border border-slate-600/30 px-3 py-1.5 text-xs text-slate-200 hover:border-sky-400/40 hover:text-white bg-gradient-to-br from-[#232634] to-[#1f2430]" onClick={onRerun}>Re-run</button>
+            <button className="rounded-lg shadow-sm border border-slate-600/30 px-3 py-1.5 text-xs text-slate-200 hover:border-sky-400/40 hover:text-white bg-gradient-to-br from-[#232634] to-[#1f2430]" onClick={handleDownload}>Download</button>
+            <button className="ml-1 h-9 w-9 rounded-full border border-slate-600/30 text-slate-200 hover:border-sky-400/40 flex items-center justify-center shadow-sm bg-[#1e222d]" onClick={onClose}>×</button>
           </div>
         </div>
         {/* Tabs placeholder could go here if needed */}

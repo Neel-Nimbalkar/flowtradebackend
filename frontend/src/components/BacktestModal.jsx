@@ -54,7 +54,7 @@ const BacktestModal = ({ open, onClose }) => {
                   setResult(nr);
                   setJobError(data.error || null);
                   try { if (typeof window.displayWorkflowResultsV2 === 'function') window.displayWorkflowResultsV2(r); } catch (e) {}
-                  try { if (typeof window.openStrategyMonitor === 'function') window.openStrategyMonitor(); } catch (e) {}
+                  try { if (typeof window.toggleResultsPanel === 'function') window.toggleResultsPanel(true); } catch (e) {}
                   try { if (typeof window.setMonitorTab === 'function') window.setMonitorTab('backtest'); } catch (e) {}
                 }
               } else {
@@ -198,7 +198,7 @@ const BacktestModal = ({ open, onClose }) => {
           setStatus(data.status || status);
           setJobError(data.error || null);
           try { if (typeof window.displayWorkflowResultsV2 === 'function') window.displayWorkflowResultsV2(r); } catch (e) {}
-          try { if (typeof window.openStrategyMonitor === 'function') window.openStrategyMonitor(); } catch (e) {}
+          try { if (typeof window.toggleResultsPanel === 'function') window.toggleResultsPanel(true); } catch (e) {}
           try { if (typeof window.setMonitorTab === 'function') window.setMonitorTab('backtest'); } catch (e) {}
       } else {
         const txt = await res.text().catch(()=>null);

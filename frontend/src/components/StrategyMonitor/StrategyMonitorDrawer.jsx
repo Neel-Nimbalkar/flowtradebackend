@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import MonitorTabs from './MonitorTabs';
 import './monitor-drawer.css';
 
-const StrategyMonitorDrawer = ({ open, onClose, initialTab = 'live', className = '', resultsData = null }) => {
+const StrategyMonitorDrawer = ({ open, onClose, initialTab = 'live', className = '', resultsData = null, nodeBuffers = {} }) => {
   const [active, setActive] = useState(initialTab);
   const [rightOffset, setRightOffset] = useState(16);
   const [heightPx, setHeightPx] = useState(() => {
@@ -141,18 +141,32 @@ const StrategyMonitorDrawer = ({ open, onClose, initialTab = 'live', className =
       >
         <div className="handle-bar" />
         <div className="monitor-drawer-title">Strategy Monitor</div>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
           <button className="md-btn" onClick={() => setActive('live')}>Live</button>
           <button className="md-btn" onClick={() => setActive('backtest')}>Backtest</button>
           <button className="md-btn" onClick={() => setActive('past')}>Past Signals</button>
-          <button className="md-btn" onClick={() => setActive('insights')}>Insights</button>
-          <button className="md-btn" onClick={() => setActive('legacy')}>Legacy Monitor</button>
+          <button
+            className="md-btn md-stop"
+            onClick={() => {
+              try {
+                // write a timestamp so other tabs receive a storage event
+                localStorage.setItem('monitor_stop', String(Date.now()));
+                // clear shortly after to avoid leaving a stale flag
+                setTimeout(() => {
+                  try { localStorage.removeItem('monitor_stop'); } catch (e) {}
+                }, 1000);
+              } catch (e) {}
+            }}
+            title="Stop live monitoring"
+          >
+            Stop
+          </button>
           <button className="md-close" onClick={onClose} title="Close Monitor">×</button>
         </div>
       </div>
 
       <div className="monitor-drawer-body">
-        <MonitorTabs active={active} onChange={setActive} resultsData={resultsData} />
+        <MonitorTabs active={active} onChange={setActive} resultsData={resultsData} nodeBuffers={nodeBuffers} />
       </div>
     </div>
   );

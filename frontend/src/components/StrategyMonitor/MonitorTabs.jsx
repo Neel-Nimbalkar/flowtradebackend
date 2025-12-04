@@ -5,11 +5,11 @@ import PastSignalsTab from './PastSignalsTab';
 import InsightsTab from './InsightsTab';
 import LegacyMonitorTab from './LegacyMonitorTab';
 
-const MonitorTabs = ({ active, onChange, resultsData = null }) => {
+const MonitorTabs = ({ active, onChange, resultsData = null, nodeBuffers = {} }) => {
   return (
     <div className="monitor-tabs">
       <div className="tab-content">
-        {active === 'live' && <LiveMonitorTab data={resultsData} />}
+        {active === 'live' && <LiveMonitorTab data={resultsData} nodeBuffers={nodeBuffers} />}
         {active === 'backtest' && <BacktestTab data={resultsData} />}
         {active === 'past' && <PastSignalsTab data={resultsData} />}
         {active === 'insights' && <InsightsTab data={resultsData} />}

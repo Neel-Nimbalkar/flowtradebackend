@@ -272,8 +272,12 @@ def rsi(prices, period=14):
     for i in range(period, len(gains)):
         avg_gain = (avg_gain * (period - 1) + gains[i]) / period
         avg_loss = (avg_loss * (period - 1) + losses[i]) / period
-        rs = avg_gain / avg_loss if avg_loss != 0 else 0
-        rsi_val = 100 - (100 / (1 + rs))
+        # Wilder's RSI: if average loss is zero, RSI is 100 (no losses in period)
+        if avg_loss == 0:
+            rsi_val = 100.0
+        else:
+            rs = avg_gain / avg_loss
+            rsi_val = 100.0 - (100.0 / (1.0 + rs))
         rs_values.append(rsi_val)
     
     return [None] * (period + 1) + rs_values
@@ -970,6 +974,12 @@ def execute_workflow():
                 except Exception:
                     latest_data['rsi'] = last_rsi
                 print(f"[INFO] Computed RSI (last non-None): {latest_data['rsi']}")
+                # Diagnostic: show recent price tail and RSI tail to help debugging spikes
+                try:
+                    tail_len = min(30, len(prices))
+                    print(f"[DEBUG_RSI] prices_tail={prices[-tail_len:]}\n[DEBUG_RSI] rsi_tail={rsi_vals[-min(10,len(rsi_vals)):]}" )
+                except Exception:
+                    pass
         
         if 'ema' in block_types or 'sma' in block_types:
             period = indicator_params.get('ema', {}).get('period', 20)
@@ -1546,8 +1556,95 @@ def _build_v2_response(symbol: str, timeframe: str, days: int, engine_resp: Dict
     # Decide signal mapping
     final_decision = (engine_resp.get('final_decision') or '')
     final_decision_up = str(final_decision).upper()
+    final_signal = 'HOLD'
     if 'CONFIRMED' in final_decision_up:
-        final_signal = 'BUY'
+        # Attempt to infer BUY vs SELL from the passed condition blocks and latest_data
+        def infer_direction(blocks, latest):
+            # Prefer any passed RSI block anywhere in the workflow: explicit rsi signals should override
+            try:
+                for b in (blocks or []):
+                    try:
+                        btype = b.get('block_type') or b.get('type')
+                        status = (b.get('status') or '').lower()
+                        if status != 'passed':
+                            continue
+                        params = (b.get('data') or {}).get('params') or b.get('params') or {}
+                        if btype == 'rsi':
+                            rsi_val = float(latest.get('rsi') or 0)
+                            low = float(params.get('oversold') or params.get('threshold_low') or 30)
+                            high = float(params.get('overbought') or params.get('threshold_high') or 70)
+                            cond = (params.get('rsi_condition') or params.get('condition') or 'any').lower()
+                            if cond == 'oversold':
+                                return 'BUY'
+                            if cond == 'overbought':
+                                return 'SELL'
+                            if rsi_val < low:
+                                return 'BUY'
+                            if rsi_val > high:
+                                return 'SELL'
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+
+            # Fallback to original reverse-order heuristics for other indicators
+            for b in reversed(blocks or []):
+                try:
+                    btype = b.get('block_type') or b.get('type')
+                    status = (b.get('status') or '').lower()
+                    if status != 'passed':
+                        continue
+                    params = (b.get('data') or {}).get('params') or b.get('params') or {}
+                    if btype in ('ema', 'sma'):
+                        ema = latest.get('ema')
+                        close = latest.get('close')
+                        if ema is None or close is None:
+                            continue
+                        direction = (params.get('direction') or 'above').lower()
+                        if direction == 'above':
+                            return 'BUY' if close > ema else 'SELL'
+                        if direction == 'below':
+                            return 'SELL' if close < ema else 'BUY'
+                    if btype == 'macd':
+                        hist = latest.get('macd_hist')
+                        if hist is None:
+                            continue
+                        return 'BUY' if hist > 0 else 'SELL'
+                    if btype == 'bollinger':
+                        upper = latest.get('boll_upper')
+                        lower = latest.get('boll_lower')
+                        close = latest.get('close')
+                        # If we have an upper band and the close is above it, infer SELL.
+                        # If we only have a lower band and the close is below it, infer BUY.
+                        if upper is not None and close is not None:
+                            if close >= upper:
+                                return 'SELL'
+                        if lower is not None and close is not None:
+                            if close <= lower:
+                                return 'BUY'
+                    if btype == 'stochastic':
+                        k = latest.get('stoch_k')
+                        low = float(params.get('oversold') or params.get('stoch_low') or 20)
+                        high = float(params.get('overbought') or params.get('stoch_high') or 80)
+                        if k is None:
+                            continue
+                        if k < low:
+                            return 'BUY'
+                        if k > high:
+                            return 'SELL'
+                    if btype == 'vwap':
+                        vwap = latest.get('vwap')
+                        close = latest.get('close')
+                        if vwap is None or close is None:
+                            continue
+                        return 'BUY' if close > vwap else 'SELL'
+                except Exception:
+                    continue
+
+            # If we couldn't infer direction from any passed block, be conservative and HOLD
+            return 'HOLD'
+
+        final_signal = infer_direction(engine_resp.get('blocks', []), engine_resp.get('latest_data', {}))
     elif 'REJECTED' in final_decision_up:
         # If stopped/failed, treat as HOLD unless explicit sell conditions determined elsewhere
         final_signal = 'HOLD'
@@ -1622,6 +1719,253 @@ def execute_workflow_v2():
     except Exception as e:
         print(f"❌ Error in v2 execute: {e}")
         return jsonify({'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/test_alpaca_keys', methods=['POST'])
+def test_alpaca_keys():
+    """Quick endpoint to validate Alpaca API keys by attempting to fetch a small bar window.
+
+    Body: { alpacaKeyId, alpacaSecretKey, symbol?, timeframe?, days? }
+    Returns: { ok: true } on success or { ok: false, error: '...' } on failure
+    """
+    try:
+        data = request.json or {}
+        key = data.get('alpacaKeyId') or data.get('alpacaKey')
+        secret = data.get('alpacaSecretKey') or data.get('alpacaSecret')
+        symbol = (data.get('symbol') or 'SPY').upper()
+        tf = normalize_timeframe(data.get('timeframe') or '1Hour')
+        days = parse_days(data.get('days') or 1, default=1)
+
+        if not key or not secret:
+            return jsonify({'ok': False, 'error': 'Missing alpacaKeyId or alpacaSecretKey in request body'}), 400
+
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=days)
+        start_str = start_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+        end_str = end_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+        bars = fetch_bars_full(symbol, start_str, end_str, tf, api_key=key, api_secret=secret)
+        if not bars or not bars.get('close'):
+            return jsonify({'ok': False, 'error': 'No bars returned with provided keys (check permissions/timeframe)'}), 400
+        # minimal success payload
+        return jsonify({'ok': True, 'symbol': symbol, 'timeframe': tf, 'count': len(bars.get('close', []))}), 200
+    except Exception as e:
+        print(f"❌ Error validating Alpaca keys: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# --- Backtest Data & Execution Endpoints (for frontend backtesting) -----------------------
+@app.route('/backtest_data', methods=['POST'])
+def backtest_data():
+    """Fetch historical data for backtesting"""
+    try:
+        req = request.json or {}
+        symbol = req.get('symbol', 'SPY')
+        timeframe = req.get('timeframe', '1Hour')
+        start_date = req.get('start')
+        end_date = req.get('end')
+        alpaca_key_id = req.get('alpacaKeyId')
+        alpaca_secret_key = req.get('alpacaSecretKey')
+
+        if not start_date or not end_date:
+            return jsonify({'error': 'start and end dates required'}), 400
+
+        print(f"📊 Fetching backtest data: {symbol} {timeframe} from {start_date} to {end_date}")
+
+        # Fetch bars using alpaca_fetch
+        bars = fetch_bars_full(
+            symbol=symbol,
+            timeframe=timeframe,
+            start=start_date,
+            end=end_date,
+            api_key=alpaca_key_id,
+            api_secret=alpaca_secret_key
+        )
+
+        if not bars or 'error' in bars:
+            return jsonify({'error': bars.get('error', 'Failed to fetch data')}), 500
+
+        # Convert to list of bar objects
+        bar_list = []
+        length = len(bars.get('timestamp', []))
+        for i in range(length):
+            bar_list.append({
+                't': bars['timestamp'][i],
+                'o': bars['open'][i],
+                'h': bars['high'][i],
+                'l': bars['low'][i],
+                'c': bars['close'][i],
+                'v': bars['volume'][i]
+            })
+
+        print(f"✅ Fetched {len(bar_list)} bars for backtesting")
+        return jsonify({'bars': bar_list}), 200
+
+    except Exception as e:
+        print(f"❌ Error fetching backtest data: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/execute_backtest', methods=['POST'])
+def execute_backtest():
+    """Execute workflow against historical data and return signals"""
+    try:
+        req = request.json or {}
+        symbol = req.get('symbol', 'SPY')
+        timeframe = req.get('timeframe', '1Hour')
+        workflow = req.get('workflow', [])
+        historical_data = req.get('historicalData', [])
+        alpaca_key_id = req.get('alpacaKeyId')
+        alpaca_secret_key = req.get('alpacaSecretKey')
+
+        if not workflow:
+            return jsonify({'error': 'workflow required'}), 400
+        if not historical_data:
+            return jsonify({'error': 'historicalData required'}), 400
+
+        print(f"🔄 Executing backtest workflow: {len(workflow)} blocks, {len(historical_data)} bars")
+
+        # Convert historical_data to the format workflow_engine expects
+        bars_dict = {
+            't': [bar['t'] for bar in historical_data],
+            'o': [bar['o'] for bar in historical_data],
+            'h': [bar['h'] for bar in historical_data],
+            'l': [bar['l'] for bar in historical_data],
+            'c': [bar['c'] for bar in historical_data],
+            'v': [bar['v'] for bar in historical_data]
+        }
+
+        # Process each bar through the workflow to generate signals
+        signals = []
+        for i, bar in enumerate(historical_data):
+            # Build latest_data dict with current bar and indicators
+            # We need enough history for indicators to calculate
+            latest_data = {
+                'symbol': symbol,
+                'timeframe': timeframe,
+                'close': bar['c'],
+                'open': bar['o'],
+                'high': bar['h'],
+                'low': bar['l'],
+                'volume': bar['v'],
+                'timestamp': bar['t']
+            }
+
+            # Calculate indicators if we have enough bars. Use parameters from the workflow blocks
+            # Extract arrays up to current index for indicator calculation
+            history_start = max(0, i - 1000)
+            closes_so_far = [historical_data[j]['c'] for j in range(history_start, i + 1)]
+            highs_so_far = [historical_data[j]['h'] for j in range(history_start, i + 1)]
+            lows_so_far = [historical_data[j]['l'] for j in range(history_start, i + 1)]
+            volumes_so_far = [historical_data[j]['v'] for j in range(history_start, i + 1)]
+
+            # Helper to find a block by type and return its params dict
+            def _block_params(t):
+                for b in workflow:
+                    if b.get('type') == t:
+                        return b.get('params', {}) or {}
+                return {}
+
+            block_types = {b.get('type') for b in workflow}
+
+            # Calculate RSI if needed (use user's period if provided)
+            if 'rsi' in block_types:
+                rsi_params = _block_params('rsi')
+                rsi_period = int(rsi_params.get('period', rsi_params.get('length', 14)))
+                if len(closes_so_far) >= rsi_period + 1:
+                    from rsiIndicator import rsi
+                    rsi_vals = rsi(closes_so_far, rsi_period)
+                    if rsi_vals and rsi_vals[-1] is not None:
+                        latest_data['rsi'] = rsi_vals[-1]
+
+            # Calculate MACD if needed (use user's fast/slow/signal if provided)
+            if 'macd' in block_types:
+                macd_params = _block_params('macd')
+                fast = int(macd_params.get('fast', macd_params.get('fastPeriod', 12)))
+                slow = int(macd_params.get('slow', macd_params.get('slowPeriod', 26)))
+                signal = int(macd_params.get('signal', macd_params.get('signalPeriod', 9)))
+                min_required = max(fast, slow) + signal
+                if len(closes_so_far) >= min_required:
+                    from macdIndicator import macd
+                    macd_line, signal_line, histogram = macd(closes_so_far, fast, slow, signal)
+                    if macd_line and macd_line[-1] is not None:
+                        latest_data['macd'] = macd_line[-1]
+                        latest_data['macd_signal'] = signal_line[-1] if signal_line else None
+                        latest_data['macd_histogram'] = histogram[-1] if histogram else None
+
+            # Calculate Bollinger Bands if needed (use user's period and std)
+            if 'bollinger' in block_types or 'bollingerBands' in block_types:
+                bb_type = 'bollinger' if 'bollinger' in block_types else 'bollingerBands'
+                bb_params = _block_params(bb_type)
+                bb_period = int(bb_params.get('period', bb_params.get('length', 20)))
+                bb_std = float(bb_params.get('numStd', bb_params.get('std', 2)))
+                if len(closes_so_far) >= bb_period:
+                    from bollingerBands import bollinger_bands
+                    upper, middle, lower = bollinger_bands(closes_so_far, bb_period, bb_std)
+                    if upper and upper[-1] is not None:
+                        latest_data['bb_upper'] = upper[-1]
+                        latest_data['bb_middle'] = middle[-1]
+                        latest_data['bb_lower'] = lower[-1]
+
+            # Execute workflow for this bar
+            result = workflow_engine.execute_workflow(workflow, latest_data)
+
+            # Extract signal from result
+            # WorkflowResult has .success and .final_decision
+            # If workflow passes, look for signal block to determine BUY/SELL direction
+            if result and result.success:
+                signal_value = None
+                
+                # Check if final_decision already specifies BUY/SELL
+                if result.final_decision and result.final_decision.upper() in ['BUY', 'SELL', 'LONG', 'SHORT']:
+                    signal_value = result.final_decision.upper()
+                else:
+                    # Look for a signal block in the workflow to determine direction
+                    signal_block = next((b for b in workflow if b.get('type') == 'signal'), None)
+                    if signal_block:
+                        # Extract signal from params or data
+                        signal_value = signal_block.get('params', {}).get('signal') or signal_block.get('params', {}).get('action')
+                        if not signal_value:
+                            # Default to BUY if workflow passes but no explicit signal
+                            signal_value = 'BUY'
+                    else:
+                        # No signal block found - check if this is an RSI oversold (BUY) or overbought (SELL) strategy
+                        # Look at the passing block's message/type for hints
+                        for block_result in result.blocks:
+                            if block_result.status.value == 'passed' and block_result.block_type == 'rsi':
+                                if 'oversold' in block_result.message.lower():
+                                    signal_value = 'BUY'
+                                elif 'overbought' in block_result.message.lower():
+                                    signal_value = 'SELL'
+                                break
+                        
+                        # If still no signal, default to BUY when conditions pass
+                        if not signal_value:
+                            signal_value = 'BUY'
+                
+                # Normalize LONG->BUY, SHORT->SELL
+                if signal_value == 'LONG':
+                    signal_value = 'BUY'
+                elif signal_value == 'SHORT':
+                    signal_value = 'SELL'
+                
+                if signal_value in ['BUY', 'SELL']:
+                    signals.append({
+                        'time': bar['t'],
+                        'timestamp': bar['t'],
+                        'signal': signal_value,
+                        'price': bar['c'],
+                        'close': bar['c']
+                    })
+
+        print(f"✅ Generated {len(signals)} signals from backtest")
+        return jsonify({'signals': signals}), 200
+
+    except Exception as e:
+        print(f"❌ Error executing backtest: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 
