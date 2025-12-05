@@ -149,13 +149,32 @@ const StrategyMonitorDrawer = ({ open, onClose, initialTab = 'live', className =
             className="md-btn md-stop"
             onClick={() => {
               try {
+                // Get active workflow ID before clearing
+                const activeId = localStorage.getItem('workflow_active_id');
+                
                 // write a timestamp so other tabs receive a storage event
                 localStorage.setItem('monitor_stop', String(Date.now()));
-                // clear shortly after to avoid leaving a stale flag
+                
+                // Clear workflow_live and workflow_active_id
+                localStorage.setItem('workflow_live', '0');
+                localStorage.removeItem('workflow_active_id');
+                
+                // Clear the sidebar toggle key for this strategy
+                if (activeId) {
+                  const toggleKey = `flowgrid_saved_enabled::${activeId}`;
+                  localStorage.setItem(toggleKey, '0');
+                }
+                
+                // Dispatch custom event so same-tab components can react
+                window.dispatchEvent(new CustomEvent('flowgrid:strategy-stopped', { detail: { strategyId: activeId } }));
+                
+                // clear monitor_stop flag shortly after to avoid leaving a stale flag
                 setTimeout(() => {
                   try { localStorage.removeItem('monitor_stop'); } catch (e) {}
                 }, 1000);
-              } catch (e) {}
+              } catch (e) {
+                console.error('[Monitor] Stop button error:', e);
+              }
             }}
             title="Stop live monitoring"
           >

@@ -112,6 +112,36 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
 
 /* Canvas area */
 .canvas-container { flex:1; position:relative; overflow:hidden; background-color:var(--bg); background-image: radial-gradient(rgba(38,42,51,0.6) 1px, transparent 1px), radial-gradient(rgba(38,42,51,0.6) 1px, transparent 1px); background-position:0 0, 7.5px 7.5px; background-size:15px 15px; margin-left:240px; }
+/* FlowTrade logo background - sits behind the grid */
+.flowtrade-logo-bg {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 0; /* behind connections and canvas */
+  pointer-events: none;
+  /* slightly more visible but still very transparent */
+  opacity: 0.08;
+  filter: saturate(1.0) brightness(1.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.flowtrade-logo-text {
+  font-family: Inter, 'Segoe UI', Roboto, system-ui, -apple-system, sans-serif;
+  font-weight: 800;
+  font-size: 96px; /* slightly larger for readability */
+  letter-spacing: 10px;
+  color: rgba(255,255,255,0.14); /* whiter, still translucent */
+  text-transform: uppercase;
+  user-select: none;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.04);
+  mix-blend-mode: overlay;
+}
+
+/* Ensure main layers sit above background */
+.connection-layer { z-index: 1; }
+.canvas { z-index: 2; }
 .connection-layer { position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; z-index:1; }
 .canvas { position:absolute; width:5000px; height:5000px; cursor:grab; transform-origin:0 0; z-index:2; }
 /* Prevent pointer events in overlapping regions */

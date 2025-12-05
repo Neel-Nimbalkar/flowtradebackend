@@ -24,6 +24,16 @@ export default defineConfig({
         changeOrigin: true,
         secure: false
       },
+      '/api': {
+        target: 'http://127.0.0.1:5000',
+        changeOrigin: true,
+        secure: false
+      },
+      '/test_alpaca_keys': {
+        target: 'http://127.0.0.1:5000',
+        changeOrigin: true,
+        secure: false
+      },
       '/health': {
         target: 'http://127.0.0.1:5000',
         changeOrigin: true,

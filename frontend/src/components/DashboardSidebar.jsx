@@ -13,6 +13,17 @@ const items = [
   { key: 'help', label: 'Help / Documentation', icon: 'search' }
 ];
 
+const clearBuilderLoadRequest = () => {
+  try {
+    localStorage.removeItem('flowgrid_workflow_v1::load_request');
+    // Dispatch event to tell builder to clear its canvas
+    window.dispatchEvent(new Event('flowgrid:clear-builder'));
+    console.log('[DashboardSidebar] Dispatched clear-builder event');
+  } catch (e) {
+    console.error('[DashboardSidebar] clearBuilderLoadRequest error', e);
+  }
+};
+
 const SAVES_KEY = 'flowgrid_workflow_v1::saves';
 const SidebarSavedKey = id => `flowgrid_saved_enabled::${id}`;
 
@@ -82,10 +93,19 @@ const DashboardSidebar = ({ onNavigate = () => {}, hideHome = false, activeKey =
     const onCustom = () => readSaved();
     window.addEventListener('flowgrid:saves-updated', onCustom);
     window.addEventListener('focus', readSaved);
+    
+    // Listen for strategy-stopped event (same-tab communication)
+    const onStrategyStopped = (e) => {
+      console.log('[DashboardSidebar] Strategy stopped event received', e.detail);
+      readSaved(); // Re-read all toggle states
+    };
+    window.addEventListener('flowgrid:strategy-stopped', onStrategyStopped);
+    
     return () => {
       window.removeEventListener('storage', onStorage);
       window.removeEventListener('flowgrid:saves-updated', onCustom);
       window.removeEventListener('focus', readSaved);
+      window.removeEventListener('flowgrid:strategy-stopped', onStrategyStopped);
     };
   }, []);
 
@@ -128,8 +148,14 @@ const DashboardSidebar = ({ onNavigate = () => {}, hideHome = false, activeKey =
 
   const handleStrategyClick = (id) => {
     try {
+      console.log('[DashboardSidebar] handleStrategyClick:', id);
+      // Clear existing load request first
+      localStorage.removeItem('flowgrid_workflow_v1::load_request');
+      // Set new load request
       localStorage.setItem('flowgrid_workflow_v1::load_request', id);
-      // navigate to builder; builder will listen for load_request on mount
+      // Dispatch custom event to force builder to process immediately
+      window.dispatchEvent(new CustomEvent('flowgrid:load-request', { detail: { workflowId: id } }));
+      // navigate to builder; builder will listen for load_request
       onNavigate('builder');
     } catch (e) { console.error('[DashboardSidebar] handleStrategyClick error', e); }
   };

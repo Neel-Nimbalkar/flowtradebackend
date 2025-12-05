@@ -1,6 +1,6 @@
 import React from 'react';
 
-const Toolbar = ({ onSave, onLoad, onExport, onImport, onClear, onOrganize, onRun, onSample, onToggleMonitor, onRunToggle, onBacktest, liveRunning, extraBefore = null }) => {
+const Toolbar = ({ onSave, onLoad, onExport, onImport, onClear, onOrganize, onRun, onSample, onToggleMonitor, onRunToggle, onBacktest, liveRunning, extraBefore = null, onNew = null }) => {
   const callOrLegacy = (id, cb) => () => {
     if (cb) return cb();
     const el = document.getElementById(id);
@@ -14,6 +14,7 @@ const Toolbar = ({ onSave, onLoad, onExport, onImport, onClear, onOrganize, onRu
   return (
     <div className="toolbar">
       {extraBefore}
+      {onNew && <button className="toolbar-btn" id="newBtn" onClick={onNew} title="Start new workflow (clear canvas)">New</button>}
       <button className="toolbar-btn" id="organizeBtn" onClick={callOrLegacy('organizeBtn', onOrganize)} title="Auto-arrange blocks">Organize</button>
       <button className="toolbar-btn" id="clearBtn" onClick={callOrLegacy('clearBtn', onClear)}>Clear</button>
       <button className="toolbar-btn" id="saveBtn" onClick={callOrLegacy('saveBtn', onSave)} title="Save workflow">Save</button>

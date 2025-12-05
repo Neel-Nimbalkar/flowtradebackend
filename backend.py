@@ -22,12 +22,17 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 import matplotlib.dates as mdates
 from io import BytesIO
+from telegram_notifier import get_notifier, load_telegram_settings, save_telegram_settings
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for browser access
 
 # Initialize workflow engine
 workflow_engine = WorkflowEngine()
+
+# Track last sent signal per strategy to avoid spam
+# Key: f"{symbol}_{timeframe}", Value: signal_type (BUY/SELL)
+last_sent_signals = {}
 
 # Lightweight backtest manager (filesystem-backed) for local dev
 try:
@@ -1480,6 +1485,87 @@ def execute_workflow():
         print(f"✅ Workflow completed: {workflow_result.final_decision}")
         print(f"📊 latest_data keys: {list(latest_data.keys())}")
         print(f"💰 latest_data.price: {latest_data.get('price', 'MISSING')}")
+        
+        # Send Telegram notification if workflow succeeded (all conditions passed)
+        try:
+            # Extract signal type from signal block OR infer from conditions
+            signal_type = None
+            
+            # First, try to get signal type from Signal block
+            for block in workflow_blocks:
+                if block.get('type') == 'signal':
+                    signal_type = block.get('params', {}).get('type')
+                    break
+            
+            # If no explicit signal type, infer from RSI conditions
+            if not signal_type and workflow_result.success:
+                for result in workflow_result.blocks:
+                    if result.block_type == 'rsi' and result.status.value == 'passed':
+                        # Check if it was oversold (BUY) or overbought (SELL)
+                        if 'oversold' in result.message.lower():
+                            signal_type = 'BUY'
+                            break
+                        elif 'overbought' in result.message.lower():
+                            signal_type = 'SELL'
+                            break
+            
+            # Send notification if workflow succeeded and we have a signal type
+            if workflow_result.success and signal_type:
+                # Check if this is a new signal (different from last sent)
+                strategy_key = f"{symbol}_{timeframe}"
+                last_signal = last_sent_signals.get(strategy_key)
+                
+                if last_signal != signal_type:
+                    # Signal changed! Send notification
+                    print(f"📱 Signal CHANGED from {last_signal} to {signal_type}, sending Telegram notification...")
+                    notifier = get_notifier()
+                    
+                    # Load settings if not already loaded
+                    if not notifier.is_configured():
+                        settings = load_telegram_settings()
+                        if settings.get('bot_token') and settings.get('chat_id'):
+                            notifier.set_credentials(settings['bot_token'], settings['chat_id'])
+                    
+                    # Send notification if configured
+                    if notifier.is_configured():
+                        # Get strategy name from request or use default
+                        strategy_name = data.get('strategy_name', f"{symbol} {timeframe} Strategy")
+                        
+                        # Extract additional indicator data for the message
+                        additional_info = {}
+                        if 'rsi' in latest_data:
+                            additional_info['RSI'] = latest_data['rsi']
+                        if 'macd' in latest_data:
+                            additional_info['MACD'] = latest_data['macd']
+                        if 'ema' in latest_data:
+                            additional_info['EMA'] = latest_data['ema']
+                        if 'volume' in latest_data:
+                            additional_info['Volume'] = latest_data['volume']
+                        
+                        telegram_result = notifier.send_signal(
+                            strategy_name=strategy_name,
+                            signal=signal_type,  # Use the signal type from the Signal block
+                            symbol=symbol,
+                            price=latest_data.get('price') or latest_data.get('close'),
+                            timeframe=timeframe,
+                            additional_info=additional_info if additional_info else None
+                        )
+                        
+                        if telegram_result.get('success'):
+                            print(f"📱 Telegram notification sent successfully for {signal_type} signal")
+                            # Update last sent signal
+                            last_sent_signals[strategy_key] = signal_type
+                        else:
+                            print(f"⚠️ Telegram notification failed: {telegram_result.get('error')}")
+                else:
+                    # Same signal as before, don't spam
+                    print(f"ℹ️ Signal remains {signal_type}, not sending duplicate Telegram notification")
+            elif workflow_result.success:
+                print(f"ℹ️ No Telegram notification sent (no signal block found or Telegram not configured)")
+        except Exception as telegram_err:
+            # Don't fail the whole request if Telegram fails
+            print(f"⚠️ Telegram notification error: {telegram_err}")
+        
         return jsonify(response)
     
     except Exception as e:
@@ -2194,6 +2280,99 @@ def nvda_chart():
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
+# ===== Telegram Notification Endpoints =====
+
+@app.route('/api/telegram/settings', methods=['GET'])
+def get_telegram_settings():
+    """Get current Telegram settings"""
+    try:
+        settings = load_telegram_settings()
+        # Don't send full token to frontend for security
+        return jsonify({
+            'bot_token_set': bool(settings.get('bot_token')),
+            'chat_id': settings.get('chat_id', '')
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/telegram/settings', methods=['POST'])
+def save_telegram_settings_endpoint():
+    """Save Telegram settings"""
+    try:
+        data = request.json
+        bot_token = data.get('bot_token', '').strip()
+        chat_id = data.get('chat_id', '').strip()
+        
+        if not bot_token or not chat_id:
+            return jsonify({'error': 'Bot token and chat ID are required'}), 400
+        
+        success = save_telegram_settings(bot_token, chat_id)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Telegram settings saved successfully'
+            }), 200
+        else:
+            return jsonify({'error': 'Failed to save settings'}), 500
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/telegram/test', methods=['POST'])
+def test_telegram():
+    """Test Telegram connection and send test message"""
+    try:
+        notifier = get_notifier()
+        
+        # Load settings if not already loaded
+        if not notifier.is_configured():
+            settings = load_telegram_settings()
+            if settings.get('bot_token') and settings.get('chat_id'):
+                notifier.set_credentials(
+                    settings['bot_token'],
+                    settings['chat_id']
+                )
+        
+        if not notifier.is_configured():
+            return jsonify({
+                'success': False,
+                'error': 'Telegram not configured. Please save your settings first.'
+            }), 400
+        
+        # Test connection
+        test_result = notifier.test_connection()
+        
+        if not test_result.get('success'):
+            return jsonify(test_result), 400
+        
+        # Send test message
+        result = notifier.send_signal(
+            strategy_name="Test Strategy",
+            signal="BUY",
+            symbol="TEST",
+            price=100.50,
+            timeframe="Test",
+            additional_info={
+                "message": "This is a test message from FlowGrid Trading"
+            }
+        )
+        
+        if result.get('success'):
+            return jsonify({
+                'success': True,
+                'message': 'Test message sent successfully!',
+                'bot_info': test_result
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.get('error', 'Failed to send test message')
+            }), 400
+    
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
     print("FlowGrid Trading Backend Server")

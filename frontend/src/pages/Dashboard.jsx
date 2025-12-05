@@ -116,13 +116,30 @@ const Dashboard = ({ onNavigate }) => {
 
   const alertsToShow = React.useMemo(() => alerts.slice(0, 4), [alerts]);
 
+  const handleStartNewStrategy = React.useCallback(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const bridge = window.flowgridLiveBridge;
+        if (bridge && typeof bridge.resetWorkflow === 'function') {
+          bridge.resetWorkflow({ clearActive: true });
+        } else {
+          window.localStorage?.setItem('flowgrid_new_workflow_request', String(Date.now()));
+          window.dispatchEvent(new Event('flowgrid:new-workflow'));
+        }
+      }
+    } catch (err) {
+      console.warn('[Dashboard] Failed to request blank builder', err);
+    }
+    onNavigate('builder');
+  }, [onNavigate]);
+
   return (
     <div className="dashboard-root">
       <DashboardSidebar onNavigate={onNavigate} hideHome={true} activeKey={'home'} />
       <div className="dashboard-content">
         <div className="dashboard-main">
           <div className="top-cards">
-            <button className="card primary" onClick={() => onNavigate('builder')}>
+            <button className="card primary" onClick={handleStartNewStrategy}>
               <div className="card-title">Start New Strategy</div>
               <div className="card-desc">Open FlowGrid strategy builder</div>
             </button>

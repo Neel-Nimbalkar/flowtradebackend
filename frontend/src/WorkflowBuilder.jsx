@@ -220,6 +220,21 @@ const WorkflowBuilder = ({ onNavigate }) => {
     if (!confirm('Clear all nodes and connections?')) return;
     setNodes([]);
     setConnections([]);
+    try { localStorage.removeItem('workflow_active_id'); } catch (e) {}
+    try { localStorage.removeItem('flowgrid_workflow_v1::load_request'); } catch (e) {}
+  };
+
+  const newWorkflow = () => {
+    // Clear without confirmation - user clicked "New" intentionally
+    setNodes([]);
+    setConnections([]);
+    stopLive(); // Stop any running workflow
+    try { 
+      localStorage.setItem('workflow_live', '0');
+      localStorage.removeItem('workflow_active_id');
+      localStorage.removeItem('flowgrid_workflow_v1::load_request');
+    } catch (e) {}
+    console.log('[Builder] Started new workflow (cleared canvas)');
   };
 
   // Expose a small helper UI via window for quick access to saved workflows.
@@ -355,7 +370,11 @@ const WorkflowBuilder = ({ onNavigate }) => {
     let alpacaKeyId = null; let alpacaSecretKey = null;
     try { alpacaKeyId = localStorage.getItem('alpaca_key_id') || null; alpacaSecretKey = localStorage.getItem('alpaca_secret_key') || null; } catch (e) {}
 
-    return { symbol, timeframe, days, workflow: workflow_blocks, priceType: 'current', alpacaKeyId, alpacaSecretKey };
+    // Get strategy name from localStorage
+    let strategy_name = null;
+    try { strategy_name = localStorage.getItem('workflow_active_id') || null; } catch (e) {}
+
+    return { symbol, timeframe, days, workflow: workflow_blocks, priceType: 'current', alpacaKeyId, alpacaSecretKey, strategy_name };
   };
 
   // Execute a single workflow request. Returns parsed JSON or throws. Accepts optional AbortSignal.
@@ -587,6 +606,7 @@ const WorkflowBuilder = ({ onNavigate }) => {
     const tryLoadRequest = () => {
       try {
         const req = localStorage.getItem('flowgrid_workflow_v1::load_request');
+        console.log('[Builder] tryLoadRequest - load_request value:', req);
         if (!req) return;
         const raw = localStorage.getItem(SAVES_KEY) || '{}';
         const map = JSON.parse(raw);
@@ -596,9 +616,16 @@ const WorkflowBuilder = ({ onNavigate }) => {
           return;
         }
         const parsed = map[req];
+        if (!parsed || !parsed.nodes) {
+          console.warn('[Builder] Saved workflow has no nodes:', req);
+          try { localStorage.removeItem('flowgrid_workflow_v1::load_request'); } catch (e) {}
+          return;
+        }
         const normalized = normalizeIds(parsed.nodes || [], parsed.connections || []);
+        console.log(`[Builder] Loading workflow "${req}" with ${normalized.nodes.length} nodes`);
         setNodes(normalized.nodes);
         setConnections(normalized.connections);
+        try { localStorage.setItem('workflow_active_id', req); } catch (e) {}
         console.log(`[Builder] Loaded workflow from load_request: "${req}" with ${normalized.nodes.length} nodes`);
         // remove the request so it doesn't reload repeatedly
         try { localStorage.removeItem('flowgrid_workflow_v1::load_request'); } catch (e) {}
@@ -624,14 +651,19 @@ const WorkflowBuilder = ({ onNavigate }) => {
     const onStorage = (e) => {
       if (!e || !e.key) return;
       if (e.key === 'flowgrid_workflow_v1::load_request') {
+        console.log('[Builder] Storage event for load_request');
         tryLoadRequest();
       }
     };
+    const onCustomLoad = (e) => {
+      console.log('[Builder] Custom load-request event:', e.detail);
+      setTimeout(tryLoadRequest, 10); // Small delay to ensure localStorage is updated
+    };
     window.addEventListener('storage', onStorage);
-    window.addEventListener('flowgrid:load-request', tryLoadRequest);
+    window.addEventListener('flowgrid:load-request', onCustomLoad);
     return () => {
       window.removeEventListener('storage', onStorage);
-      window.removeEventListener('flowgrid:load-request', tryLoadRequest);
+      window.removeEventListener('flowgrid:load-request', onCustomLoad);
     };
   }, []);
 
@@ -647,6 +679,21 @@ const WorkflowBuilder = ({ onNavigate }) => {
     };
     window.addEventListener('storage', handler);
     return () => window.removeEventListener('storage', handler);
+  }, []);
+
+  // Listen for clear-builder event from Dashboard
+  useEffect(() => {
+    const handleClear = () => {
+      console.log('[Builder] Received clear-builder event, clearing canvas');
+      setNodes([]);
+      setConnections([]);
+      try { 
+        localStorage.removeItem('workflow_active_id');
+        localStorage.removeItem('flowgrid_workflow_v1::load_request');
+      } catch (e) {}
+    };
+    window.addEventListener('flowgrid:clear-builder', handleClear);
+    return () => window.removeEventListener('flowgrid:clear-builder', handleClear);
   }, []);
 
   // WebSocket client to receive node-emitted messages from backend broadcaster
@@ -1018,6 +1065,7 @@ const WorkflowBuilder = ({ onNavigate }) => {
           ) : (
             <BackButton onBack={() => { try { window.navigate && window.navigate('home'); } catch (e) { window.location.href = '/'; } }} label={'Back to Home'} />
           )}
+          onNew={newWorkflow}
           onSave={saveWorkflow}
           onLoad={loadWorkflow}
           onExport={exportWorkflow}
@@ -1033,6 +1081,10 @@ const WorkflowBuilder = ({ onNavigate }) => {
         />
 
         <div className="canvas-container">
+          {/* Background logo behind the grid */}
+          <div className="flowtrade-logo-bg" aria-hidden>
+            <span className="flowtrade-logo-text">FLOWTRADE</span>
+          </div>
           {/* Minimap and zoom controls together */}
           <div style={{ position: 'absolute', bottom: 24, right: 32, zIndex: 100, display: 'flex', alignItems: 'flex-end', gap: 12 }}>
             {/* minimap removed per request */}
