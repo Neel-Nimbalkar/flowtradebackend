@@ -30,7 +30,6 @@ const blockCategoryMap = {
   // AI & Output
   ai_agent: 'AI & Output',
   output: 'AI & Output',
-  signal: 'AI & Output',
 
   // Utility
   note: 'Utility'

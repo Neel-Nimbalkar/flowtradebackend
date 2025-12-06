@@ -57,10 +57,12 @@ const TradesTable = ({ trades }) => {
               <th onClick={() => handleSort('entryTime')}>Entry Time <SortIcon field="entryTime" /></th>
               <th onClick={() => handleSort('exitTime')}>Exit Time <SortIcon field="exitTime" /></th>
               <th onClick={() => handleSort('direction')}>Direction <SortIcon field="direction" /></th>
+              <th onClick={() => handleSort('shares')}>Shares <SortIcon field="shares" /></th>
               <th onClick={() => handleSort('entryPrice')}>Entry Price <SortIcon field="entryPrice" /></th>
               <th onClick={() => handleSort('exitPrice')}>Exit Price <SortIcon field="exitPrice" /></th>
               <th onClick={() => handleSort('netProfit')}>Net P/L <SortIcon field="netProfit" /></th>
               <th onClick={() => handleSort('profitPercent')}>P/L % <SortIcon field="profitPercent" /></th>
+              <th>Exit Reason</th>
               <th onClick={() => handleSort('holdingDuration')}>Duration <SortIcon field="holdingDuration" /></th>
               <th onClick={() => handleSort('mae')}>MAE <SortIcon field="mae" /></th>
               <th onClick={() => handleSort('mfe')}>MFE <SortIcon field="mfe" /></th>
@@ -73,9 +75,10 @@ const TradesTable = ({ trades }) => {
                 <td>{formatDate(trade.exitTime)}</td>
                 <td>
                   <span className={`direction-badge ${trade.direction}`}>
-                    {trade.direction === 'long' ? '📈 LONG' : '📉 SHORT'}
+                    {trade.direction === 'long' ? 'LONG' : 'SHORT'}
                   </span>
                 </td>
+                <td>{trade.shares || 100}</td>
                 <td>{formatCurrency(trade.entryPrice)}</td>
                 <td>{formatCurrency(trade.exitPrice)}</td>
                 <td className={trade.netProfit > 0 ? 'profit' : 'loss'}>
@@ -83,6 +86,13 @@ const TradesTable = ({ trades }) => {
                 </td>
                 <td className={trade.profitPercent > 0 ? 'profit' : 'loss'}>
                   {formatPercent(trade.profitPercent)}
+                </td>
+                <td>
+                  <span className={`exit-reason ${trade.exitReason || 'signal'}`}>
+                    {trade.exitReason === 'take-profit' ? 'TP' : 
+                     trade.exitReason === 'stop-loss' ? 'SL' : 
+                     trade.exitReason === 'auto-exit' ? 'Auto' : 'Signal'}
+                  </span>
                 </td>
                 <td>{formatDuration(trade.holdingDuration)}</td>
                 <td>{formatCurrency(trade.mae)}</td>

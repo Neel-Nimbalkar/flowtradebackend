@@ -27,6 +27,21 @@ const DrawdownChart = ({ data }) => {
     const minTime = data[0].time;
     const maxTime = data[data.length - 1].time;
 
+    // Determine color intensity based on max drawdown severity
+    // Green if DD < 5%, Yellow if 5-15%, Red if > 15%
+    const ddPct = maxDD;
+    let lineColor, areaColor;
+    if (ddPct < 5) {
+      lineColor = '#10b981';
+      areaColor = 'rgba(16, 185, 129, 0.3)';
+    } else if (ddPct < 15) {
+      lineColor = '#f59e0b';
+      areaColor = 'rgba(245, 158, 11, 0.3)';
+    } else {
+      lineColor = '#ef4444';
+      areaColor = 'rgba(239, 68, 68, 0.3)';
+    }
+
     const xScale = (time) => margin.left + ((time - minTime) / (maxTime - minTime)) * chartWidth;
     const yScale = (dd) => height - margin.bottom - (dd / maxDD) * chartHeight;
 
@@ -55,7 +70,7 @@ const DrawdownChart = ({ data }) => {
     ctx.stroke();
 
     // Draw drawdown area
-    ctx.fillStyle = 'rgba(239, 68, 68, 0.3)';
+    ctx.fillStyle = areaColor;
     ctx.beginPath();
     ctx.moveTo(xScale(data[0].time), height - margin.bottom);
     data.forEach(point => {
@@ -66,7 +81,7 @@ const DrawdownChart = ({ data }) => {
     ctx.fill();
 
     // Draw drawdown line
-    ctx.strokeStyle = '#ef4444';
+    ctx.strokeStyle = lineColor;
     ctx.lineWidth = 2;
     ctx.beginPath();
     data.forEach((point, idx) => {

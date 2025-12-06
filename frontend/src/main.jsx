@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import WorkflowBuilder from './WorkflowBuilder'
-import BacktestPage from './BacktestPage'
+import BacktestPage from './pages/BacktestPage'
 import Dashboard from './pages/Dashboard'
 import Analytics from './pages/Analytics'
 import Account from './pages/Account'

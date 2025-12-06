@@ -11,6 +11,7 @@ import NodeSettings from './components/NodeSettings';
 import PastDataViewer from './components/StrategyResults/PastDataViewer';
 import BacktestModal from './components/BacktestModal';
 import Icon from './components/Icon';
+import { trackTrade, getCurrentPosition } from './tradeTracker';
 
 const WorkflowBuilder = ({ onNavigate }) => {
     // Zoom and pan state
@@ -480,6 +481,22 @@ const WorkflowBuilder = ({ onNavigate }) => {
             if (data && data.historical_bars && Object.keys(data.historical_bars).length > 0) setPastOpen(true);
             else setPastOpen(false);
             persistAlertEntry(data, 'live-tick');
+
+            // Track live trades when strategy is running
+            try {
+              const strategyName = localStorage.getItem('workflow_active_id') || 'Unnamed Strategy';
+              const symbol = payload.symbol || 'SPY';
+              const timeframe = payload.timeframe || '1Hour';
+              trackTrade(data, {
+                strategyId: strategyName,
+                strategyName: strategyName,
+                symbol: symbol,
+                timeframe: timeframe,
+                shares: 100 // Could make configurable
+              });
+            } catch (err) {
+              console.warn('[WorkflowBuilder] Trade tracking error', err);
+            }
           } else {
             console.warn('Live run returned error payload', data);
           }

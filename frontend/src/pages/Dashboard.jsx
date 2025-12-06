@@ -138,20 +138,7 @@ const Dashboard = ({ onNavigate }) => {
       <DashboardSidebar onNavigate={onNavigate} hideHome={true} activeKey={'home'} />
       <div className="dashboard-content">
         <div className="dashboard-main">
-          <div className="top-cards">
-            <button className="card primary" onClick={handleStartNewStrategy}>
-              <div className="card-title">Start New Strategy</div>
-              <div className="card-desc">Open FlowGrid strategy builder</div>
-            </button>
-            <button className="card" onClick={() => onNavigate('backtest')}>
-              <div className="card-title">Run Backtest</div>
-              <div className="card-desc">Evaluate strategy performance</div>
-            </button>
-            <button className="card" onClick={() => onNavigate('analytics')}>
-              <div className="card-title">View Analytics</div>
-              <div className="card-desc">Open analytics & insights</div>
-            </button>
-          </div>
+          {/* top-cards removed per UI update - buttons hidden */}
           {/* Move Alpaca API Settings panel to bottom of grid */}
 
           <div className="grid" style={{ gridTemplateColumns: '1fr 3fr 360px', gridTemplateRows: 'auto auto auto', gap: 16 }}>

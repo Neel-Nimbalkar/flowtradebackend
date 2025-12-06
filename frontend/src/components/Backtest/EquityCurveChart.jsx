@@ -31,6 +31,13 @@ const EquityCurveChart = ({ data }) => {
     const minTime = data[0].time;
     const maxTime = data[data.length - 1].time;
 
+    // Determine color based on final equity vs starting equity
+    const startEquity = data[0].equity;
+    const endEquity = data[data.length - 1].equity;
+    const isProfit = endEquity >= startEquity;
+    const lineColor = isProfit ? '#10b981' : '#ef4444';
+    const areaColor = isProfit ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)';
+
     // Scales
     const xScale = (time) => margin.left + ((time - minTime) / (maxTime - minTime)) * chartWidth;
     const yScale = (equity) => height - margin.bottom - ((equity - minEquity) / (maxEquity - minEquity)) * chartHeight;
@@ -60,7 +67,7 @@ const EquityCurveChart = ({ data }) => {
     ctx.stroke();
 
     // Draw equity curve
-    ctx.strokeStyle = '#10b981';
+    ctx.strokeStyle = lineColor;
     ctx.lineWidth = 2;
     ctx.beginPath();
     data.forEach((point, idx) => {
@@ -75,7 +82,7 @@ const EquityCurveChart = ({ data }) => {
     ctx.stroke();
 
     // Draw area under curve
-    ctx.fillStyle = 'rgba(16, 185, 129, 0.1)';
+    ctx.fillStyle = areaColor;
     ctx.beginPath();
     ctx.moveTo(xScale(data[0].time), height - margin.bottom);
     data.forEach(point => {

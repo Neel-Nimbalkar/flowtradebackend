@@ -124,10 +124,6 @@ const blockDefs = {
     name: 'Output', icon: 'target', color: 'color-output', inputs: ['signal'], outputs: [],
     config: []
   },
-  signal: {
-    name: 'Signal Output', icon: 'target', color: 'color-output', inputs: ['signal'], outputs: [],
-    config: []
-  },
   // Utility
   note: {
     name: 'Text Note', icon: 'note', color: 'color-note', inputs: [], outputs: [],

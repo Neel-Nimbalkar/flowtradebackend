@@ -1,5 +1,7 @@
 import React from 'react';
 import './MetricsSummary.css';
+import EquityCurveChart from './EquityCurveChart';
+import DrawdownChart from './DrawdownChart';
 
 const MetricsSummary = ({ results }) => {
   const { metrics, config, trades } = results;
@@ -19,6 +21,8 @@ const MetricsSummary = ({ results }) => {
     { label: 'Win Rate', value: formatPercent(metrics.winRate), color: metrics.winRate > 50 ? '#10b981' : '#f59e0b' },
     { label: 'Net Profit', value: formatCurrency(metrics.netProfit), color: metrics.netProfit > 0 ? '#10b981' : '#ef4444' },
     { label: 'Return', value: formatPercent(metrics.netProfitPercent), color: metrics.netProfitPercent > 0 ? '#10b981' : '#ef4444' },
+    { label: 'Open P&L', value: formatCurrency(metrics.openPnL || 0), color: (metrics.openPnL || 0) >= 0 ? '#10b981' : '#ef4444' },
+    { label: 'Current Capital', value: formatCurrency(metrics.currentCapital || config.startingCapital), color: '#3b82f6' },
     { label: 'Profit Factor', value: formatNumber(metrics.profitFactor), color: metrics.profitFactor > 1 ? '#10b981' : '#ef4444' },
     { label: 'Sharpe Ratio', value: formatNumber(metrics.sharpeRatio), color: metrics.sharpeRatio > 1 ? '#10b981' : '#f59e0b' },
     { label: 'Avg Win', value: formatCurrency(metrics.avgWin), color: '#10b981' },
@@ -70,6 +74,20 @@ const MetricsSummary = ({ results }) => {
               <div className="metric-value" style={{ color: card.color }}>{card.value}</div>
             </div>
           ))}
+        </div>
+      </div>
+
+      <div className="summary-charts">
+        <h3>Performance Charts</h3>
+        <div className="charts-grid">
+          <div className="chart-panel">
+            <h4>Equity Curve</h4>
+            <EquityCurveChart data={results.equityCurve} />
+          </div>
+          <div className="chart-panel">
+            <h4>Drawdown</h4>
+            <DrawdownChart data={results.drawdownData.data} />
+          </div>
         </div>
       </div>
 

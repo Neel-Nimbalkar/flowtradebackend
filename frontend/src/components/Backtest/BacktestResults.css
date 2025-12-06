@@ -1,7 +1,7 @@
 .backtest-results {
   width: 100%;
   height: 100%;
-  max-height: calc(100vh - 180px);
+  max-height: calc(100vh - 20px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -82,6 +82,7 @@
 .results-content {
   flex: 1;
   padding: 24px;
+  padding-bottom: 48px;
   overflow-y: auto;
   overflow-x: hidden;
   min-height: 0;

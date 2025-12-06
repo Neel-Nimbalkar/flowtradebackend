@@ -2,6 +2,7 @@ import React from 'react';
 import DashboardSidebar from '../components/DashboardSidebar';
 import StrategyMonitorDrawer from '../components/StrategyMonitor/StrategyMonitorDrawer';
 import DashboardSettings from '../components/DashboardSettings';
+import LiveTrades from '../components/LiveTrades';
 import './Dashboard.css';
 
 const Analytics = ({ onNavigate }) => {
@@ -51,9 +52,9 @@ const Analytics = ({ onNavigate }) => {
         <div className="dashboard-main">
           <div className="grid" style={{ gridTemplateColumns: '1fr 3fr 360px', gap: 16 }}>
             <div className="panel large" style={{ gridColumn: '1 / span 2', gridRow: '1', minWidth: 0 }}>
-              <div className="panel-header">Analytics</div>
+              <div className="panel-header">Live Trading History</div>
               <div className="panel-body">
-                <div style={{ padding: 8 }}>Analytics workspace — Strategy Monitor is available on the right.</div>
+                <LiveTrades />
               </div>
             </div>
 

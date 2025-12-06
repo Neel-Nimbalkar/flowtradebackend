@@ -28,13 +28,12 @@
 
 .backtest-container {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: 400px 1fr;
   gap: 24px;
-  max-width: 1600px;
-  margin: 0 auto;
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  width: 100%;
 }
 
 .backtest-output {

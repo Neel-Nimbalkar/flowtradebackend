@@ -1904,6 +1904,14 @@ def execute_backtest():
         historical_data = req.get('historicalData', [])
         alpaca_key_id = req.get('alpacaKeyId')
         alpaca_secret_key = req.get('alpacaSecretKey')
+        
+        # Backtest configuration parameters
+        config = req.get('config', {})
+        take_profit_pct = float(config.get('takeProfitPct', 0))  # 0 = disabled
+        stop_loss_pct = float(config.get('stopLossPct', 0))  # 0 = disabled
+        shares_per_trade = int(config.get('sharesPerTrade', 100))
+        initial_capital = float(config.get('initialCapital', 10000))
+        commission_per_trade = float(config.get('commissionPerTrade', 0))
 
         if not workflow:
             return jsonify({'error': 'workflow required'}), 400
@@ -1911,6 +1919,7 @@ def execute_backtest():
             return jsonify({'error': 'historicalData required'}), 400
 
         print(f"🔄 Executing backtest workflow: {len(workflow)} blocks, {len(historical_data)} bars")
+        print(f"⚙️  Config: TP={take_profit_pct}% SL={stop_loss_pct}% Shares={shares_per_trade} Capital=${initial_capital}")
 
         # Convert historical_data to the format workflow_engine expects
         bars_dict = {
@@ -2006,29 +2015,32 @@ def execute_backtest():
                 # Check if final_decision already specifies BUY/SELL
                 if result.final_decision and result.final_decision.upper() in ['BUY', 'SELL', 'LONG', 'SHORT']:
                     signal_value = result.final_decision.upper()
+                    print(f"  [SIGNAL] From final_decision: {signal_value}")
                 else:
                     # Look for a signal block in the workflow to determine direction
                     signal_block = next((b for b in workflow if b.get('type') == 'signal'), None)
                     if signal_block:
                         # Extract signal from params or data
                         signal_value = signal_block.get('params', {}).get('signal') or signal_block.get('params', {}).get('action')
-                        if not signal_value:
-                            # Default to BUY if workflow passes but no explicit signal
-                            signal_value = 'BUY'
-                    else:
-                        # No signal block found - check if this is an RSI oversold (BUY) or overbought (SELL) strategy
-                        # Look at the passing block's message/type for hints
-                        for block_result in result.blocks:
-                            if block_result.status.value == 'passed' and block_result.block_type == 'rsi':
-                                if 'oversold' in block_result.message.lower():
-                                    signal_value = 'BUY'
-                                elif 'overbought' in block_result.message.lower():
-                                    signal_value = 'SELL'
-                                break
-                        
-                        # If still no signal, default to BUY when conditions pass
-                        if not signal_value:
-                            signal_value = 'BUY'
+                        if signal_value:
+                            print(f"  [SIGNAL] From signal block params: {signal_value}")
+                    
+                    # If no explicit signal yet, infer from RSI condition
+                    if not signal_value:
+                        # Check RSI block for oversold (BUY) or overbought (SELL)
+                        rsi_block = next((b for b in result.blocks if b.block_type == 'rsi' and b.status.value == 'passed'), None)
+                        if rsi_block:
+                            msg_lower = rsi_block.message.lower()
+                            if 'oversold' in msg_lower:
+                                signal_value = 'BUY'
+                                print(f"  [RSI] Oversold detected → BUY")
+                            elif 'overbought' in msg_lower:
+                                signal_value = 'SELL'
+                                print(f"  [RSI] Overbought detected → SELL")
+                            else:
+                                signal_value = 'BUY'  # Default fallback
+                        else:
+                            signal_value = 'BUY'  # Default fallback
                 
                 # Normalize LONG->BUY, SHORT->SELL
                 if signal_value == 'LONG':
@@ -2036,17 +2048,39 @@ def execute_backtest():
                 elif signal_value == 'SHORT':
                     signal_value = 'SELL'
                 
+                # Only add signal if it's different from the last one (deduplication)
+                last_signal = signals[-1]['signal'] if signals else None
                 if signal_value in ['BUY', 'SELL']:
-                    signals.append({
-                        'time': bar['t'],
-                        'timestamp': bar['t'],
-                        'signal': signal_value,
-                        'price': bar['c'],
-                        'close': bar['c']
-                    })
+                    if signal_value != last_signal:
+                        # Signal changed - this is a valid entry/exit
+                        signals.append({
+                            'time': bar['t'],
+                            'timestamp': bar['t'],
+                            'signal': signal_value,
+                            'price': bar['c'],
+                            'close': bar['c']
+                        })
+                        print(f"  📍 Bar {i+1}/{len(historical_data)}: {signal_value} @ ${bar['c']:.2f} | time={bar['t']} [Total signals: {len(signals)}]")
+                    else:
+                        # Same signal repeated - skip it
+                        print(f"  [SKIP] Bar {i+1}/{len(historical_data)}: {signal_value} (duplicate, last was {last_signal})")
 
         print(f"✅ Generated {len(signals)} signals from backtest")
-        return jsonify({'signals': signals}), 200
+        
+        # Return signals, historical data, and configuration for frontend processing
+        return jsonify({
+            'signals': signals,
+            'historicalData': historical_data,
+            'symbol': symbol,
+            'timeframe': timeframe,
+            'config': {
+                'takeProfitPct': take_profit_pct,
+                'stopLossPct': stop_loss_pct,
+                'sharesPerTrade': shares_per_trade,
+                'initialCapital': initial_capital,
+                'commissionPerTrade': commission_per_trade
+            }
+        }), 200
 
     except Exception as e:
         print(f"❌ Error executing backtest: {e}")

@@ -1,11 +1,12 @@
 .metrics-summary {
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 16px;
 }
 
 .summary-config,
 .summary-metrics,
+.summary-charts,
 .summary-breakdown {
   background: var(--secondary-bg, #0d1117);
   border-radius: 10px;
@@ -15,6 +16,7 @@
 
 .summary-config h3,
 .summary-metrics h3,
+.summary-charts h3,
 .summary-breakdown h3 {
   font-size: 16px;
   font-weight: 600;
@@ -117,4 +119,32 @@
 .breakdown-label {
   font-size: 13px;
   color: var(--text-muted, #9aa6c6);
+}
+.summary-charts {
+  margin-top: 0;
+}
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.chart-panel {
+  background: var(--card-bg, #161b22);
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid var(--border, #2a2e39);
+}
+
+.chart-panel h4 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 12px;
+  color: var(--text-primary, #cfe8ff);
+}
+
+.chart-panel canvas {
+  width: 100% !important;
+  height: 250px !important;
 }

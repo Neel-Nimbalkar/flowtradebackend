@@ -91,6 +91,28 @@
 
 .advanced-content {
   padding: 16px;
+  max-height: 400px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Custom scrollbar styling */
+.advanced-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.advanced-content::-webkit-scrollbar-track {
+  background: var(--secondary-bg, #0d1117);
+  border-radius: 4px;
+}
+
+.advanced-content::-webkit-scrollbar-thumb {
+  background: var(--border, #2a2e39);
+  border-radius: 4px;
+}
+
+.advanced-content::-webkit-scrollbar-thumb:hover {
+  background: var(--accent, #2962ff);
 }
 
 .run-backtest-btn {

@@ -14,7 +14,11 @@ const BacktestInputPanel = ({ onRun, loading }) => {
     startingCapital: 10000,
     fees: 0.001,
     slippage: 0.0005,
-    orderType: 'market'
+    orderType: 'market',
+    // New configuration options
+    takeProfitPct: 0,
+    stopLossPct: 0,
+    commissionPerTrade: 0
   });
 
   useEffect(() => {
@@ -149,6 +153,45 @@ const BacktestInputPanel = ({ onRun, loading }) => {
         <details className="advanced-settings">
           <summary>Advanced Settings</summary>
           <div className="advanced-content">
+            <div className="input-group">
+              <label>Take Profit (%)</label>
+              <input
+                type="number"
+                value={config.takeProfitPct}
+                onChange={(e) => handleChange('takeProfitPct', parseFloat(e.target.value) || 0)}
+                min="0"
+                step="0.5"
+                disabled={loading}
+              />
+              <small className="input-hint">Auto-exit when profit reaches this % (0 = disabled)</small>
+            </div>
+
+            <div className="input-group">
+              <label>Stop Loss (%)</label>
+              <input
+                type="number"
+                value={config.stopLossPct}
+                onChange={(e) => handleChange('stopLossPct', parseFloat(e.target.value) || 0)}
+                min="0"
+                step="0.5"
+                disabled={loading}
+              />
+              <small className="input-hint">Auto-exit when loss reaches this % (0 = disabled)</small>
+            </div>
+
+            <div className="input-group">
+              <label>Commission Per Trade ($)</label>
+              <input
+                type="number"
+                value={config.commissionPerTrade}
+                onChange={(e) => handleChange('commissionPerTrade', parseFloat(e.target.value) || 0)}
+                min="0"
+                step="0.01"
+                disabled={loading}
+              />
+              <small className="input-hint">Fixed commission per trade (default: $0)</small>
+            </div>
+
             <div className="input-group">
               <label>Fees (%)</label>
               <input
