@@ -47,7 +47,10 @@ const BacktestInputPanel = ({ onRun, loading }) => {
   }
 
   function getDefaultEndDate() {
-    return new Date().toISOString().split('T')[0];
+    // Use yesterday to avoid issues with today's incomplete data
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
   }
 
   const handleChange = (field, value) => {
@@ -63,6 +66,31 @@ const BacktestInputPanel = ({ onRun, loading }) => {
       alert('Please enter a ticker symbol');
       return;
     }
+    
+    // Validate date range
+    const startDate = new Date(config.startDate);
+    const endDate = new Date(config.endDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (startDate >= endDate) {
+      alert('⚠️ Start date must be before end date');
+      return;
+    }
+    
+    if (endDate >= today) {
+      alert('⚠️ End date should be at least yesterday or earlier.\n\nToday\'s market data may be incomplete or unavailable.');
+      return;
+    }
+    
+    // Check if Alpaca credentials are configured
+    const alpacaKeyId = localStorage.getItem('alpaca_key_id');
+    const alpacaSecretKey = localStorage.getItem('alpaca_secret_key');
+    if (!alpacaKeyId || !alpacaSecretKey) {
+      alert('⚠️ Alpaca API credentials not configured.\n\nPlease go to Dashboard → Settings and enter your Alpaca API Key ID and Secret Key to fetch historical market data.');
+      return;
+    }
+    
     onRun(config);
   };
 

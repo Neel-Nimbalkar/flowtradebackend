@@ -1,3 +1,184 @@
+/* ========================================
+   TradeZella-inspired Icon Sidebar
+   ======================================== */
+
+/* Main Sidebar Container - 72px icon-only sidebar */
+.sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 72px;
+  height: 100vh;
+  background: #1a1d24;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 0;
+  border-right: 1px solid #2a2e39;
+  z-index: 100;
+  box-sizing: border-box;
+}
+
+/* Logo Section */
+.sidebar-logo {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.sidebar-logo:hover {
+  transform: scale(1.05);
+}
+
+/* Navigation Section */
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 0 12px;
+  box-sizing: border-box;
+}
+
+/* Navigation Item */
+.sidebar-nav-item {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 12px;
+  color: #8b949e;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.sidebar-nav-item:hover {
+  background: rgba(41, 98, 255, 0.1);
+  color: #c9d1d9;
+}
+
+.sidebar-nav-item:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.sidebar-nav-item.active {
+  background: rgba(41, 98, 255, 0.15);
+  color: #2962ff;
+}
+
+.sidebar-nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 24px;
+  background: #2962ff;
+  border-radius: 0 2px 2px 0;
+}
+
+/* Tooltip */
+.sidebar-tooltip {
+  position: absolute;
+  left: 72px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #30363d;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+.sidebar-tooltip::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 6px solid transparent;
+  border-right-color: #30363d;
+  border-left: none;
+}
+
+.sidebar-nav-item:hover .sidebar-tooltip {
+  opacity: 1;
+  visibility: visible;
+  left: 68px;
+}
+
+/* Spacer */
+.sidebar-spacer {
+  flex: 1;
+}
+
+/* Bottom Section */
+.sidebar-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 0 12px;
+  box-sizing: border-box;
+  margin-top: auto;
+}
+
+/* Signout Button */
+.sidebar-signout {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 12px;
+  color: #8b949e;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sidebar-signout:hover {
+  background: rgba(248, 81, 73, 0.1);
+  color: #f85149;
+}
+
+/* Responsive - Hide sidebar on mobile */
+@media (max-width: 768px) {
+  .sidebar {
+    display: none;
+  }
+}
+
+/* Ensure no browser default page margin */
+body {
+  margin: 0;
+}
+
+/* ========================================
+   Legacy styles for compatibility
+   ======================================== */
+
+/* Old sidebar styles - kept for backwards compatibility */
 .df-sidebar { width: 240px; background: var(--card-bg, #161B22); padding: 18px 14px; display:flex; flex-direction:column; gap:12px; border-right: 1px solid var(--border, #2a2e39); box-sizing: border-box; margin-left: 0; }
 .df-logo { font-weight: 800; font-size: 18px; color: #cfe8ff; padding: 6px 6px; }
 .df-logo svg { width: 40px; height: 40px; }
@@ -10,11 +191,6 @@
 .df-nav-item span { font-size: 15px; }
 .df-bottom { margin-top:auto; }
 .df-theme { width:100%; padding:8px; border-radius:8px; background: rgba(255,255,255,0.02); border:none; color:#cfe8ff; }
-
-@media (max-width:900px) { .df-sidebar { display:none; } }
-
-/* Ensure no browser default page margin so sidebar can sit flush to viewport edge */
-body { margin: 0; }
 
 /* Saved strategies dropdown & buttons */
 .df-saved-section { margin-top: 6px; }
@@ -35,7 +211,6 @@ body { margin: 0; }
 .df-action-btn:hover { background: rgba(255,255,255,0.03); color: #fff; }
 .df-action-btn.delete { color: #ff7b7b; font-weight:700; }
 .df-action-btn.delete:hover { background: rgba(255,123,123,0.06); }
-
 
 /* Switch styles (small variant) */
 .df-switch { display:inline-block; position:relative; width:42px; height:22px; }

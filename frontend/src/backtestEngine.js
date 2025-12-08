@@ -41,13 +41,13 @@ export async function runBacktest(config) {
   // Step 1: Load the saved strategy
   const workflow = loadStrategy(strategyName);
   if (!workflow) {
-    throw new Error(`Strategy "${strategyName}" not found`);
+    throw new Error(`Strategy "${strategyName}" not found. Create a strategy in the Workflow Builder first.`);
   }
 
   // Step 2: Fetch historical market data
   const historicalData = await fetchHistoricalData(symbol, timeframe, startDate, endDate);
   if (!historicalData || historicalData.length === 0) {
-    throw new Error('No historical data available for the selected period');
+    throw new Error(`No historical data available for ${symbol} (${timeframe}) from ${startDate} to ${endDate}. Try a different date range or timeframe.`);
   }
 
   console.log(`[BacktestEngine] Loaded ${historicalData.length} candles`);
@@ -146,6 +146,11 @@ async function fetchHistoricalData(symbol, timeframe, startDate, endDate) {
     const alpacaKeyId = localStorage.getItem('alpaca_key_id');
     const alpacaSecretKey = localStorage.getItem('alpaca_secret_key');
 
+    // Check if credentials are configured
+    if (!alpacaKeyId || !alpacaSecretKey) {
+      throw new Error('Alpaca API credentials not found. Please configure them in Dashboard Settings.');
+    }
+
     const payload = {
       symbol,
       timeframe,
@@ -155,7 +160,11 @@ async function fetchHistoricalData(symbol, timeframe, startDate, endDate) {
       alpacaSecretKey
     };
 
+    console.log(`[BacktestEngine] Fetching data for ${symbol} (${timeframe}) from ${startDate} to ${endDate}`);
+
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
     const endpoints = [
+      `${baseUrl}/backtest_data`,
       'http://localhost:5000/backtest_data',
       'http://127.0.0.1:5000/backtest_data',
       '/backtest_data'
@@ -164,6 +173,7 @@ async function fetchHistoricalData(symbol, timeframe, startDate, endDate) {
     let lastError = null;
     for (const url of endpoints) {
       try {
+        console.log(`[BacktestEngine] Trying endpoint: ${url}`);
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -179,7 +189,9 @@ async function fetchHistoricalData(symbol, timeframe, startDate, endDate) {
         if (data.error) throw new Error(data.error);
         
         // Normalize data format
-        return data.bars || data.data || data;
+        const bars = data.bars || data.data || data;
+        console.log(`[BacktestEngine] Successfully fetched ${bars.length || 0} bars from ${url}`);
+        return bars;
       } catch (err) {
         lastError = err;
         continue;
@@ -242,7 +254,9 @@ async function generateSignals(workflow, historicalData, symbol, timeframe, back
       }
     };
 
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
     const endpoints = [
+      `${baseUrl}/execute_backtest`,
       '/execute_backtest',
       'http://127.0.0.1:5000/execute_backtest',
       'http://localhost:5000/execute_backtest'

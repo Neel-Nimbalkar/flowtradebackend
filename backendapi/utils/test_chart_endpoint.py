@@ -15,7 +15,7 @@ try:
         print(f"❌ Backend returned error: {response.status_code}")
 except Exception as e:
     print(f"❌ Cannot connect to backend: {e}")
-    print("   Make sure to run: python backend.py")
+    print("   Make sure to run: python -m backendapi.api.backend")
     exit(1)
 
 print()
@@ -71,7 +71,7 @@ The chart should appear in the bottom drawer showing:
 
 If the chart doesn't appear:
 - Check browser console (F12) for errors
-- Verify backend is running (python backend.py)
+- Verify backend is running (python -m backendapi.api.backend)
 - Confirm Alpaca credentials are entered correctly
 - Make sure the symbol exists and markets are open (or use historical data)
 """)

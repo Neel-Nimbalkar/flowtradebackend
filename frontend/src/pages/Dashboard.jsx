@@ -1,367 +1,608 @@
-import React from 'react';
-import './Dashboard.css';
+import React, { useState, useEffect, useCallback } from 'react';
 import DashboardSidebar from '../components/DashboardSidebar';
-// DashboardHeader removed to eliminate top bar
-import DashboardSettings from '../components/DashboardSettings';
-import PriceChart from '../components/StrategyResults/PriceChart';
 import './Dashboard.css';
 
-const ALERTS_STORAGE_KEY = 'flowgrid_alerts_v1';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
-const mockPrices = Array.from({ length: 60 }).map((_, i) => ({ time: Date.now() - (60 - i) * 60000, close: 100 + Math.sin(i / 6) * 4 + i * 0.05 }));
-// Mock NVDA fallback generator
-const makeMockSeries = (days = 7, base = 420) => {
-  const now = Date.now();
-  return Array.from({ length: days }).map((_, i) => {
-    const t = now - (days - i - 1) * 24 * 3600 * 1000;
-    const noise = Math.sin(i / 2) * 6 + (Math.random() - 0.5) * 4;
-    const close = +(base + (i - days / 2) * 1.8 + noise).toFixed(2);
-    return { time: t, close };
-  });
+// ============================================
+// Utility Functions
+// ============================================
+const formatCurrency = (value) => {
+  if (value === null || value === undefined) return '—';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
 };
-const mockActivities = [
-  { time: '2m ago', text: 'Edited strategy: Mean Reversion' },
-  { time: '10m ago', text: 'Backtest completed: NVDA 1Hour' },
-  { time: '1h ago', text: 'Alert triggered: SPY price above 450' },
-];
 
-const AccountPerformance = ({ initialRange = '1D' }) => {
-  const [range, setRange] = React.useState(initialRange);
+const formatPercent = (value) => {
+  if (value === null || value === undefined) return '—';
+  const sign = value >= 0 ? '+' : '';
+  return `${sign}${value.toFixed(2)}%`;
+};
 
-  // Mock equity curve generator for each range
-  const ranges = React.useMemo(() => ({
-    '1D': 24,
-    '5D': 5 * 24,
-    '1M': 30 * 24,
-    '6M': 30 * 24 * 6,
-    'YTD': 365 * 24,
-    'All': 365 * 24 * 2
-  }), []);
+// ============================================
+// LocalStorage Keys (same as WorkflowBuilder)
+// ============================================
+const SAVES_KEY = 'flowgrid_workflow_v1::saves';
 
-  const generateSeries = (r) => {
-    const points = ranges[r] || 24;
-    const now = Date.now();
-    const base = 10000;
-    // limit points for performance in the small widget
-    const count = Math.min(points, 200);
-    return Array.from({ length: count }).map((_, i) => ({ t: now - (points - i) * 3600 * 1000, v: +(base + Math.sin(i / 6) * 120 + i * 2 + (Math.random() - 0.5) * 40).toFixed(2) }));
-  };
+// ============================================
+// API Hook
+// ============================================
+const useFetchData = (endpoint, refreshInterval = null) => {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const series = React.useMemo(() => generateSeries(range), [range]);
-  // represent performance as percentage change from the period start
-  const firstVal = series[0].v;
-  const pctSeries = series.map(s => ({ t: s.t, v: +(((s.v - firstVal) / firstVal) * 100).toFixed(4) }));
-  const latest = pctSeries[pctSeries.length - 1].v;
-  const change = +(latest - pctSeries[0].v).toFixed(2); // effectively same as latest
-  const pct = +latest.toFixed(2);
+  const fetchData = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE}${endpoint}`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const result = await response.json();
+      setData(result);
+      setError(null);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [endpoint]);
+
+  useEffect(() => {
+    fetchData();
+    if (refreshInterval) {
+      const interval = setInterval(fetchData, refreshInterval);
+      return () => clearInterval(interval);
+    }
+  }, [fetchData, refreshInterval]);
+
+  return { data, loading, error, refetch: fetchData };
+};
+
+// ============================================
+// Sync localStorage workflows to backend
+// ============================================
+const syncWorkflowsToBackend = async () => {
+  try {
+    const raw = localStorage.getItem(SAVES_KEY);
+    if (!raw) return;
+    
+    const savedWorkflows = JSON.parse(raw);
+    const workflowNames = Object.keys(savedWorkflows);
+    
+    for (const name of workflowNames) {
+      const workflow = savedWorkflows[name];
+      
+      // Try to extract symbol from workflow nodes
+      let symbol = 'UNKNOWN';
+      let timeframe = '1D';
+      
+      if (workflow.nodes) {
+        const dataNode = workflow.nodes.find(n => n.type === 'data' || n.type === 'fetchData');
+        if (dataNode?.params) {
+          symbol = dataNode.params.symbol || dataNode.params.ticker || 'UNKNOWN';
+          timeframe = dataNode.params.timeframe || dataNode.params.interval || '1D';
+        }
+      }
+      
+      // Save to backend
+      await fetch(`${API_BASE}/api/strategies/saved`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          symbol,
+          timeframe,
+          workflow
+        })
+      });
+    }
+  } catch (err) {
+    console.error('Error syncing workflows:', err);
+  }
+};
+
+// ============================================
+// Toggle Switch Component
+// ============================================
+const ToggleSwitch = ({ isOn, onToggle, disabled }) => {
+  return (
+    <button 
+      className={`toggle-switch ${isOn ? 'on' : 'off'} ${disabled ? 'disabled' : ''}`}
+      onClick={() => !disabled && onToggle()}
+      disabled={disabled}
+    >
+      <span className="toggle-slider" />
+    </button>
+  );
+};
+
+// ============================================
+// Semi-Circle Gauge Component
+// ============================================
+const SemiCircleGauge = ({ value, maxValue = 100, color = '#2962ff', size = 60 }) => {
+  const percentage = Math.min((value / maxValue) * 100, 100);
+  const strokeWidth = 6;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = Math.PI * radius;
+  const offset = circumference - (percentage / 100) * circumference;
 
   return (
-    <div className="account-perf">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ fontSize: 20, fontWeight: 700 }}>{`${pct >= 0 ? '+' : ''}${pct}%`}</div>
-          <div style={{ color: change >= 0 ? '#7ee787' : '#ff9b9b' }}>{`${change >= 0 ? '+' : ''}${change}% vs start`}</div>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {['1D','5D','1M','6M','YTD','All'].map(r => (
-            <button key={r} onClick={() => setRange(r)} className={`toolbar-btn ${r===range? 'primary':''}`} style={{ padding: '6px 10px' }}>{r}</button>
-          ))}
-        </div>
+    <svg width={size} height={size / 2 + 5} className="semi-gauge">
+      <path
+        d={`M ${strokeWidth / 2} ${size / 2} A ${radius} ${radius} 0 0 1 ${size - strokeWidth / 2} ${size / 2}`}
+        fill="none"
+        stroke="#2d3748"
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+      />
+      <path
+        d={`M ${strokeWidth / 2} ${size / 2} A ${radius} ${radius} 0 0 1 ${size - strokeWidth / 2} ${size / 2}`}
+        fill="none"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeDasharray={circumference}
+        strokeDashoffset={offset}
+        className="gauge-progress"
+      />
+    </svg>
+  );
+};
+
+// ============================================
+// Donut Gauge Component
+// ============================================
+const DonutGauge = ({ value, total, winColor = '#10b981', lossColor = '#f59e0b', size = 60 }) => {
+  const strokeWidth = 6;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const winPercent = total > 0 ? (value / total) * 100 : 0;
+  const winOffset = circumference - (winPercent / 100) * circumference;
+
+  return (
+    <svg width={size} height={size} className="donut-gauge">
+      <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={lossColor} strokeWidth={strokeWidth} />
+      <circle
+        cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={winColor} strokeWidth={strokeWidth}
+        strokeDasharray={circumference} strokeDashoffset={winOffset} strokeLinecap="round"
+        transform={`rotate(-90 ${size / 2} ${size / 2})`} className="donut-progress"
+      />
+    </svg>
+  );
+};
+
+// ============================================
+// Mini Bar Chart Component
+// ============================================
+const MiniBarChart = ({ winValue, lossValue }) => {
+  const maxVal = Math.max(Math.abs(winValue), Math.abs(lossValue), 1);
+  const winHeight = (winValue / maxVal) * 20;
+  const lossHeight = (Math.abs(lossValue) / maxVal) * 20;
+
+  return (
+    <div className="mini-bar-chart">
+      <div className="bar-container">
+        <div className="bar win-bar" style={{ height: `${winHeight}px` }} />
+        <div className="bar loss-bar" style={{ height: `${lossHeight}px` }} />
       </div>
-      <div style={{ marginTop: 8, height: '34vh', minHeight: 220 }}>
-        <PriceChart priceBars={pctSeries.map(s => ({ time: s.t, close: s.v }))} />
+      <div className="bar-labels">
+        <span className="win-label">${winValue.toFixed(2)}</span>
+        <span className="loss-label">${Math.abs(lossValue).toFixed(2)}</span>
       </div>
     </div>
   );
 };
 
-const Dashboard = ({ onNavigate }) => {
-  const [alerts, setAlerts] = React.useState([]);
+// ============================================
+// Metric Card Component
+// ============================================
+const MetricCard = ({ label, value, subLabel, icon, chart, loading }) => {
+  return (
+    <div className="metric-card">
+      <div className="metric-card-header">
+        <span className="metric-label">{label}</span>
+        {icon && <span className="metric-icon">{icon}</span>}
+      </div>
+      <div className="metric-card-body">
+        {loading ? (
+          <div className="metric-skeleton" />
+        ) : (
+          <>
+            <div className="metric-value">{value}</div>
+            {chart && <div className="metric-chart">{chart}</div>}
+          </>
+        )}
+      </div>
+      {subLabel && <div className="metric-sub-label">{subLabel}</div>}
+    </div>
+  );
+};
 
-  const syncAlertsFromStorage = React.useCallback(() => {
-    if (typeof window === 'undefined') { setAlerts([]); return; }
-    try {
-      const raw = localStorage.getItem(ALERTS_STORAGE_KEY);
-      const parsed = raw ? JSON.parse(raw) : [];
-      setAlerts(Array.isArray(parsed) ? parsed : []);
-    } catch (e) {
-      console.warn('[Dashboard] Failed to read alerts', e);
-      setAlerts([]);
+// ============================================
+// Account Performance Chart Component
+// ============================================
+const PerformanceChart = ({ data, timeframe, onTimeframeChange, loading }) => {
+  const timeframes = ['1D', '1W', '1M', '3M', 'YTD', 'All'];
+
+  const renderChart = () => {
+    if (!data || data.length === 0) {
+      return <div className="chart-empty">No performance data</div>;
     }
-  }, []);
 
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
-    syncAlertsFromStorage();
-    const handleStorage = (e) => {
-      if (!e || e.key !== ALERTS_STORAGE_KEY) return;
-      syncAlertsFromStorage();
-    };
-    const handleCustom = () => syncAlertsFromStorage();
-    window.addEventListener('storage', handleStorage);
-    window.addEventListener('flowgrid:alerts-updated', handleCustom);
-    return () => {
-      window.removeEventListener('storage', handleStorage);
-      window.removeEventListener('flowgrid:alerts-updated', handleCustom);
-    };
-  }, [syncAlertsFromStorage]);
+    const width = 600;
+    const height = 200;
+    const padding = { top: 20, right: 20, bottom: 30, left: 60 };
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
 
-  const clearAlerts = React.useCallback(() => {
-    try {
-      localStorage.removeItem(ALERTS_STORAGE_KEY);
-    } catch (e) { console.warn('[Dashboard] clearAlerts localStorage remove failed', e); }
-    setAlerts([]);
-    try { window.dispatchEvent(new Event('flowgrid:alerts-updated')); } catch (e) {}
-  }, []);
+    const values = data.map(d => d.value);
+    const minVal = Math.min(...values);
+    const maxVal = Math.max(...values);
+    const range = maxVal - minVal || 1;
 
-  const alertsToShow = React.useMemo(() => alerts.slice(0, 4), [alerts]);
+    const getY = (val) => padding.top + chartHeight - ((val - minVal) / range) * chartHeight;
 
-  const handleStartNewStrategy = React.useCallback(() => {
-    try {
-      if (typeof window !== 'undefined') {
-        // Clear any existing load request first to prevent loading old workflow
-        try {
-          localStorage.removeItem('flowgrid_workflow_v1::load_request');
-          localStorage.removeItem('workflow_active_id');
-          localStorage.setItem('workflow_live', '0');
-          localStorage.setItem('flowgrid_new_workflow_request', String(Date.now()));
-        } catch (e) {}
-        
-        const bridge = window.flowgridLiveBridge;
-        if (bridge && typeof bridge.resetWorkflow === 'function') {
-          bridge.resetWorkflow({ clearActive: true });
-        } else {
-          // Dispatch event in case builder is already mounted
-          window.dispatchEvent(new Event('flowgrid:new-workflow'));
-        }
-      }
-    } catch (err) {
-      console.warn('[Dashboard] Failed to request blank builder', err);
-    }
-    onNavigate('builder');
-  }, [onNavigate]);
+    const points = data.map((d, i) => {
+      const x = padding.left + (i / (data.length - 1)) * chartWidth;
+      const y = getY(d.value);
+      return `${x},${y}`;
+    }).join(' ');
+
+    const areaPath = `M ${padding.left} ${height - padding.bottom} ` +
+      data.map((d, i) => {
+        const x = padding.left + (i / (data.length - 1)) * chartWidth;
+        const y = getY(d.value);
+        return `L ${x} ${y}`;
+      }).join(' ') +
+      ` L ${width - padding.right} ${height - padding.bottom} Z`;
+
+    const isPositive = values[values.length - 1] >= values[0];
+
+    return (
+      <svg viewBox={`0 0 ${width} ${height}`} className="performance-chart-svg">
+        <defs>
+          <linearGradient id="perfGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor={isPositive ? '#2962ff' : '#ef4444'} stopOpacity="0.3" />
+            <stop offset="100%" stopColor={isPositive ? '#2962ff' : '#ef4444'} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+
+        {/* Grid lines */}
+        {[0, 1, 2, 3, 4].map(i => (
+          <line key={i} x1={padding.left} y1={padding.top + (i / 4) * chartHeight}
+            x2={width - padding.right} y2={padding.top + (i / 4) * chartHeight}
+            stroke="#2d3748" strokeWidth="1" />
+        ))}
+
+        {/* Area fill */}
+        <path d={areaPath} fill="url(#perfGradient)" />
+
+        {/* Line */}
+        <polyline points={points} fill="none" stroke={isPositive ? '#2962ff' : '#ef4444'} strokeWidth="2" />
+
+        {/* Y-axis labels */}
+        {[maxVal, (maxVal + minVal) / 2, minVal].map((val, i) => (
+          <text key={i} x={padding.left - 8} y={getY(val) + 4} textAnchor="end" fill="#8b949e" fontSize="10">
+            {formatCurrency(val)}
+          </text>
+        ))}
+      </svg>
+    );
+  };
 
   return (
-    <div className="dashboard-root">
-      <DashboardSidebar onNavigate={onNavigate} hideHome={true} activeKey={'home'} />
-      <div className="dashboard-content">
-        <div className="dashboard-main">
-          {/* top-cards removed per UI update - buttons hidden */}
-          {/* Move Alpaca API Settings panel to bottom of grid */}
-
-          <div className="grid" style={{ gridTemplateColumns: '1fr 3fr 360px', gridTemplateRows: 'auto auto auto', gap: 16 }}>
-            <div className="panel large" style={{ gridColumn: '1 / span 2', gridRow: '1', minWidth: 0 }}>
-              <div className="panel-header">Account Performance</div>
-              <AccountPerformance range={'1D'} />
-            </div>
-
-            <div style={{ gridColumn: '1 / span 2', gridRow: '2', display: 'flex', gap: 16, alignItems: 'stretch' }}>
-              <div className="panel" style={{ flex: '1 1 0', minWidth: 0 }}>
-                <div className="panel-header">RSI Strategy</div>
-                <StrategyWidget strategy="RSI" />
-              </div>
-              <div className="panel" style={{ flex: '1 1 0', minWidth: 0 }}>
-                <div className="panel-header">EMA Cross Strategy</div>
-                <StrategyWidget strategy="EMA Cross" />
-              </div>
-              <div className="panel" style={{ flex: '1 1 0', minWidth: 0 }}>
-                <div className="panel-header">Volume Strategy</div>
-                <StrategyWidget strategy="Volume" />
-              </div>
-            </div>
-            {/* Alpaca API Settings panel moved up into right column row 2 */}
-            <div className="panel" style={{ gridColumn: '3', gridRow: '2', minHeight: 300 }}>
-              <div className="panel-header">Alpaca API Settings</div>
-              <DashboardSettings noWrapper={true} />
-            </div>
-
-            <div className="panel" style={{ gridColumn: '3', gridRow: '1' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div className="panel-header">Alerts Overview</div>
-                <button className="toolbar-btn clear-alerts-btn" onClick={clearAlerts} title="Clear recent alerts">Clear Alerts</button>
-              </div>
-              <div className="panel-body alerts-panel">
-                {alertsToShow.length === 0 ? (
-                  <div className="muted">No recent signals</div>
-                ) : (
-                  <div className="alerts-list">
-                    {alertsToShow.map((alert) => {
-                      const signalLabel = (alert.signal || 'HOLD').toUpperCase();
-                      const priceText = alert.price != null && !Number.isNaN(Number(alert.price))
-                        ? `$${Number(alert.price).toFixed(2)}`
-                        : '--';
-                      const ts = alert.timestamp ? new Date(alert.timestamp) : null;
-                      const timeText = ts ? ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-                      const dateText = ts ? ts.toLocaleDateString([], { month: 'short', day: 'numeric' }) : '';
-                      const signalClass = signalLabel.toLowerCase();
-                      return (
-                        <div key={alert.id || alert.timestamp} className={`alert-row ${signalClass}`}>
-                          <div className="alert-left">
-                            <div className="alert-details">
-                              <div className="alert-strategy" title={alert.strategyName || 'Strategy'}>{alert.strategyName || 'Strategy'}</div>
-                              <div className="alert-meta">
-                                {alert.symbol || '—'} · {alert.timeframe || '—'}
-                                {timeText && (<span> · {timeText}</span>)}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="alert-right">
-                            <div className="alert-action">{signalLabel} <span className="alert-price">@ {priceText}</span></div>
-                            <div className="alert-timestamp">{dateText}{timeText && ` · ${timeText}`}</div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            
-
-          </div>
+    <div className="panel performance-panel">
+      <div className="panel-header">
+        <h3>Account Performance</h3>
+        <div className="timeframe-selector">
+          {timeframes.map(tf => (
+            <button key={tf} className={`tf-btn ${timeframe === tf ? 'active' : ''}`}
+              onClick={() => onTimeframeChange(tf)}>{tf}</button>
+          ))}
         </div>
       </div>
+      <div className="panel-body">
+        {loading ? <div className="panel-loading"><div className="spinner" /></div> : renderChart()}
+      </div>
+    </div>
+  );
+};
+
+// ============================================
+// Saved Strategies Panel
+// ============================================
+const SavedStrategiesPanel = ({ strategies, onToggleStrategy, onDeleteStrategy, loading }) => {
+  return (
+    <div className="panel strategies-panel">
+      <div className="panel-header">
+        <h3>Saved Strategies</h3>
+        <span className="panel-count">{strategies?.filter(s => s.isRunning).length || 0} running</span>
+      </div>
+      <div className="panel-body">
+        {loading ? (
+          <div className="panel-loading"><div className="spinner" /></div>
+        ) : !strategies || strategies.length === 0 ? (
+          <div className="panel-empty">
+            <span className="empty-icon">📋</span>
+            <span>No saved strategies</span>
+            <small>Create strategies in the Workflow Builder</small>
+          </div>
+        ) : (
+          <div className="strategies-list">
+            {strategies.map(strategy => (
+              <div key={strategy.id} className={`strategy-item ${strategy.isRunning ? 'running' : ''}`}>
+                <div className="strategy-info">
+                  <span className="strategy-name">{strategy.name}</span>
+                  <span className="strategy-symbol">{strategy.symbol} • {strategy.timeframe}</span>
+                </div>
+                <div className="strategy-actions">
+                  {strategy.isRunning && <span className="status-dot" />}
+                  <ToggleSwitch 
+                    isOn={strategy.isRunning} 
+                    onToggle={() => onToggleStrategy(strategy.id)}
+                  />
+                  <button 
+                    className="delete-btn" 
+                    onClick={() => onDeleteStrategy(strategy.id)}
+                    title="Delete strategy"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ============================================
+// Live Signals Panel
+// ============================================
+const SignalsPanel = ({ signals, loading }) => {
+  const getSignalClass = (signal) => {
+    switch (signal?.toUpperCase()) {
+      case 'BUY': return 'buy';
+      case 'SELL': return 'sell';
+      case 'HOLD': return 'hold';
+      default: return 'neutral';
+    }
+  };
+
+  return (
+    <div className="panel signals-panel">
+      <div className="panel-header">
+        <h3>Live Signals</h3>
+        <span className="live-indicator">● LIVE</span>
+      </div>
+      <div className="panel-body">
+        {loading ? (
+          <div className="panel-loading"><div className="spinner" /></div>
+        ) : !signals || signals.length === 0 ? (
+          <div className="panel-empty">
+            <span>No active signals</span>
+            <small>Enable strategies to see signals</small>
+          </div>
+        ) : (
+          <div className="signals-list">
+            <div className="signals-header">
+              <span>Strategy</span>
+              <span>Symbol</span>
+              <span>Price</span>
+              <span>Signal</span>
+            </div>
+            {signals.map((signal, index) => (
+              <div key={index} className="signal-item">
+                <span className="signal-strategy">{signal.strategyName}</span>
+                <span className="signal-symbol">{signal.symbol}</span>
+                <span className="signal-price">{formatCurrency(signal.price)}</span>
+                <span className={`signal-action ${getSignalClass(signal.signal)}`}>
+                  {signal.signal || 'HOLD'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ============================================
+// Flow Score Panel
+// ============================================
+const FlowScorePanel = ({ score, metrics, loading }) => {
+  const getGradeColor = (score) => {
+    if (score >= 80) return '#10b981';
+    if (score >= 60) return '#2962ff';
+    if (score >= 40) return '#f59e0b';
+    return '#ef4444';
+  };
+
+  return (
+    <div className="panel flow-score-panel">
+      <div className="panel-header">
+        <h3>Flow Score</h3>
+      </div>
+      <div className="panel-body">
+        {loading ? (
+          <div className="panel-loading"><div className="spinner" /></div>
+        ) : (
+          <div className="flow-score-content">
+            <div className="score-ring">
+              <svg viewBox="0 0 100 100" className="score-ring-svg">
+                <circle cx="50" cy="50" r="40" fill="none" stroke="#2d3748" strokeWidth="8" />
+                <circle cx="50" cy="50" r="40" fill="none" stroke={getGradeColor(score)}
+                  strokeWidth="8" strokeLinecap="round"
+                  strokeDasharray={`${score * 2.51} 251`}
+                  transform="rotate(-90 50 50)" className="score-progress" />
+                <text x="50" y="50" textAnchor="middle" dominantBaseline="middle"
+                  fill={getGradeColor(score)} fontSize="24" fontWeight="700">{score}</text>
+                <text x="50" y="65" textAnchor="middle" fill="#8b949e" fontSize="10">/100</text>
+              </svg>
+            </div>
+            <div className="score-metrics">
+              <div className="score-metric">
+                <span className="metric-name">Win Rate</span>
+                <span className="metric-val">{metrics?.winRate?.toFixed(1)}%</span>
+              </div>
+              <div className="score-metric">
+                <span className="metric-name">Profit Factor</span>
+                <span className="metric-val">{metrics?.profitFactor?.toFixed(2)}</span>
+              </div>
+              <div className="score-metric">
+                <span className="metric-name">Sharpe</span>
+                <span className="metric-val">{metrics?.sharpeRatio?.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ============================================
+// Main Dashboard Component
+// ============================================
+const Dashboard = ({ onNavigate }) => {
+  const [perfTimeframe, setPerfTimeframe] = useState('1M');
+  const [savedStrategies, setSavedStrategies] = useState([]);
+  const [syncComplete, setSyncComplete] = useState(false);
+
+  // Sync localStorage workflows to backend on mount
+  useEffect(() => {
+    const doSync = async () => {
+      await syncWorkflowsToBackend();
+      setSyncComplete(true);
+    };
+    doSync();
+  }, []);
+
+  // Fetch data
+  const { data: metrics, loading: metricsLoading } = useFetchData('/api/dashboard/metrics', 30000);
+  const { data: perfData, loading: perfLoading } = useFetchData(`/api/dashboard/performance?timeframe=${perfTimeframe}`, 60000);
+  const { data: flowScore, loading: scoreLoading } = useFetchData('/api/dashboard/flow-grade', 60000);
+  const { data: signals, loading: signalsLoading } = useFetchData('/api/dashboard/signals', 5000);
+  const { data: strategiesData, loading: strategiesLoading, refetch: refetchStrategies } = useFetchData('/api/strategies/saved', 10000);
+
+  // Update saved strategies when data loads or after sync
+  useEffect(() => {
+    if (strategiesData) {
+      setSavedStrategies(strategiesData);
+    }
+  }, [strategiesData]);
+
+  // Refetch after sync completes
+  useEffect(() => {
+    if (syncComplete) {
+      refetchStrategies();
+    }
+  }, [syncComplete, refetchStrategies]);
+
+  // Toggle strategy on/off
+  const handleToggleStrategy = async (strategyId) => {
+    const strategy = savedStrategies.find(s => s.id === strategyId);
+    if (!strategy) return;
+
+    const newState = !strategy.isRunning;
+    
+    // Optimistic update
+    setSavedStrategies(prev => prev.map(s => 
+      s.id === strategyId ? { ...s, isRunning: newState } : s
+    ));
+
+    try {
+      await fetch(`${API_BASE}/api/strategies/${strategyId}/toggle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isRunning: newState })
+      });
+    } catch (err) {
+      // Revert on error
+      setSavedStrategies(prev => prev.map(s => 
+        s.id === strategyId ? { ...s, isRunning: !newState } : s
+      ));
+    }
+  };
+
+  // Delete strategy
+  const handleDeleteStrategy = async (strategyId) => {
+    if (!confirm('Delete this strategy?')) return;
+    
+    setSavedStrategies(prev => prev.filter(s => s.id !== strategyId));
+    
+    try {
+      await fetch(`${API_BASE}/api/strategies/${strategyId}`, {
+        method: 'DELETE'
+      });
+    } catch (err) {
+      refetchStrategies();
+    }
+  };
+
+  // Derive metrics
+  const netPnL = metrics?.netPnL ?? 0;
+  const tradeCount = metrics?.tradeCount ?? 0;
+  const profitFactor = metrics?.profitFactor ?? 0;
+  const winPercent = metrics?.winPercent ?? 0;
+  const winCount = metrics?.winCount ?? 0;
+  const lossCount = metrics?.lossCount ?? 0;
+  const avgWinLossRatio = metrics?.avgWinLossRatio ?? 0;
+  const avgWin = metrics?.avgWin ?? 0;
+  const avgLoss = metrics?.avgLoss ?? 0;
+
+  return (
+    <div className="dashboard-page">
+      <DashboardSidebar onNavigate={onNavigate} activeRoute="home" />
+      
+      <main className="dashboard-main">
+        <div className="dashboard-header">
+          <h1>Dashboard</h1>
+        </div>
+
+        {/* Top Metrics Row */}
+        <div className="metrics-row">
+          <MetricCard label="Net P&L" value={formatCurrency(netPnL)} 
+            subLabel={`${tradeCount} trades`} loading={metricsLoading} />
+          <MetricCard label="Profit Factor" value={profitFactor.toFixed(2)}
+            chart={<SemiCircleGauge value={profitFactor} maxValue={3} />} loading={metricsLoading} />
+          <MetricCard label="Win %" value={`${winPercent.toFixed(1)}%`}
+            subLabel={`${winCount} / ${winCount + lossCount}`}
+            chart={<DonutGauge value={winCount} total={winCount + lossCount} />} loading={metricsLoading} />
+          <MetricCard label="Avg Win/Loss" value={avgWinLossRatio.toFixed(2)}
+            chart={<MiniBarChart winValue={avgWin} lossValue={avgLoss} />} loading={metricsLoading} />
+        </div>
+
+        {/* Main Content Grid */}
+        <div className="dashboard-grid">
+          {/* Left Column */}
+          <div className="grid-left">
+            <PerformanceChart data={perfData?.data || []} timeframe={perfTimeframe}
+              onTimeframeChange={setPerfTimeframe} loading={perfLoading} />
+            
+            <SignalsPanel signals={signals || []} loading={signalsLoading} />
+          </div>
+
+          {/* Right Column */}
+          <div className="grid-right">
+            <SavedStrategiesPanel strategies={savedStrategies}
+              onToggleStrategy={handleToggleStrategy} 
+              onDeleteStrategy={handleDeleteStrategy}
+              loading={strategiesLoading} />
+            
+            <FlowScorePanel score={flowScore?.score || 0} 
+              metrics={flowScore?.metrics || {}} loading={scoreLoading} />
+          </div>
+        </div>
+      </main>
     </div>
   );
 };
 
 export default Dashboard;
-
-// NVDAWidget: fetches price history for NVDA (1D/1W/1M ranges) using backend /price_history
-const NVDAWidget = ({ symbol = 'NVDA' }) => {
-  const [range, setRange] = React.useState('1W');
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState(null);
-  const [bars, setBars] = React.useState(makeMockSeries(7, 420));
-
-  const rangeToDays = (r) => {
-    switch (r) {
-      case '1D': return 1;
-      case '5D': return 5;
-      case '1W': return 7;
-      case '1M': return 30;
-      case '6M': return 180;
-      case 'YTD': {
-        const now = new Date();
-        const start = new Date(now.getFullYear(), 0, 1);
-        return Math.max(1, Math.round((now - start) / (1000 * 60 * 60 * 24)));
-      }
-      case 'All': return 365 * 2;
-      default: return 7;
-    }
-  };
-
-  React.useEffect(() => {
-    let mounted = true;
-    const doFetch = async () => {
-      setLoading(true); setError(null);
-      const days = rangeToDays(range);
-      // try to get keys from localStorage
-      let alpacaKeyId = null, alpacaSecretKey = null;
-      try { alpacaKeyId = localStorage.getItem('alpaca_key_id'); alpacaSecretKey = localStorage.getItem('alpaca_secret_key'); } catch (e) {}
-      if (!alpacaKeyId || !alpacaSecretKey) {
-        // no keys -> use mock
-        setBars(makeMockSeries(Math.max(7, days), 420));
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const params = new URLSearchParams({ symbol, timeframe: '1Day', days: String(days), alpacaKeyId, alpacaSecretKey });
-        const urls = [`/price_history?${params.toString()}`, `http://127.0.0.1:5000/price_history?${params.toString()}`];
-        let res = null; let data = null;
-        for (const url of urls) {
-          try {
-            res = await fetch(url);
-            if (!res.ok) continue;
-            data = await res.json();
-            break;
-          } catch (e) { continue; }
-        }
-        if (!data) throw new Error('No response');
-        if (data.error) throw new Error(data.error || 'No data');
-        const parsed = (data.bars || []).map(b => ({ time: b.t || b.tms || b.time || Date.now(), close: b.close }));
-        if (mounted && parsed.length > 0) setBars(parsed);
-      } catch (e) {
-        console.warn('NVDAWidget fetch error', e);
-        if (mounted) { setError(String(e)); setBars(makeMockSeries(Math.max(7, rangeToDays(range)), 420)); }
-      }
-      if (mounted) setLoading(false);
-    };
-    doFetch();
-    return () => { mounted = false; };
-  }, [range, symbol]);
-    // convert bars to percent series relative to period start
-    const pctSeries = (bars && bars.length > 0) ? (() => {
-      const firstVal = bars[0].close || bars[0].v || 0;
-      if (!firstVal) return bars.map(b => ({ time: b.time, close: 0 }));
-      return bars.map(b => ({ time: b.time, close: (((b.close - firstVal) / firstVal) * 100) }));
-    })() : [];
-
-    const latest = pctSeries && pctSeries.length ? pctSeries[pctSeries.length - 1].close : null;
-    const firstPct = pctSeries && pctSeries.length ? pctSeries[0].close : null;
-    const change = latest != null && firstPct != null ? +(latest - firstPct).toFixed(2) : null;
-
-    return (
-      <div className="panel-body" style={{ height: 200, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontWeight: 700 }}>{symbol}</div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontWeight: 700 }}>{latest != null ? `${latest.toFixed(2)}%` : '--'}</div>
-            <div style={{ color: change >= 0 ? '#7ee787' : '#ff9b9b' }}>{change != null ? `${change >= 0 ? '+' : ''}${change}% vs start` : (loading ? 'Loading…' : (error ? 'Error' : '--'))}</div>
-          </div>
-        </div>
-        <div style={{ flex: 1 }}>
-          <PriceChart verticalBias={0.12} priceBars={pctSeries.map(p => ({ time: p.time, close: p.close }))} />
-        </div>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 8 }}>
-          {['1D','5D','1W','1M','6M','YTD','All'].map(r => (
-            <button key={r} onClick={() => setRange(r)} className={`toolbar-btn ${r===range? 'primary':''}`} style={{ padding: '6px 10px' }}>{r}</button>
-          ))}
-        </div>
-      </div>
-    );
-};
-
-// StrategyWidget: simplified widget for strategy previews (no external fetching)
-const StrategyWidget = ({ strategy = 'RSI', initialRange = '1W' }) => {
-  const [range, setRange] = React.useState(initialRange);
-  // choose a base to vary the mock series per strategy for visual distinction
-  const baseMap = { 'RSI': 120, 'EMA Cross': 200, 'Volume': 80 };
-  const base = baseMap[strategy] || 100;
-  const days = range === '1D' ? 1 : range === '5D' ? 5 : range === '1W' ? 7 : range === '1M' ? 30 : 7;
-  const series = React.useMemo(() => makeMockSeries(Math.max(7, days), base), [range, base]);
-  // convert mock series to percent change relative to period start
-  const pctSeries = React.useMemo(() => {
-    if (!series || series.length === 0) return [];
-    const f = series[0].close || series[0].v || 0;
-    if (!f) return series.map(s => ({ time: s.time, close: 0 }));
-    return series.map(s => ({ time: s.time, close: (((s.close - f) / f) * 100) }));
-  }, [series]);
-
-  const latest = pctSeries && pctSeries.length ? pctSeries[pctSeries.length - 1].close : null;
-  const first = pctSeries && pctSeries.length ? pctSeries[0].close : null;
-  const change = latest != null && first != null ? +(latest - first).toFixed(2) : null;
-  const pct = latest != null && first != null ? +latest.toFixed(2) : null;
-
-  return (
-    <div className="panel-body" style={{ height: 200, display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ fontWeight: 700 }}>{strategy}</div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontWeight: 700 }}>{pct != null ? `${pct}%` : '--'}</div>
-          <div style={{ color: change >= 0 ? '#7ee787' : '#ff9b9b' }}>{change != null ? `${change >= 0 ? '+' : ''}${change} (${pct}%)` : '--'}</div>
-        </div>
-      </div>
-      <div style={{ flex: 1 }}>
-        <PriceChart verticalBias={0.08} priceBars={pctSeries.map(p => ({ time: p.time, close: p.close }))} />
-      </div>
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 8 }}>
-        {['1D','5D','1W','1M','6M','YTD','All'].map(r => (
-          <button key={r} onClick={() => setRange(r)} className={`toolbar-btn ${r===range? 'primary':''}`} style={{ padding: '6px 10px' }}>{r}</button>
-        ))}
-      </div>
-    </div>
-  );
-};

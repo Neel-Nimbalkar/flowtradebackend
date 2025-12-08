@@ -233,14 +233,15 @@ Install: `pip install -r requirements.txt`
 
 ## Run
 ```bash
-# Terminal 1: Backend
-python backend.py
+# Terminal 1: Backend (from project root)
+python -m backendapi.api.backend
 
 # Terminal 2: Frontend
-python -m http.server 8000
+cd frontend
+npm run dev
 
 # Open browser
-http://localhost:8000/workflow_builder.html
+http://localhost:5173
 ```
 
 ---

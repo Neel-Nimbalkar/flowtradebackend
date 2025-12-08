@@ -32,10 +32,12 @@ const BacktestPage = ({ onNavigate }) => {
   };
 
   return (
-    <div className="dashboard-root">
-      <DashboardSidebar onNavigate={onNavigate} hideHome={false} activeKey={'backtest'} />
-      <div className="backtest-page">
-        
+    <div className="dashboard-page">
+      <DashboardSidebar onNavigate={onNavigate} activeRoute="backtest" />
+      <main className="dashboard-main">
+        <div className="dashboard-header">
+          <h1>Backtest</h1>
+        </div>
 
         <div className="backtest-container">
           <div className="backtest-config-wrapper">
@@ -75,7 +77,7 @@ const BacktestPage = ({ onNavigate }) => {
             )}
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 };
