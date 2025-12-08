@@ -1,40 +1,281 @@
-.price-chart {
+/* Enhanced Price Chart */
+.price-chart-enhanced {
+  background: var(--secondary-bg, #0d1117);
+  border-radius: 12px;
+  border: 1px solid var(--border, #2a2e39);
+  padding: 20px;
+}
+
+/* Stats Bar */
+.price-stats-bar {
+  display: flex;
+  gap: 20px;
+  padding: 16px 20px;
+  background: var(--card-bg, #161b22);
+  border-radius: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.price-stat {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 20px;
-  background: var(--secondary-bg, #0d1117);
-  border-radius: 10px;
-  border: 1px solid var(--border, #2a2e39);
+  gap: 2px;
+  min-width: 90px;
 }
 
-.price-chart canvas {
-  max-width: 100%;
-  height: auto;
-  margin: 0 auto;
+.price-stat.main {
+  padding-right: 20px;
+  border-right: 1px solid var(--border, #2a2e39);
+  min-width: 120px;
 }
 
-.chart-legend {
+.price-label {
+  font-size: 11px;
+  color: var(--text-muted, #9aa6c6);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.price-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary, #cfe8ff);
+}
+
+.price-stat.main .price-value {
+  font-size: 20px;
+}
+
+.price-sub {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.price-value.positive, .price-sub.positive { color: #10b981; }
+.price-value.negative, .price-sub.negative { color: #ef4444; }
+.price-value.neutral { color: #f59e0b; }
+
+/* Chart Controls */
+.chart-controls {
   display: flex;
-  gap: 24px;
-  justify-content: center;
-  font-size: 13px;
+  gap: 16px;
+  margin-bottom: 12px;
 }
 
-.legend-item {
+.control-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-muted, #9aa6c6);
+}
+
+.control-toggle input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: #2962ff;
+}
+
+.control-toggle:hover {
+  color: var(--text-primary, #cfe8ff);
+}
+
+/* Chart Container */
+.price-chart-container {
+  position: relative;
+  width: 100%;
+  height: 400px;
+  margin-bottom: 16px;
+  cursor: crosshair;
+}
+
+.price-chart-container canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Price Tooltip */
+.price-tooltip {
+  position: absolute;
+  background: #1e222d;
+  border: 1px solid #363a45;
+  border-radius: 8px;
+  padding: 10px 12px;
+  pointer-events: none;
+  z-index: 100;
+  min-width: 150px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.price-tooltip .tooltip-date {
+  font-size: 11px;
+  color: #9aa6c6;
+  margin-bottom: 6px;
+}
+
+.price-tooltip .tooltip-ohlc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: #d1d4dc;
+  margin-bottom: 4px;
+}
+
+.price-tooltip .tooltip-ohlc b {
+  color: #fff;
+}
+
+.price-tooltip .tooltip-ohlc b.positive { color: #10b981; }
+.price-tooltip .tooltip-ohlc b.negative { color: #ef4444; }
+
+.price-tooltip .tooltip-volume {
+  font-size: 11px;
+  color: #9aa6c6;
+}
+
+/* Equity Dots Section - TradingView Style */
+.equity-dots-section {
+  background: var(--card-bg, #161b22);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.equity-dots-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.equity-dots-section .section-header h4 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary, #cfe8ff);
+}
+
+.dots-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted, #9aa6c6);
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.legend-dot.win {
+  background: #26a69a;
+}
+
+.legend-dot.loss {
+  background: #ef5350;
+  margin-left: 8px;
+}
+
+.equity-dots-container {
+  width: 100%;
+  height: 150px;
+}
+
+.equity-dots-container canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Summary Row */
+.price-summary-row {
+  display: flex;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--card-bg, #161b22);
+  border-radius: 10px;
+  flex-wrap: wrap;
+}
+
+.summary-item {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 8px 12px;
+  background: var(--secondary-bg, #0d1117);
+  border-radius: 8px;
+  border: 1px solid var(--border, #2a2e39);
 }
 
-.legend-marker {
-  font-size: 14px;
+.summary-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
 }
 
-.legend-marker.buy {
+.summary-icon.bullish {
+  background: rgba(16, 185, 129, 0.15);
   color: #10b981;
 }
 
-.legend-marker.sell {
+.summary-icon.bearish {
+  background: rgba(239, 68, 68, 0.15);
   color: #ef4444;
+}
+
+.summary-icon.buy {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.summary-icon.sell {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.summary-label {
+  font-size: 12px;
+  color: var(--text-muted, #9aa6c6);
+}
+
+.summary-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #cfe8ff);
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .price-stats-bar {
+    gap: 12px;
+  }
+  .price-stat {
+    min-width: 70px;
+  }
+}
+
+@media (max-width: 768px) {
+  .price-chart-container {
+    height: 320px;
+  }
+  .price-summary-row {
+    gap: 8px;
+  }
+  .summary-item {
+    flex: 1;
+    min-width: 120px;
+    justify-content: center;
+  }
+  .equity-dots-container {
+    height: 120px;
+  }
 }

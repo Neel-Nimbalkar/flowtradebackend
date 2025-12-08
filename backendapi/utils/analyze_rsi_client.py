@@ -1,5 +1,5 @@
 import requests, json
-from backend import rsi
+from backendapi.api.backend import rsi
 
 payload = {
     "symbol": "NVDA",

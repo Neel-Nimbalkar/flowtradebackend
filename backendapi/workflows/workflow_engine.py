@@ -302,13 +302,16 @@ class WorkflowEngine:
             block_id = block.get('id', i)
             params = block.get('params', {})
             
-            # Skip non-condition blocks (config, input, output)
-            if block_type in ['symbol', 'timeframe', 'lookback', 'input', 'signal', 'ai_agent', 'alpaca_config']:
+            # Skip non-condition blocks (config, input, output, signal, etc.)
+            # These are configuration or terminal blocks that don't need condition evaluation
+            skip_types = ['symbol', 'timeframe', 'lookback', 'input', 'output', 'signal', 
+                         'ai_agent', 'alpaca_config', 'config', 'start', 'end', 'entry', 'exit']
+            if block_type in skip_types:
                 results.append(BlockResult(
                     block_id=block_id,
                     block_type=block_type,
                     status=BlockStatus.SKIPPED,
-                    message=f"Configuration block (no condition check)",
+                    message=f"Configuration/terminal block (no condition check)",
                     data={},
                     execution_time_ms=(time.time() - block_start) * 1000
                 ))
@@ -415,4 +418,6 @@ class WorkflowEngine:
         if evaluator_func:
             return evaluator_func(latest_data, params)
         else:
-            return False, f"Unknown block type: {block_type}"
+            # Unknown block types are treated as passed (they may be config/terminal blocks)
+            # This allows workflows to include custom blocks without breaking
+            return True, f"Block type '{block_type}' has no condition (auto-pass)"

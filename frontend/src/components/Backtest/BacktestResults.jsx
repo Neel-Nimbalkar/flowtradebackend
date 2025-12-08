@@ -6,17 +6,22 @@ import EquityCurveChart from './EquityCurveChart';
 import PriceChart from './PriceChart';
 import DrawdownChart from './DrawdownChart';
 import StatsDistribution from './StatsDistribution';
+import AdvancedMetrics from './AdvancedMetrics';
+import MonthlyReturns from './MonthlyReturns';
+import Icon from '../Icon';
 
 const BacktestResults = ({ results }) => {
   const [activeTab, setActiveTab] = useState('summary');
 
   const tabs = [
-    { key: 'summary', label: 'Summary', icon: '📊' },
-    { key: 'trades', label: 'Trades', icon: '📋' },
-    { key: 'equity', label: 'Equity Curve', icon: '📈' },
-    { key: 'price', label: 'Price Action', icon: '🕯' },
-    { key: 'drawdown', label: 'Drawdown', icon: '📉' },
-    { key: 'stats', label: 'Statistics', icon: '📐' }
+    { key: 'summary', label: 'Summary', icon: 'ai' },
+    { key: 'trades', label: 'Trades', icon: 'list' },
+    { key: 'advanced', label: 'Advanced', icon: 'target' },
+    { key: 'monthly', label: 'Monthly', icon: 'chart' },
+    { key: 'equity', label: 'Equity Curve', icon: 'chart' },
+    { key: 'price', label: 'Price Action', icon: 'bolt' },
+    { key: 'drawdown', label: 'Drawdown', icon: 'drop' },
+    { key: 'stats', label: 'Distribution', icon: 'search' }
   ];
 
   const exportCSV = () => {
@@ -72,7 +77,7 @@ const BacktestResults = ({ results }) => {
             className={`tab-btn ${activeTab === tab.key ? 'active' : ''}`}
             onClick={() => setActiveTab(tab.key)}
           >
-            <span className="tab-icon">{tab.icon}</span>
+            <Icon name={tab.icon} />
             <span className="tab-label">{tab.label}</span>
           </button>
         ))}
@@ -81,6 +86,8 @@ const BacktestResults = ({ results }) => {
       <div className="results-content">
         {activeTab === 'summary' && <MetricsSummary results={results} />}
         {activeTab === 'trades' && <TradesTable trades={results.trades} />}
+        {activeTab === 'advanced' && <AdvancedMetrics results={results} />}
+        {activeTab === 'monthly' && <MonthlyReturns results={results} />}
         {activeTab === 'equity' && <EquityCurveChart data={results.equityCurve} />}
         {activeTab === 'price' && <PriceChart historicalData={results.historicalData} signals={results.signals} />}
         {activeTab === 'drawdown' && <DrawdownChart data={results.drawdownData.data} />}

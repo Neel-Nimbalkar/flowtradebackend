@@ -119,11 +119,19 @@ const Dashboard = ({ onNavigate }) => {
   const handleStartNewStrategy = React.useCallback(() => {
     try {
       if (typeof window !== 'undefined') {
+        // Clear any existing load request first to prevent loading old workflow
+        try {
+          localStorage.removeItem('flowgrid_workflow_v1::load_request');
+          localStorage.removeItem('workflow_active_id');
+          localStorage.setItem('workflow_live', '0');
+          localStorage.setItem('flowgrid_new_workflow_request', String(Date.now()));
+        } catch (e) {}
+        
         const bridge = window.flowgridLiveBridge;
         if (bridge && typeof bridge.resetWorkflow === 'function') {
           bridge.resetWorkflow({ clearActive: true });
         } else {
-          window.localStorage?.setItem('flowgrid_new_workflow_request', String(Date.now()));
+          // Dispatch event in case builder is already mounted
           window.dispatchEvent(new Event('flowgrid:new-workflow'));
         }
       }

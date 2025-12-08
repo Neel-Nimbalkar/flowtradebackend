@@ -553,7 +553,19 @@ const WorkflowBuilder = ({ onNavigate }) => {
           try { localStorage.setItem('workflow_live', '0'); } catch (e) {}
         }
       },
-      isLiveRunning: () => !!liveRunningRef.current
+      isLiveRunning: () => !!liveRunningRef.current,
+      resetWorkflow: (options = {}) => {
+        // Clear canvas for new workflow
+        setNodes([]);
+        setConnections([]);
+        stopLive();
+        try {
+          localStorage.setItem('workflow_live', '0');
+          localStorage.removeItem('workflow_active_id');
+          localStorage.removeItem('flowgrid_workflow_v1::load_request');
+        } catch (e) {}
+        console.log('[Builder] Reset workflow via bridge');
+      }
     };
     window.flowgridLiveBridge = bridge;
     return () => {
@@ -622,6 +634,15 @@ const WorkflowBuilder = ({ onNavigate }) => {
   useEffect(() => {
     const tryLoadRequest = () => {
       try {
+        // Check if this is a new workflow request - if so, skip loading
+        const newWorkflowRequest = localStorage.getItem('flowgrid_new_workflow_request');
+        if (newWorkflowRequest) {
+          console.log('[Builder] New workflow request detected, skipping load request');
+          try { localStorage.removeItem('flowgrid_new_workflow_request'); } catch (e) {}
+          try { localStorage.removeItem('flowgrid_workflow_v1::load_request'); } catch (e) {}
+          return;
+        }
+        
         const req = localStorage.getItem('flowgrid_workflow_v1::load_request');
         console.log('[Builder] tryLoadRequest - load_request value:', req);
         if (!req) return;
@@ -711,6 +732,31 @@ const WorkflowBuilder = ({ onNavigate }) => {
     };
     window.addEventListener('flowgrid:clear-builder', handleClear);
     return () => window.removeEventListener('flowgrid:clear-builder', handleClear);
+  }, []);
+
+  // Listen for new-workflow event from Dashboard (Start New Strategy button)
+  useEffect(() => {
+    const handleNewWorkflow = () => {
+      console.log('[Builder] Received new-workflow event, resetting canvas');
+      setNodes([]);
+      setConnections([]);
+      stopLive();
+      try { 
+        localStorage.setItem('workflow_live', '0');
+        localStorage.removeItem('workflow_active_id');
+        localStorage.removeItem('flowgrid_workflow_v1::load_request');
+        // Clear any saved enabled states that might auto-load
+        const saves = localStorage.getItem(SAVES_KEY);
+        if (saves) {
+          const map = JSON.parse(saves);
+          Object.keys(map).forEach(id => {
+            try { localStorage.setItem(`flowgrid_saved_enabled::${id}`, '0'); } catch (e) {}
+          });
+        }
+      } catch (e) {}
+    };
+    window.addEventListener('flowgrid:new-workflow', handleNewWorkflow);
+    return () => window.removeEventListener('flowgrid:new-workflow', handleNewWorkflow);
   }, []);
 
   // WebSocket client to receive node-emitted messages from backend broadcaster

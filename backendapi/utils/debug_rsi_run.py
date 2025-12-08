@@ -3,7 +3,7 @@ Small harness to reproduce RSI evaluation logic locally.
 Run with: `python debug_rsi_run.py` from project root.
 Set FLOWGRID_DEBUG=1 in environment to enable verbose logs from the engine.
 """
-from workflow_engine import WorkflowEngine
+from backendapi.workflows.workflow_engine import WorkflowEngine
 
 # Create a simple workflow with a single RSI block
 blocks = [

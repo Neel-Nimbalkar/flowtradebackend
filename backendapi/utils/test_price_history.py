@@ -8,7 +8,7 @@ os.environ['ALPACA_KEY_ID'] = 'YOUR_ALPACA_KEY_ID_HERE'
 os.environ['ALPACA_SECRET_KEY'] = 'YOUR_ALPACA_SECRET_KEY_HERE'
 
 # Import backend function
-from alpaca_fetch import fetch_bars_full
+from backendapi.integrations.alpaca_fetch import fetch_bars_full
 
 symbol = 'NVDA'
 timeframe = '1Hour'

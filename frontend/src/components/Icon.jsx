@@ -71,6 +71,18 @@ const GeneratedIcon = ({ name, size, className, style, title }) => {
           <path d="M20 20l-4.5-4.5" stroke="currentColor" strokeOpacity="0.6" strokeWidth="1.6" strokeLinecap="round" />
         </svg>
       );
+    case 'list':
+      return (
+        <svg {...commonProps} className={className} aria-hidden={!title} role={title ? 'img' : 'presentation'}>
+          {title && <title>{title}</title>}
+          <rect x="3" y="5" width="3" height="3" rx="0.5" fill="currentColor" fillOpacity="0.7" />
+          <rect x="3" y="10.5" width="3" height="3" rx="0.5" fill="currentColor" fillOpacity="0.7" />
+          <rect x="3" y="16" width="3" height="3" rx="0.5" fill="currentColor" fillOpacity="0.7" />
+          <line x1="9" y1="6.5" x2="21" y2="6.5" stroke="currentColor" strokeOpacity="0.6" strokeWidth="1.2" strokeLinecap="round" />
+          <line x1="9" y1="12" x2="21" y2="12" stroke="currentColor" strokeOpacity="0.6" strokeWidth="1.2" strokeLinecap="round" />
+          <line x1="9" y1="17.5" x2="21" y2="17.5" stroke="currentColor" strokeOpacity="0.6" strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+      );
     default:
       return null;
   }

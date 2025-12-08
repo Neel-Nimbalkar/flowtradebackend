@@ -14,13 +14,14 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, List
 
 # Import fetch and workflow engine directly to avoid circular import with backend
-from alpaca_fetch import fetch_bars_full
-from workflow_engine import WorkflowEngine
+from backendapi.integrations.alpaca_fetch import fetch_bars_full
+from backendapi.workflows.workflow_engine import WorkflowEngine
 
 # Create a local workflow engine instance for the manager to use
 workflow_engine = WorkflowEngine()
 
-ROOT = os.path.dirname(__file__)
+# Point to the outputs directory at project root
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 OUTDIR = os.path.join(ROOT, 'outputs', 'backtests')
 os.makedirs(OUTDIR, exist_ok=True)
 

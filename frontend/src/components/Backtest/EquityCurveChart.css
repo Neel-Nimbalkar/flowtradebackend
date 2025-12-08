@@ -1,13 +1,152 @@
-.equity-curve-chart {
-  display: flex;
-  justify-content: center;
-  padding: 20px;
+/* Enhanced Equity Curve Chart */
+.equity-curve-enhanced {
   background: var(--secondary-bg, #0d1117);
-  border-radius: 10px;
+  border-radius: 12px;
   border: 1px solid var(--border, #2a2e39);
+  padding: 20px;
 }
 
-.equity-curve-chart canvas {
-  max-width: 100%;
-  height: auto;
+/* Stats Bar */
+.equity-stats-bar {
+  display: flex;
+  gap: 24px;
+  padding: 16px 20px;
+  background: var(--card-bg, #161b22);
+  border-radius: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.eq-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 100px;
+}
+
+.eq-label {
+  font-size: 11px;
+  color: var(--text-muted, #9aa6c6);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.eq-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary, #cfe8ff);
+}
+
+.eq-value.positive { color: #10b981; }
+.eq-value.negative { color: #ef4444; }
+.eq-value.neutral { color: #f59e0b; }
+
+/* Chart Container */
+.equity-chart-container {
+  position: relative;
+  width: 100%;
+  height: 350px;
+  margin-bottom: 16px;
+  cursor: crosshair;
+}
+
+.equity-chart-container canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Interactive Tooltip */
+.chart-tooltip {
+  position: absolute;
+  background: #1e222d;
+  border: 1px solid #363a45;
+  border-radius: 8px;
+  padding: 12px 14px;
+  pointer-events: none;
+  z-index: 100;
+  min-width: 140px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.chart-tooltip .tooltip-date {
+  font-size: 11px;
+  color: #9aa6c6;
+  margin-bottom: 6px;
+}
+
+.chart-tooltip .tooltip-value {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: var(--text-primary, #cfe8ff);
+}
+
+.chart-tooltip .tooltip-value.positive { color: #10b981; }
+.chart-tooltip .tooltip-value.negative { color: #ef4444; }
+
+.chart-tooltip .tooltip-change {
+  font-size: 11px;
+  color: #9aa6c6;
+}
+
+/* Summary Row */
+.equity-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 16px;
+  background: var(--card-bg, #161b22);
+  border-radius: 10px;
+}
+
+.equity-start, .equity-end, .equity-peak {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.equity-start .label, .equity-end .label, .equity-peak .label {
+  font-size: 11px;
+  color: var(--text-muted, #9aa6c6);
+  text-transform: uppercase;
+}
+
+.equity-start .value, .equity-end .value, .equity-peak .value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary, #cfe8ff);
+}
+
+.equity-end .value.positive, .equity-peak .value.positive { color: #10b981; }
+.equity-end .value.negative { color: #ef4444; }
+
+.equity-arrow {
+  color: var(--text-muted, #9aa6c6);
+}
+
+.equity-arrow svg {
+  width: 32px;
+  height: 32px;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .equity-stats-bar {
+    gap: 16px;
+  }
+  .eq-stat {
+    min-width: 80px;
+  }
+}
+
+@media (max-width: 768px) {
+  .equity-chart-container {
+    height: 280px;
+  }
+  .equity-summary-row {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
 }

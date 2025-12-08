@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import '../BacktestPage.css';
 import './Dashboard.css';
 import DashboardSidebar from '../components/DashboardSidebar';
@@ -11,14 +11,16 @@ const BacktestPage = ({ onNavigate }) => {
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
 
-  const handleRunBacktest = async (config) => {
+  const handleRunBacktest = async (basicConfig) => {
     setLoading(true);
     setError(null);
     setResults(null);
 
     try {
-      console.log('[Backtest] Running with config:', config);
-      const backtestResults = await runBacktest(config);
+      console.log('[Backtest] Running with config:', basicConfig);
+      
+      const backtestResults = await runBacktest(basicConfig);
+      
       console.log('[Backtest] Results:', backtestResults);
       setResults(backtestResults);
     } catch (err) {
@@ -36,10 +38,12 @@ const BacktestPage = ({ onNavigate }) => {
         
 
         <div className="backtest-container">
-          <BacktestInputPanel 
-            onRun={handleRunBacktest} 
-            loading={loading}
-          />
+          <div className="backtest-config-wrapper">
+            <BacktestInputPanel 
+              onRun={handleRunBacktest} 
+              loading={loading}
+            />
+          </div>
           
           <div className="backtest-output">
             {loading && (

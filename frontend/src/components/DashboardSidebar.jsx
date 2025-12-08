@@ -71,8 +71,20 @@ const DashboardSidebar = ({ onNavigate = () => {}, hideHome = false, activeKey =
       const list = Object.keys(map).map(name => ({ id: name, name }));
       console.debug('[DashboardSidebar] parsed saved list:', list);
       setSavedStrategies(list);
+      
+      // Read the actual workflow_live state and active_id to ensure sync
+      const workflowLive = localStorage.getItem('workflow_live') === '1';
+      const activeId = localStorage.getItem('workflow_active_id');
+      
       const states = {};
-      list.forEach(s => { states[s.id] = (localStorage.getItem(SidebarSavedKey(s.id)) === '1'); });
+      list.forEach(s => { 
+        // A strategy is enabled if:
+        // 1. It has the individual enabled flag set AND
+        // 2. It's the currently active strategy AND workflow is live
+        const individualEnabled = localStorage.getItem(SidebarSavedKey(s.id)) === '1';
+        const isActive = activeId === s.id;
+        states[s.id] = individualEnabled && (isActive ? workflowLive : individualEnabled);
+      });
       setEnabled(states);
     } catch (e) { console.error('[DashboardSidebar] readSaved error', e); setSavedStrategies([]); }
   };
@@ -86,6 +98,9 @@ const DashboardSidebar = ({ onNavigate = () => {}, hideHome = false, activeKey =
       } else if (e.key.startsWith('flowgrid_saved_enabled::')) {
         const id = e.key.split('::')[1];
         setEnabled(prev => ({ ...prev, [id]: e.newValue === '1' }));
+      } else if (e.key === 'workflow_live' || e.key === 'workflow_active_id') {
+        // Re-sync toggle states when workflow state changes
+        readSaved();
       }
     };
     window.addEventListener('storage', onStorage);
@@ -124,6 +139,8 @@ const DashboardSidebar = ({ onNavigate = () => {}, hideHome = false, activeKey =
         localStorage.setItem('workflow_live', '1');
         localStorage.setItem('workflow_active_id', id);
         localStorage.setItem(SidebarSavedKey(id), '1');
+        // Dispatch storage event for same-tab listeners
+        window.dispatchEvent(new StorageEvent('storage', { key: 'workflow_live', newValue: '1' }));
         console.log(`[DashboardSidebar] workflow_live set to 1 for "${id}"`);
       } catch (e) { console.error('[DashboardSidebar] enable error', e); }
     } else {
@@ -138,6 +155,8 @@ const DashboardSidebar = ({ onNavigate = () => {}, hideHome = false, activeKey =
           const lr = localStorage.getItem('flowgrid_workflow_v1::load_request');
           if (lr === id) localStorage.removeItem('flowgrid_workflow_v1::load_request');
         } catch (e) {}
+        // Dispatch storage event for same-tab listeners
+        window.dispatchEvent(new StorageEvent('storage', { key: 'workflow_live', newValue: '0' }));
         console.log('[DashboardSidebar] Cleared workflow_live and workflow_active_id');
       }
     }

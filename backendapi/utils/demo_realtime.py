@@ -15,8 +15,8 @@ Open the frontend (Vite) and the Strategy Monitor to see live updates.
 import time
 import logging
 
-from flowgrid_nodes import EMAIndicator, RSIIndicator
-from flowgrid_orchestrator import WorkflowRunner
+from backendapi.workflows.flowgrid_nodes import EMAIndicator, RSIIndicator
+from backendapi.workflows.flowgrid_orchestrator import WorkflowRunner
 
 logging.basicConfig(level=logging.DEBUG)
 

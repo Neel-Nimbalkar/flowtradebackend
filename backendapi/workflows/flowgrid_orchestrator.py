@@ -11,11 +11,11 @@ from typing import Dict, Any
 import threading
 import logging
 
-from flowgrid_realtime import PriceStream
-from flowgrid_nodes import Node
+from backendapi.workflows.flowgrid_realtime import PriceStream
+from backendapi.workflows.flowgrid_nodes import Node
 try:
     # optional broadcaster
-    from flowgrid_ws import WebSocketBroadcaster
+    from backendapi.api.flowgrid_ws import WebSocketBroadcaster
 except Exception:
     WebSocketBroadcaster = None
 
