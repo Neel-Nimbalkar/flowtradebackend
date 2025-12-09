@@ -3,16 +3,26 @@ FlowGrid Trading - Backend API Server
 Executes trading strategies and returns results to the browser dashboard
 """
 
+import sys
+import os
+
+# Set UTF-8 encoding for Windows console to handle emoji characters
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
 from flask import Flask, request, jsonify, send_file
 from flask import make_response
 from flask_cors import CORS
 import subprocess
 import json
 import re
-import os
 from datetime import datetime, timedelta
-from backendapi.integrations.alpaca_fetch import fetch_bars_full
-from backendapi.workflows.workflow_engine import WorkflowEngine
+#from backendapi.integrations.alpaca_fetch import fetch_bars_full
+from integrations.alpaca_fetch import fetch_bars_full
+#from backendapi.workflows.workflow_engine import WorkflowEngine
+from workflows.workflow_engine import WorkflowEngine
 from typing import List, Dict, Any
 from math import floor
 import requests
@@ -22,7 +32,8 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 import matplotlib.dates as mdates
 from io import BytesIO
-from backendapi.integrations.telegram_notifier import get_notifier, load_telegram_settings, save_telegram_settings
+#from backendapi.integrations.telegram_notifier import get_notifier, load_telegram_settings, save_telegram_settings
+from integrations.telegram_notifier import get_notifier, load_telegram_settings, save_telegram_settings
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for browser access
@@ -36,7 +47,7 @@ last_sent_signals = {}
 
 # Lightweight backtest manager (filesystem-backed) for local dev
 try:
-    from backendapi.backtest.backtest_manager import get_manager
+    from ..backtest.backtest_manager import get_manager
     backtest_manager = get_manager()
     print('✅ Backtest manager initialized')
 except Exception as _e:
@@ -1969,7 +1980,8 @@ def execute_backtest():
                 rsi_params = _block_params('rsi')
                 rsi_period = int(rsi_params.get('period', rsi_params.get('length', 14)))
                 if len(closes_so_far) >= rsi_period + 1:
-                    from backendapi.indicators.rsiIndicator import rsi
+                    #from backendapi.indicators.rsiIndicator import rsi
+                    from indicators.rsiIndicator import rsi
                     rsi_vals = rsi(closes_so_far, rsi_period)
                     if rsi_vals and rsi_vals[-1] is not None:
                         latest_data['rsi'] = rsi_vals[-1]
@@ -1982,7 +1994,8 @@ def execute_backtest():
                 signal = int(macd_params.get('signal', macd_params.get('signalPeriod', 9)))
                 min_required = max(fast, slow) + signal
                 if len(closes_so_far) >= min_required:
-                    from backendapi.indicators.macdIndicator import macd
+                    #from backendapi.indicators.macdIndicator import macd
+                    from indicators.macdIndicator import macd
                     macd_line, signal_line, histogram = macd(closes_so_far, fast, slow, signal)
                     if macd_line and macd_line[-1] is not None:
                         latest_data['macd'] = macd_line[-1]
@@ -1996,7 +2009,8 @@ def execute_backtest():
                 bb_period = int(bb_params.get('period', bb_params.get('length', 20)))
                 bb_std = float(bb_params.get('numStd', bb_params.get('std', 2)))
                 if len(closes_so_far) >= bb_period:
-                    from backendapi.indicators.bollingerBands import bollinger_bands
+                    #from backendapi.indicators.bollingerBands import bollinger_bands
+                    from indicators.bollingerBands import bollinger_bands
                     upper, middle, lower = bollinger_bands(closes_so_far, bb_period, bb_std)
                     if upper and upper[-1] is not None:
                         latest_data['bb_upper'] = upper[-1]
@@ -2151,7 +2165,20 @@ def health():
 @app.route('/', methods=['GET'])
 def index():
     """Serve the main workflow builder HTML"""
-    return send_file('workflow_builder.html')
+    try:
+        # Try to find workflow_builder.html in frontend directories
+        possible_paths = [
+            'workflow_builder.html',
+            '../../../frontend/public/workflow_builder.html',
+            '../../../frontend/ui/workflow-react/public/workflow_builder.html'
+        ]
+        for path in possible_paths:
+            if os.path.exists(path):
+                return send_file(path)
+        # If not found, return a simple HTML response
+        return jsonify({'message': 'FlowGrid Trading Backend API running. Frontend not found.'}), 200
+    except Exception as e:
+        return jsonify({'message': 'FlowGrid Trading Backend API running', 'error': str(e)}), 200
 
 @app.route('/nvda_chart.png', methods=['GET'])
 def nvda_chart():
@@ -2407,6 +2434,691 @@ def test_telegram():
     
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ============================================
+# Dashboard API Endpoints
+# ============================================
+
+# In-memory storage for strategies, alerts, and activity (in production, use a database)
+_dashboard_strategies = []
+_dashboard_alerts = []
+_dashboard_activity = []
+_dashboard_account = {
+    'equity': 100000,
+    'initial_equity': 100000,
+    'equity_history': [],
+    'trades': []
+}
+
+
+def _calculate_flow_grade(account_data):
+    """Calculate Flow Grade performance score based on account metrics."""
+    trades = account_data.get('trades', [])
+    equity_history = account_data.get('equity_history', [])
+    
+    if len(trades) < 5:
+        return None  # Not enough data to calculate grade
+    
+    # Calculate metrics
+    winning_trades = [t for t in trades if t.get('pnl', 0) > 0]
+    losing_trades = [t for t in trades if t.get('pnl', 0) < 0]
+    
+    win_rate = len(winning_trades) / len(trades) * 100 if trades else 0
+    
+    total_wins = sum(t.get('pnl', 0) for t in winning_trades)
+    total_losses = abs(sum(t.get('pnl', 0) for t in losing_trades))
+    profit_factor = total_wins / total_losses if total_losses > 0 else 0
+    
+    # Calculate Sharpe-like ratio (simplified)
+    if len(equity_history) > 1:
+        returns = []
+        for i in range(1, len(equity_history)):
+            prev = equity_history[i-1].get('v', equity_history[i-1])
+            curr = equity_history[i].get('v', equity_history[i])
+            if isinstance(prev, (int, float)) and isinstance(curr, (int, float)) and prev > 0:
+                returns.append((curr - prev) / prev)
+        
+        if returns:
+            avg_return = sum(returns) / len(returns)
+            std_return = (sum((r - avg_return)**2 for r in returns) / len(returns)) ** 0.5
+            sharpe_ratio = (avg_return / std_return * (252 ** 0.5)) if std_return > 0 else 0
+        else:
+            sharpe_ratio = 0
+    else:
+        sharpe_ratio = 0
+    
+    # Calculate consistency (percentage of profitable periods)
+    consistency = 0
+    if len(equity_history) > 5:
+        profitable_periods = 0
+        for i in range(1, len(equity_history)):
+            prev = equity_history[i-1].get('v', equity_history[i-1])
+            curr = equity_history[i].get('v', equity_history[i])
+            if isinstance(prev, (int, float)) and isinstance(curr, (int, float)):
+                if curr >= prev:
+                    profitable_periods += 1
+        consistency = profitable_periods / (len(equity_history) - 1) * 100
+    
+    # Calculate overall score (0-100)
+    score = 0
+    score += min(win_rate * 0.3, 30)  # Win rate contributes up to 30 points
+    score += min(profit_factor * 10, 25)  # Profit factor contributes up to 25 points
+    score += min(max(sharpe_ratio + 1, 0) * 15, 25)  # Sharpe contributes up to 25 points
+    score += min(consistency * 0.2, 20)  # Consistency contributes up to 20 points
+    
+    return {
+        'score': round(min(max(score, 0), 100)),
+        'metrics': {
+            'winRate': round(win_rate, 2),
+            'profitFactor': round(profit_factor, 2),
+            'sharpeRatio': round(sharpe_ratio, 2),
+            'consistency': round(consistency, 2)
+        }
+    }
+
+
+def _get_market_status():
+    """Determine market status based on time and API connectivity."""
+    now = datetime.now()
+    hour = now.hour
+    weekday = now.weekday()
+    
+    # Markets closed on weekends
+    if weekday >= 5:
+        return 'disconnected'
+    
+    # Pre-market: 4am-9:30am ET, Market hours: 9:30am-4pm ET
+    if 9 <= hour < 16:
+        return 'live'
+    elif 4 <= hour < 9 or 16 <= hour < 20:
+        return 'delayed'
+    else:
+        return 'disconnected'
+
+
+@app.route('/api/dashboard/metrics', methods=['GET'])
+def get_dashboard_metrics():
+    """Get main dashboard metrics for the top widgets."""
+    try:
+        equity = _dashboard_account.get('equity', 100000)
+        initial = _dashboard_account.get('initial_equity', 100000)
+        equity_history = _dashboard_account.get('equity_history', [])
+        
+        # Calculate total return
+        total_return = ((equity - initial) / initial) * 100 if initial > 0 else 0
+        
+        # Calculate max drawdown
+        max_drawdown = 0
+        peak = initial
+        for point in equity_history:
+            val = point.get('v', point) if isinstance(point, dict) else point
+            if isinstance(val, (int, float)):
+                if val > peak:
+                    peak = val
+                drawdown = ((peak - val) / peak) * 100 if peak > 0 else 0
+                max_drawdown = max(max_drawdown, drawdown)
+        
+        # Generate sparkline data (last 20 points)
+        equity_spark = []
+        if equity_history:
+            spark_data = equity_history[-20:]
+            equity_spark = [p.get('v', p) if isinstance(p, dict) else p for p in spark_data]
+        else:
+            # Generate sample data if no history
+            import random
+            base = initial
+            for _ in range(20):
+                base = base * (1 + random.uniform(-0.01, 0.015))
+                equity_spark.append(round(base, 2))
+        
+        # Return sparkline data
+        return_spark = []
+        if len(equity_spark) > 1:
+            for i, val in enumerate(equity_spark):
+                ret = ((val - initial) / initial) * 100
+                return_spark.append(round(ret, 2))
+        
+        # Drawdown spark
+        drawdown_spark = []
+        peak = equity_spark[0] if equity_spark else initial
+        for val in equity_spark:
+            if val > peak:
+                peak = val
+            dd = -((peak - val) / peak) * 100 if peak > 0 else 0
+            drawdown_spark.append(round(dd, 2))
+        
+        # Sample trading metrics for TradeZella-style dashboard
+        import random
+        net_pnl = 248.78
+        trade_count = 12
+        trade_expectancy = 248.78
+        profit_factor = 1.24
+        win_percent = 39.02
+        win_count = 32
+        loss_count = 51
+        avg_win_loss_ratio = 2.4
+        avg_win = 34.82
+        avg_loss = 51.32
+        
+        return jsonify({
+            'accountEquity': round(equity, 2),
+            'totalReturn': round(total_return, 2),
+            'maxDrawdown': round(-max_drawdown, 2),
+            'marketStatus': _get_market_status(),
+            'equitySpark': equity_spark,
+            'returnSpark': return_spark,
+            'drawdownSpark': drawdown_spark,
+            # TradeZella-style metrics
+            'netPnL': net_pnl,
+            'tradeCount': trade_count,
+            'tradeExpectancy': trade_expectancy,
+            'profitFactor': profit_factor,
+            'winPercent': win_percent,
+            'winCount': win_count,
+            'lossCount': loss_count,
+            'avgWinLossRatio': avg_win_loss_ratio,
+            'avgWin': avg_win,
+            'avgLoss': avg_loss
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/equity', methods=['GET'])
+def get_dashboard_equity():
+    """Get equity curve data for the chart."""
+    try:
+        timeframe = request.args.get('timeframe', '1M')
+        equity_history = _dashboard_account.get('equity_history', [])
+        initial = _dashboard_account.get('initial_equity', 100000)
+        
+        # Calculate how many days to show
+        days_map = {
+            '1W': 7,
+            '1M': 30,
+            '3M': 90,
+            'YTD': (datetime.now() - datetime(datetime.now().year, 1, 1)).days,
+            'All': 365
+        }
+        days = days_map.get(timeframe, 30)
+        
+        # Generate data if we don't have history
+        data = []
+        if equity_history:
+            data = equity_history[-days:]
+        else:
+            # Generate sample data
+            import random
+            base = initial
+            for i in range(days):
+                date = datetime.now() - timedelta(days=days-i-1)
+                base = base * (1 + random.uniform(-0.015, 0.02))
+                data.append({
+                    't': int(date.timestamp() * 1000),
+                    'v': round(base, 2),
+                    'equity': round(base, 2),
+                    'date': date.isoformat()
+                })
+            # Update account with generated data
+            _dashboard_account['equity_history'] = data
+            _dashboard_account['equity'] = data[-1]['v'] if data else initial
+        
+        return jsonify({
+            'data': data,
+            'timeframe': timeframe
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/flow-grade', methods=['GET'])
+def get_flow_grade():
+    """Get Flow Grade performance score."""
+    try:
+        grade_data = _calculate_flow_grade(_dashboard_account)
+        
+        if grade_data is None:
+            # Return sample data for demo
+            return jsonify({
+                'score': 81,
+                'metrics': {
+                    'winRate': 39.02,
+                    'avgWinLoss': 2.4,
+                    'profitFactor': 1.24,
+                    'sharpeRatio': 1.24,
+                    'consistency': 65.0
+                }
+            })
+        
+        return jsonify(grade_data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ============================================
+# Saved Strategies - File-based Persistence
+# ============================================
+STRATEGIES_FILE = os.path.join(os.path.dirname(__file__), '..', 'data', 'saved_strategies.json')
+
+def _ensure_data_dir():
+    """Ensure data directory exists."""
+    data_dir = os.path.dirname(STRATEGIES_FILE)
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir, exist_ok=True)
+
+def _load_strategies():
+    """Load saved strategies from file."""
+    try:
+        _ensure_data_dir()
+        if os.path.exists(STRATEGIES_FILE):
+            with open(STRATEGIES_FILE, 'r') as f:
+                return json.load(f)
+    except Exception as e:
+        print(f'Error loading strategies: {e}')
+    return []
+
+def _save_strategies(strategies):
+    """Save strategies to file."""
+    try:
+        _ensure_data_dir()
+        with open(STRATEGIES_FILE, 'w') as f:
+            json.dump(strategies, f, indent=2)
+        return True
+    except Exception as e:
+        print(f'Error saving strategies: {e}')
+        return False
+
+
+@app.route('/api/strategies/saved', methods=['GET'])
+def get_saved_strategies():
+    """Get list of saved strategies with on/off state."""
+    try:
+        strategies = _load_strategies()
+        return jsonify(strategies)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/strategies/saved', methods=['POST'])
+def save_strategy():
+    """Save a new strategy from workflow builder."""
+    try:
+        data = request.get_json()
+        
+        strategies = _load_strategies()
+        
+        # Generate unique ID if not provided
+        strategy_id = data.get('id') or f"strat-{datetime.now().strftime('%Y%m%d%H%M%S')}-{len(strategies)}"
+        
+        # Extract symbol and timeframe from workflow nodes if available
+        symbol = data.get('symbol', 'UNKNOWN')
+        timeframe = data.get('timeframe', '1D')
+        
+        # Check if strategy with this name already exists
+        existing_idx = next((i for i, s in enumerate(strategies) if s.get('name') == data.get('name')), None)
+        
+        strategy = {
+            'id': strategy_id,
+            'name': data.get('name', f'Strategy {len(strategies) + 1}'),
+            'symbol': symbol,
+            'timeframe': timeframe,
+            'isRunning': False,
+            'workflow': data.get('workflow', {}),
+            'createdAt': datetime.now().isoformat(),
+            'lastSignal': None
+        }
+        
+        if existing_idx is not None:
+            # Update existing
+            strategy['id'] = strategies[existing_idx]['id']
+            strategy['isRunning'] = strategies[existing_idx].get('isRunning', False)
+            strategies[existing_idx] = strategy
+        else:
+            strategies.append(strategy)
+        
+        _save_strategies(strategies)
+        
+        return jsonify({'success': True, 'strategy': strategy})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/strategies/<strategy_id>', methods=['DELETE'])
+def delete_strategy(strategy_id):
+    """Delete a saved strategy."""
+    try:
+        strategies = _load_strategies()
+        strategies = [s for s in strategies if s.get('id') != strategy_id]
+        _save_strategies(strategies)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/strategies/<strategy_id>/toggle', methods=['POST'])
+def toggle_strategy(strategy_id):
+    """Toggle a strategy on/off."""
+    try:
+        data = request.get_json()
+        is_running = data.get('isRunning', False)
+        
+        strategies = _load_strategies()
+        
+        for strategy in strategies:
+            if strategy['id'] == strategy_id:
+                strategy['isRunning'] = is_running
+                _save_strategies(strategies)
+                return jsonify({'success': True, 'strategy': strategy})
+        
+        return jsonify({'error': 'Strategy not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/signals', methods=['GET'])
+def get_live_signals():
+    """Get live signals from running strategies."""
+    try:
+        import random
+        
+        strategies = _load_strategies()
+        signals = []
+        
+        for strategy in strategies:
+            if strategy.get('isRunning'):
+                # Generate mock signal data based on strategy
+                signal_types = ['BUY', 'SELL', 'HOLD']
+                weights = [0.3, 0.2, 0.5]  # HOLD is most common
+                signal = random.choices(signal_types, weights=weights)[0]
+                
+                # Generate realistic price based on symbol
+                base_prices = {
+                    'AAPL': 195.0,
+                    'NVDA': 140.0,
+                    'SPY': 590.0,
+                    'TSLA': 250.0,
+                    'GOOGL': 175.0,
+                    'MSFT': 430.0,
+                    'AMD': 140.0,
+                    'META': 580.0,
+                    'QQQ': 520.0,
+                    'AMZN': 225.0
+                }
+                symbol = strategy.get('symbol', 'UNKNOWN')
+                base_price = base_prices.get(symbol, 100.0)
+                price = base_price * (1 + random.uniform(-0.02, 0.02))
+                
+                signals.append({
+                    'strategyId': strategy['id'],
+                    'strategyName': strategy['name'],
+                    'symbol': symbol,
+                    'price': round(price, 2),
+                    'signal': signal,
+                    'timestamp': datetime.now().isoformat()
+                })
+        
+        return jsonify(signals)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/performance', methods=['GET'])
+def get_performance_data():
+    """Get account performance data for chart."""
+    try:
+        import random
+        
+        timeframe = request.args.get('timeframe', '1M')
+        
+        # Determine number of data points based on timeframe
+        points_map = {
+            '1D': 24,
+            '1W': 7,
+            '1M': 30,
+            '3M': 90,
+            'YTD': (datetime.now() - datetime(datetime.now().year, 1, 1)).days or 1,
+            'All': 365
+        }
+        num_points = points_map.get(timeframe, 30)
+        
+        # Generate performance data
+        data = []
+        initial_value = 100000
+        current_value = initial_value
+        
+        for i in range(num_points):
+            # Simulate daily returns with slight upward bias
+            daily_return = random.gauss(0.0003, 0.015)  # 0.03% mean, 1.5% std
+            current_value *= (1 + daily_return)
+            
+            data.append({
+                'date': (datetime.now() - timedelta(days=num_points-i-1)).strftime('%m/%d'),
+                'value': round(current_value, 2)
+            })
+        
+        return jsonify({
+            'data': data,
+            'timeframe': timeframe,
+            'startValue': initial_value,
+            'endValue': round(current_value, 2),
+            'change': round((current_value - initial_value) / initial_value * 100, 2)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/daily-pnl', methods=['GET'])
+def get_daily_pnl():
+    """Get daily P&L data for charts."""
+    try:
+        import random
+        
+        # Generate sample daily P&L data for demo
+        daily_data = []
+        cumulative_data = []
+        cumulative = 0
+        
+        base_date = datetime.now() - timedelta(days=14)
+        
+        for i in range(14):
+            date = base_date + timedelta(days=i)
+            date_str = date.strftime('%m/%d')
+            
+            # Random daily P&L between -200 and +200
+            daily_pnl = random.uniform(-150, 200)
+            if random.random() > 0.4:  # 60% chance of profit
+                daily_pnl = abs(daily_pnl)
+            else:
+                daily_pnl = -abs(daily_pnl) * 0.7
+            
+            cumulative += daily_pnl
+            
+            daily_data.append({
+                'date': date_str,
+                'value': round(daily_pnl, 2)
+            })
+            
+            cumulative_data.append({
+                'date': date_str,
+                'value': round(cumulative, 2)
+            })
+        
+        return jsonify({
+            'daily': daily_data,
+            'cumulative': cumulative_data
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/strategies/status', methods=['GET'])
+def get_strategies_status():
+    """Get list of strategies with their current status."""
+    try:
+        if not _dashboard_strategies:
+            # Return sample strategies for demo
+            return jsonify([
+                {
+                    'id': 'strat-1',
+                    'name': 'RSI Momentum',
+                    'status': 'active',
+                    'health': 'healthy',
+                    'capitalPercent': 30,
+                    'lastSignal': (datetime.now() - timedelta(hours=2)).isoformat()
+                },
+                {
+                    'id': 'strat-2',
+                    'name': 'MACD Crossover',
+                    'status': 'active',
+                    'health': 'healthy',
+                    'capitalPercent': 25,
+                    'lastSignal': (datetime.now() - timedelta(hours=5)).isoformat()
+                },
+                {
+                    'id': 'strat-3',
+                    'name': 'Bollinger Breakout',
+                    'status': 'paused',
+                    'health': 'warning',
+                    'capitalPercent': 20,
+                    'lastSignal': (datetime.now() - timedelta(days=1)).isoformat()
+                },
+                {
+                    'id': 'strat-4',
+                    'name': 'Volume Spike',
+                    'status': 'testing',
+                    'health': 'healthy',
+                    'capitalPercent': 0,
+                    'lastSignal': None
+                }
+            ])
+        
+        return jsonify(_dashboard_strategies)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/alerts/active', methods=['GET'])
+def get_active_alerts():
+    """Get list of active alerts."""
+    try:
+        if not _dashboard_alerts:
+            # Return sample alerts for demo
+            return jsonify([
+                {
+                    'id': 'alert-1',
+                    'type': 'triggered',
+                    'message': 'RSI crossed above 70 on AAPL',
+                    'timestamp': (datetime.now() - timedelta(minutes=15)).isoformat(),
+                    'deliveryStatus': 'sent'
+                },
+                {
+                    'id': 'alert-2',
+                    'type': 'triggered',
+                    'message': 'MACD bullish crossover on NVDA',
+                    'timestamp': (datetime.now() - timedelta(hours=1)).isoformat(),
+                    'deliveryStatus': 'sent'
+                },
+                {
+                    'id': 'alert-3',
+                    'type': 'pending',
+                    'message': 'Waiting for SPY to reach $480',
+                    'timestamp': (datetime.now() - timedelta(hours=3)).isoformat(),
+                    'deliveryStatus': None
+                },
+                {
+                    'id': 'alert-4',
+                    'type': 'pending',
+                    'message': 'RSI oversold condition watch on TSLA',
+                    'timestamp': (datetime.now() - timedelta(hours=6)).isoformat(),
+                    'deliveryStatus': None
+                }
+            ])
+        
+        return jsonify(_dashboard_alerts)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/activity/recent', methods=['GET'])
+def get_recent_activity():
+    """Get recent activity feed."""
+    try:
+        limit = request.args.get('limit', 10, type=int)
+        
+        if not _dashboard_activity:
+            # Return sample activity for demo
+            sample_events = [
+                {
+                    'id': 'evt-1',
+                    'type': 'alert_triggered',
+                    'message': 'Alert triggered: RSI crossed 70 on AAPL',
+                    'timestamp': (datetime.now() - timedelta(minutes=15)).isoformat()
+                },
+                {
+                    'id': 'evt-2',
+                    'type': 'backtest_completed',
+                    'message': 'Backtest completed: RSI Strategy on NVDA',
+                    'timestamp': (datetime.now() - timedelta(hours=1)).isoformat()
+                },
+                {
+                    'id': 'evt-3',
+                    'type': 'strategy_edited',
+                    'message': 'Strategy updated: MACD Crossover parameters changed',
+                    'timestamp': (datetime.now() - timedelta(hours=2)).isoformat()
+                },
+                {
+                    'id': 'evt-4',
+                    'type': 'config_changed',
+                    'message': 'Telegram notifications enabled',
+                    'timestamp': (datetime.now() - timedelta(hours=5)).isoformat()
+                },
+                {
+                    'id': 'evt-5',
+                    'type': 'strategy_created',
+                    'message': 'New strategy created: Volume Spike Detector',
+                    'timestamp': (datetime.now() - timedelta(days=1)).isoformat()
+                },
+                {
+                    'id': 'evt-6',
+                    'type': 'market_reconnect',
+                    'message': 'Market data connection restored',
+                    'timestamp': (datetime.now() - timedelta(days=1, hours=2)).isoformat()
+                }
+            ]
+            return jsonify({
+                'events': sample_events[:limit],
+                'hasMore': len(sample_events) > limit
+            })
+        
+        events = _dashboard_activity[:limit]
+        return jsonify({
+            'events': events,
+            'hasMore': len(_dashboard_activity) > limit
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/add-activity', methods=['POST'])
+def add_activity():
+    """Add a new activity event (internal use)."""
+    try:
+        data = request.get_json()
+        event = {
+            'id': f"evt-{len(_dashboard_activity)+1}",
+            'type': data.get('type', 'info'),
+            'message': data.get('message', ''),
+            'timestamp': datetime.now().isoformat()
+        }
+        _dashboard_activity.insert(0, event)
+        # Keep only last 100 events
+        if len(_dashboard_activity) > 100:
+            _dashboard_activity.pop()
+        return jsonify({'success': True, 'event': event})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     print("FlowGrid Trading Backend Server")

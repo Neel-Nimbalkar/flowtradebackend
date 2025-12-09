@@ -45,26 +45,30 @@ const Analytics = ({ onNavigate }) => {
   }, []);
 
   return (
-    <div className="dashboard-root">
+    <div className="dashboard-page">
       <StrategyMonitorDrawer open={monitorOpen} onClose={() => setMonitorOpen(false)} resultsData={monitorResults} nodeBuffers={monitorNodeBuffers} />
-      <DashboardSidebar onNavigate={onNavigate} hideHome={false} activeKey={'analytics'} />
-      <div className="dashboard-content">
-        <div className="dashboard-main">
-          <div className="grid" style={{ gridTemplateColumns: '1fr 3fr 360px', gap: 16 }}>
-            <div className="panel large" style={{ gridColumn: '1 / span 2', gridRow: '1', minWidth: 0 }}>
-              <div className="panel-header">Live Trading History</div>
-              <div className="panel-body">
-                <LiveTrades />
-              </div>
+      <DashboardSidebar onNavigate={onNavigate} activeRoute="analytics" />
+      <main className="dashboard-main">
+        <div className="dashboard-header">
+          <h1>Analytics</h1>
+        </div>
+        <div className="dashboard-content" style={{ gridTemplateColumns: '1fr 360px' }}>
+          <div className="calendar-panel">
+            <div className="calendar-header">
+              <span className="calendar-title">Live Trading History</span>
             </div>
-
-            <div className="panel" style={{ gridColumn: '3', gridRow: '1', minHeight: 300 }}>
-              <div className="panel-header">Alpaca API Settings</div>
+            <LiveTrades />
+          </div>
+          <div className="side-panel">
+            <div className="day-stats-panel">
+              <div className="day-stats-header">
+                <span className="day-stats-title">Alpaca API Settings</span>
+              </div>
               <DashboardSettings noWrapper={true} />
             </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 };

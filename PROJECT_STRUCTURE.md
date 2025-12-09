@@ -153,7 +153,8 @@ FlowGrid Trading/
 
 5. Run the API server:
    ```bash
-   python api/backend.py
+   cd ..
+   python -m backendapi.api.backend
    ```
 
 ### Frontend Setup

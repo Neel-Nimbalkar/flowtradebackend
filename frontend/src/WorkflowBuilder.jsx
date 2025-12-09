@@ -382,17 +382,13 @@ const WorkflowBuilder = ({ onNavigate }) => {
   const executeWorkflowOnce = async (payload, signal) => {
     if (!payload) throw new Error('No workflow defined');
     const jsonBody = JSON.stringify(payload);
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
     const endpoints = [
+      `${baseUrl}/execute_workflow_v2`,
       '/execute_workflow_v2',
       'http://127.0.0.1:5000/execute_workflow_v2',
       'http://localhost:5000/execute_workflow_v2'
     ];
-    try {
-      const host = window.location.hostname;
-      if (host && host !== '127.0.0.1' && host !== 'localhost') {
-        endpoints.push(`http://${host}:5000/execute_workflow_v2`);
-      }
-    } catch (e) { /* ignore */ }
 
     let lastErr = null;
     for (const url of endpoints) {
