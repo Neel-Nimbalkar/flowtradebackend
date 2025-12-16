@@ -12,4 +12,4 @@ C:\Users\nimba\OneDrive\Desktop\FlowGrid Trading\backendapi>
 git add .
 git commit -m "some comment"
 git branch -M main
-git push -u origin main
+git push -f origin main
