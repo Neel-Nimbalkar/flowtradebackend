@@ -43,6 +43,8 @@ const WorkflowBuilder = ({ onNavigate }) => {
       map[name] = payload;
       localStorage.setItem(SAVES_KEY, JSON.stringify(map));
       try { localStorage.setItem('workflow_active_id', name); } catch (e) {}
+      // Dispatch event so Dashboard can update strategies panel
+      window.dispatchEvent(new CustomEvent('flowgrid:strategy-saved', { detail: { name, payload } }));
       alert(`Workflow saved as "${name}"`);
     } catch (err) {
       console.error('save error', err);
@@ -1140,10 +1142,7 @@ const WorkflowBuilder = ({ onNavigate }) => {
         />
 
         <div className="canvas-container">
-          {/* Background logo behind the grid */}
-          <div className="flowtrade-logo-bg" aria-hidden>
-            <span className="flowtrade-logo-text">FLOWTRADE</span>
-          </div>
+          {/* Background logo removed */}
           {/* Minimap and zoom controls together */}
           <div style={{ position: 'absolute', bottom: 24, right: 32, zIndex: 100, display: 'flex', alignItems: 'flex-end', gap: 12 }}>
             {/* minimap removed per request */}

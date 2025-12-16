@@ -71,7 +71,7 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
 .app-container { display: flex; height: 100vh; }
 
 /* Workflow Builder Sidebar - scoped with .app-container to override dashboard sidebar */
-.app-container .sidebar { width: 320px !important; background: var(--secondary-bg); border-right: 1px solid var(--border); display:flex; flex-direction:column; overflow-y:auto; padding-bottom:80px; position:fixed; left:0; top:0; bottom:0; z-index:3000; align-items: stretch; padding: 0; }
+.app-container .sidebar { width: 200px !important; background: var(--secondary-bg); border-right: 1px solid var(--border); display:flex; flex-direction:column; overflow-y:auto; padding-bottom:80px; position:fixed; left:0; top:0; bottom:0; z-index:3000; align-items: stretch; padding: 0; }
 .app-container .sidebar::-webkit-scrollbar { width: 6px; }
 .app-container .sidebar::-webkit-scrollbar-track { background: #131722; }
 .app-container .sidebar::-webkit-scrollbar-thumb { background: #2962ff; border-radius: 3px; opacity: 0; transition: opacity 160ms ease; }
@@ -112,33 +112,8 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
 .block-name { font-size:12.5px; font-weight:500; color:#d1d4dc; }
 
 /* Canvas area */
-.canvas-container { flex:1; position:relative; overflow:hidden; background-color:var(--bg); background-image: radial-gradient(rgba(38,42,51,0.6) 1px, transparent 1px), radial-gradient(rgba(38,42,51,0.6) 1px, transparent 1px); background-position:0 0, 7.5px 7.5px; background-size:15px 15px; margin-left:320px; }
-/* FlowTrade logo background - sits behind the grid */
-.flowtrade-logo-bg {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 0; /* behind connections and canvas */
-  pointer-events: none;
-  /* slightly more visible but still very transparent */
-  opacity: 0.08;
-  filter: saturate(1.0) brightness(1.05);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.flowtrade-logo-text {
-  font-family: Inter, 'Segoe UI', Roboto, system-ui, -apple-system, sans-serif;
-  font-weight: 800;
-  font-size: 96px; /* slightly larger for readability */
-  letter-spacing: 10px;
-  color: rgba(255,255,255,0.14); /* whiter, still translucent */
-  text-transform: uppercase;
-  user-select: none;
-  text-shadow: 0 1px 0 rgba(0,0,0,0.04);
-  mix-blend-mode: overlay;
-}
+.canvas-container { flex:1; position:relative; overflow:hidden; background-color:var(--bg); background-image: radial-gradient(rgba(38,42,51,0.6) 1px, transparent 1px), radial-gradient(rgba(38,42,51,0.6) 1px, transparent 1px); background-position:0 0, 7.5px 7.5px; background-size:15px 15px; margin-left:200px; }
+/* FLOWTRADE watermark removed from grid */
 
 /* Ensure main layers sit above background */
 .connection-layer { z-index: 1; }
@@ -197,38 +172,119 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
 /* Dragging node visual */
 .node.dragging { transform:scale(1.06); box-shadow:0 8px 32px rgba(41,98,255,0.22); border-color:#60a5fa; z-index:3; user-select: none; }
 
-/* Toolbar */
+/* Toolbar - Unified Control Panel Design */
 .toolbar {
   position:fixed;
   top:16px;
-  left:240px; /* stay to the right of the fixed sidebar */
-  right:16px;
-  background:transparent; /* let button styles show, keep background minimal */
-  border: none;
-  padding: 0;
+  left: calc(200px + (100vw - 200px) / 2);
+  transform: translateX(-50%);
+  background: var(--secondary-bg, #1e222d);
+  border: 1px solid var(--border, #2a2e39);
+  border-radius: 8px;
+  padding: 6px 10px;
   display:flex;
-  justify-content:center; /* center toolbar within available content area */
-  gap:8px;
+  align-items: center;
+  gap:4px;
   z-index:2000;
   pointer-events:auto;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  width: fit-content;
 }
 
-.toolbar .toolbar-btn { background: var(--card-bg, #1e222d); border:1px solid var(--border, #2a2e39); padding:8px 10px; border-radius:6px; }
-.toolbar .toolbar-btn.primary { background: var(--card-bg, #1e222d); color: var(--text-primary, #d1d4dc); border-color: var(--border, #2a2e39); }
+.toolbar .toolbar-btn { 
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 6px 12px;
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary, #787b86);
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
 
-/* Run switch styles */
-.toolbar-run { display:flex; align-items:center; }
-.run-switch { display:inline-flex; align-items:center; cursor:pointer; }
+.toolbar .toolbar-btn:hover { 
+  background: rgba(41, 98, 255, 0.08);
+  color: var(--text-primary, #d1d4dc);
+  border-color: rgba(41, 98, 255, 0.2);
+}
+
+.toolbar .toolbar-btn:active {
+  transform: scale(0.98);
+}
+
+.toolbar .toolbar-btn.primary { 
+  background: var(--accent, #2962ff);
+  color: white;
+  border-color: var(--accent, #2962ff);
+}
+
+/* Run switch styles - Enhanced */
+.toolbar-run { 
+  display:flex; 
+  align-items:center; 
+  gap: 10px;
+  padding-left: 12px;
+  margin-left: 8px;
+  border-left: 1px solid var(--border, #2a2e39);
+}
+
+.toolbar-run span {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary, #787b86);
+}
+
+.run-switch { 
+  display:inline-flex; 
+  align-items:center; 
+  cursor:pointer;
+  transition: transform 0.1s ease;
+}
+
+.run-switch:hover {
+  transform: scale(1.05);
+}
+
 .run-switch input { position:absolute; opacity:0; width:0; height:0; }
-.run-switch .slider { width:46px; height:24px; background:#4b5563; border-radius:999px; position:relative; display:inline-block; transition:background 160ms ease; border:1px solid rgba(0,0,0,0.12); }
-.run-switch .slider::after { content:''; position:absolute; left:4px; top:3px; width:18px; height:18px; background:white; border-radius:50%; transition:transform 160ms cubic-bezier(.2,.9,.2,1); box-shadow:0 1px 2px rgba(0,0,0,0.2); }
-.run-switch.on .slider { background: var(--accent, #2962ff); border-color: rgba(41,98,255,0.9); }
+
+.run-switch .slider { 
+  width:48px; 
+  height:26px; 
+  background:#4b5563; 
+  border-radius:999px; 
+  position:relative; 
+  display:inline-block; 
+  transition:background 200ms ease; 
+  border:1px solid rgba(0,0,0,0.15);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.run-switch .slider::after { 
+  content:''; 
+  position:absolute; 
+  left:3px; 
+  top:2px; 
+  width:20px; 
+  height:20px; 
+  background:white; 
+  border-radius:50%; 
+  transition:transform 200ms cubic-bezier(.2,.9,.2,1); 
+  box-shadow:0 2px 4px rgba(0,0,0,0.25);
+}
+
+.run-switch.on .slider { 
+  background: var(--accent, #2962ff); 
+  border-color: rgba(41,98,255,0.3);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.1), 0 0 8px rgba(41, 98, 255, 0.3);
+}
+
 .run-switch.on .slider::after { transform: translateX(22px); }
 .run-switch.off .slider { background: #4b5563; }
 .run-switch.off .slider::after { transform: translateX(0); }
 
 /* Zoom, minimap, status bar simplified */
-.zoom-controls { position:fixed; top:72px; left:260px; background:var(--secondary-bg); border:1px solid var(--border); border-radius:4px; padding:8px; display:flex; flex-direction:column; gap:4px; z-index:2500; }
+.zoom-controls { position:fixed; bottom:50px; left:220px; background:var(--secondary-bg); border:1px solid var(--border); border-radius:6px; padding:8px; display:flex; flex-direction:column; gap:4px; z-index:2500; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); }
 .minimap { display: none !important; }
 .status-bar { position:absolute; bottom:0; left:0; right:0; height:36px; background:var(--secondary-bg); border-top:1px solid var(--border); display:flex; align-items:center; padding:0 20px; gap:20px; font-size:11px; color:var(--text-secondary); }
 

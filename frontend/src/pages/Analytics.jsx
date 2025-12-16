@@ -2,7 +2,7 @@ import React from 'react';
 import DashboardSidebar from '../components/DashboardSidebar';
 import StrategyMonitorDrawer from '../components/StrategyMonitor/StrategyMonitorDrawer';
 import DashboardSettings from '../components/DashboardSettings';
-import LiveTrades from '../components/LiveTrades';
+import TradeLogging from '../components/TradeLogging';
 import './Dashboard.css';
 
 const Analytics = ({ onNavigate }) => {
@@ -53,11 +53,11 @@ const Analytics = ({ onNavigate }) => {
           <h1>Analytics</h1>
         </div>
         <div className="dashboard-content" style={{ gridTemplateColumns: '1fr 360px' }}>
-          <div className="calendar-panel">
+          <div className="calendar-panel" style={{ height: 'calc(100vh - 140px)', overflow: 'hidden' }}>
             <div className="calendar-header">
-              <span className="calendar-title">Live Trading History</span>
+              <span className="calendar-title">Trade Logging</span>
             </div>
-            <LiveTrades />
+            <TradeLogging />
           </div>
           <div className="side-panel">
             <div className="day-stats-panel">

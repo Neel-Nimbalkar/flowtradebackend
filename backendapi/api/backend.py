@@ -19,6 +19,11 @@ import subprocess
 import json
 import re
 from datetime import datetime, timedelta
+import threading
+import time
+import random
+import uuid
+import logging
 #from backendapi.integrations.alpaca_fetch import fetch_bars_full
 from integrations.alpaca_fetch import fetch_bars_full
 #from backendapi.workflows.workflow_engine import WorkflowEngine
@@ -44,6 +49,14 @@ workflow_engine = WorkflowEngine()
 # Track last sent signal per strategy to avoid spam
 # Key: f"{symbol}_{timeframe}", Value: signal_type (BUY/SELL)
 last_sent_signals = {}
+
+# Setup logging
+logger = logging.getLogger('flowgrid.backend')
+logger.setLevel(logging.INFO)
+
+# Data directory
+current_file_dir = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(os.path.dirname(current_file_dir), 'data')
 
 # Lightweight backtest manager (filesystem-backed) for local dev
 try:
@@ -1796,26 +1809,30 @@ def execute_workflow_v2():
             resp = make_response(*raw)
         else:
             resp = make_response(raw)
-            if resp.status_code != 200:
-                # Try to surface the backend response body for easier debugging
+        
+        # Check status and get response data
+        engine_resp = None
+        if resp.status_code != 200:
+            # Try to surface the backend response body for easier debugging
+            try:
+                body_text = resp.get_data(as_text=True)
+                print(f"⚠️ execute_workflow returned status {resp.status_code}: {body_text}")
+                # Try to parse JSON body
                 try:
-                    body_text = resp.get_data(as_text=True)
-                    print(f"⚠️ execute_workflow returned status {resp.status_code}: {body_text}")
-                    # Try to parse JSON body
-                    try:
-                        body_json = resp.get_json(force=True)
-                    except Exception:
-                        body_json = {'raw': body_text}
-                except Exception as e:
-                    print(f"⚠️ Failed reading wrapped response body: {e}")
-                    body_json = {'error': 'Failed to read backend response body'}
-                return make_response(jsonify({'error': 'wrapped_execute_failed', 'details': body_json}), resp.status_code)
+                    body_json = resp.get_json(force=True)
+                except Exception:
+                    body_json = {'raw': body_text}
+            except Exception as e:
+                print(f"⚠️ Failed reading wrapped response body: {e}")
+                body_json = {'error': 'Failed to read backend response body'}
+            return make_response(jsonify({'error': 'wrapped_execute_failed', 'details': body_json}), resp.status_code)
+        else:
             engine_resp = resp.get_json()
+        
         v2 = _build_v2_response(symbol, timeframe, days, engine_resp)
         return jsonify(v2)
     except Exception as e:
         print(f"❌ Error in v2 execute: {e}")
-        return jsonify({'error': str(e)}), 500
         return jsonify({'error': str(e)}), 500
 
 
@@ -3120,9 +3137,1496 @@ def add_activity():
         return jsonify({'error': str(e)}), 500
 
 
+# ============================================
+# Advanced Dashboard Endpoints for Trade Analytics
+# ============================================
+
+# In-memory trade history storage (would be DB in production)
+_trade_history = []
+
+def _generate_sample_trades():
+    """Generate realistic sample trade data for demo purposes."""
+    import random
+    trades = []
+    symbols = ['AAPL', 'NVDA', 'SPY', 'TSLA', 'GOOGL', 'MSFT', 'AMD', 'META', 'QQQ', 'AMZN']
+    strategies = ['RSI Momentum', 'MACD Crossover', 'Bollinger Breakout', 'Volume Spike', 'EMA Cross']
+    
+    base_date = datetime.now() - timedelta(days=30)
+    cumulative_pnl = 0
+    equity = 100000
+    
+    for i in range(83):  # 83 trades for realistic demo
+        symbol = random.choice(symbols)
+        strategy = random.choice(strategies)
+        direction = random.choice(['LONG', 'SHORT'])
+        
+        # Entry time
+        entry_time = base_date + timedelta(
+            days=random.randint(0, 29),
+            hours=random.randint(9, 15),
+            minutes=random.randint(0, 59)
+        )
+        
+        # Hold time: 5 minutes to 4 hours
+        hold_minutes = random.randint(5, 240)
+        exit_time = entry_time + timedelta(minutes=hold_minutes)
+        
+        # Price and P&L
+        base_prices = {'AAPL': 195, 'NVDA': 140, 'SPY': 590, 'TSLA': 250, 'GOOGL': 175, 
+                       'MSFT': 430, 'AMD': 140, 'META': 580, 'QQQ': 520, 'AMZN': 225}
+        entry_price = base_prices.get(symbol, 100) * random.uniform(0.95, 1.05)
+        
+        # Win rate ~47%, average win > average loss (positive expectancy)
+        is_win = random.random() < 0.47
+        if is_win:
+            pnl_percent = random.uniform(0.5, 4.5)  # Wins: 0.5% to 4.5%
+        else:
+            pnl_percent = -random.uniform(0.3, 2.5)  # Losses: 0.3% to 2.5%
+        
+        if direction == 'SHORT':
+            pnl_percent = -pnl_percent  # Invert for short
+            exit_price = entry_price * (1 - pnl_percent / 100)
+            pnl_percent = -pnl_percent  # Calculate actual P&L
+        else:
+            exit_price = entry_price * (1 + pnl_percent / 100)
+        
+        # Position size: 1-10% of equity
+        position_size = equity * random.uniform(0.01, 0.10)
+        shares = int(position_size / entry_price)
+        if shares < 1:
+            shares = 1
+        
+        gross_pnl = (exit_price - entry_price) * shares
+        if direction == 'SHORT':
+            gross_pnl = -gross_pnl
+        
+        # Fees and commission
+        commission = shares * 0.005  # $0.005 per share
+        fees = abs(gross_pnl) * 0.001  # 0.1% SEC/TAF fees estimate
+        net_pnl = gross_pnl - commission - fees
+        
+        cumulative_pnl += net_pnl
+        equity += net_pnl
+        
+        # R-multiple (risk was 1% of equity at entry)
+        risk_amount = position_size * 0.01  # 1% stop loss
+        r_multiple = net_pnl / risk_amount if risk_amount > 0 else 0
+        
+        trades.append({
+            'id': f'trade-{i+1}',
+            'symbol': symbol,
+            'strategy': strategy,
+            'direction': direction,
+            'entryTime': entry_time.isoformat(),
+            'exitTime': exit_time.isoformat(),
+            'entryPrice': round(entry_price, 2),
+            'exitPrice': round(exit_price, 2),
+            'shares': shares,
+            'grossPnL': round(gross_pnl, 2),
+            'commission': round(commission, 2),
+            'fees': round(fees, 2),
+            'netPnL': round(net_pnl, 2),
+            'cumulativePnL': round(cumulative_pnl, 2),
+            'equity': round(equity, 2),
+            'rMultiple': round(r_multiple, 2),
+            'holdTimeMinutes': hold_minutes
+        })
+    
+    # Sort by entry time
+    trades.sort(key=lambda x: x['entryTime'])
+    
+    # Recalculate cumulative values after sorting
+    cumulative = 0
+    equity = 100000
+    for trade in trades:
+        cumulative += trade['netPnL']
+        equity += trade['netPnL']
+        trade['cumulativePnL'] = round(cumulative, 2)
+        trade['equity'] = round(equity, 2)
+    
+    return trades
+
+
+def _get_trades():
+    """Get trades, generating sample data if needed."""
+    global _trade_history
+    if not _trade_history:
+        _trade_history = _generate_sample_trades()
+    return _trade_history
+
+
+# =============================================================================
+# Real-Time Strategy Execution System
+# =============================================================================
+
+_realtime_monitoring_active = False
+_realtime_thread = None
+_realtime_stop_event = threading.Event()
+_live_signals = []  # Store live signals from enabled strategies
+_MAX_LIVE_SIGNALS = 100
+
+def _start_realtime_monitoring():
+    """Start background thread to monitor enabled strategies."""
+    global _realtime_monitoring_active, _realtime_thread
+    
+    if _realtime_monitoring_active:
+        return
+    
+    _realtime_stop_event.clear()
+    _realtime_monitoring_active = True
+    
+    def monitor_loop():
+        logger.info("🔴 Real-time monitoring started")
+        while not _realtime_stop_event.is_set():
+            try:
+                # Check enabled strategies
+                enabled = _get_enabled_strategies()
+                if not enabled:
+                    time.sleep(5)
+                    continue
+                
+                # For each enabled strategy, check if it generates a signal
+                for strategy_name in enabled:
+                    strategy = _load_strategy(strategy_name)
+                    if not strategy:
+                        continue
+                    
+                    # Execute workflow with current market data
+                    # For demo: generate synthetic signals
+                    if random.random() < 0.05:  # 5% chance per check
+                        signal = _generate_live_signal(strategy_name, strategy)
+                        _live_signals.append(signal)
+                        
+                        # Keep only last N signals
+                        if len(_live_signals) > _MAX_LIVE_SIGNALS:
+                            _live_signals.pop(0)
+                        
+                        logger.info(f"📊 Signal generated: {signal['symbol']} {signal['direction']} from {strategy_name}")
+                
+                time.sleep(10)  # Check every 10 seconds
+                
+            except Exception as e:
+                logger.error(f"Real-time monitoring error: {e}")
+                time.sleep(5)
+        
+        logger.info("🔴 Real-time monitoring stopped")
+    
+    _realtime_thread = threading.Thread(target=monitor_loop, daemon=True, name='RealtimeMonitor')
+    _realtime_thread.start()
+
+def _stop_realtime_monitoring():
+    """Stop background monitoring thread."""
+    global _realtime_monitoring_active
+    
+    if not _realtime_monitoring_active:
+        return
+    
+    _realtime_monitoring_active = False
+    _realtime_stop_event.set()
+    
+    if _realtime_thread:
+        _realtime_thread.join(timeout=3)
+
+def _generate_live_signal(strategy_name, strategy):
+    """Generate a live signal from strategy."""
+    symbols = ['AAPL', 'NVDA', 'TSLA', 'MSFT', 'GOOGL', 'AMZN', 'META']
+    symbol = random.choice(symbols)
+    direction = random.choice(['BUY', 'SELL'])
+    price = 100 + random.random() * 200
+    
+    return {
+        'id': str(uuid.uuid4())[:8],
+        'timestamp': datetime.now().isoformat(),
+        'strategy_name': strategy_name,
+        'symbol': symbol,
+        'direction': direction,
+        'type': 'entry',
+        'price': round(price, 2),
+        'quantity': random.randint(1, 10),
+        'pnl': None,  # Entry signal has no P&L yet
+        'status': 'open'
+    }
+
+def _get_enabled_strategies():
+    """Get list of currently enabled strategy names."""
+    try:
+        strategies_file = os.path.join(DATA_DIR, 'enabled_strategies.json')
+        if os.path.exists(strategies_file):
+            with open(strategies_file, 'r') as f:
+                data = json.load(f)
+                return [name for name, enabled in data.items() if enabled]
+    except:
+        pass
+    return []
+
+def _load_strategy(strategy_name):
+    """Load strategy configuration from saved_strategies.json."""
+    try:
+        strategies_file = os.path.join(DATA_DIR, 'saved_strategies.json')
+        if os.path.exists(strategies_file):
+            with open(strategies_file, 'r') as f:
+                strategies = json.load(f)
+                return strategies.get(strategy_name)
+    except:
+        pass
+    return None
+
+
+@app.route('/api/trades', methods=['GET'])
+def get_trades():
+    """Get all trades with optional filtering."""
+    try:
+        trades = _get_trades()
+        
+        # Apply filters if provided
+        strategy = request.args.get('strategy')
+        symbol = request.args.get('symbol')
+        direction = request.args.get('direction')
+        start_date = request.args.get('startDate')
+        end_date = request.args.get('endDate')
+        
+        filtered = trades
+        
+        if strategy:
+            filtered = [t for t in filtered if t['strategy'] == strategy]
+        if symbol:
+            filtered = [t for t in filtered if t['symbol'] == symbol]
+        if direction:
+            filtered = [t for t in filtered if t['direction'].upper() == direction.upper()]
+        if start_date:
+            filtered = [t for t in filtered if t['entryTime'] >= start_date]
+        if end_date:
+            filtered = [t for t in filtered if t['entryTime'] <= end_date]
+        
+        return jsonify(filtered)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/trades/recent', methods=['GET'])
+def get_recent_trades():
+    """Get most recent trades (default 5)."""
+    try:
+        limit = int(request.args.get('limit', 5))
+        trades = _get_trades()
+        recent = sorted(trades, key=lambda x: x['exitTime'], reverse=True)[:limit]
+        return jsonify(recent)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/signals/live', methods=['GET'])
+def get_live_strategy_signals():
+    """Get live signals from enabled strategies."""
+    try:
+        limit = int(request.args.get('limit', 10))
+        # Return most recent live signals
+        recent = list(reversed(_live_signals[-limit:]))
+        return jsonify(recent)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/comprehensive-metrics', methods=['GET'])
+def get_comprehensive_metrics():
+    """Get all dashboard metrics computed from trade history."""
+    try:
+        trades = _get_trades()
+        
+        if not trades:
+            return jsonify({
+                'netPnL': 0, 'netPnLPercent': 0, 'winRate': 0, 'profitFactor': 0,
+                'expectancy': 0, 'totalTrades': 0, 'maxDrawdown': 0, 'maxDrawdownPercent': 0,
+                'avgWin': 0, 'avgLoss': 0, 'largestWin': 0, 'largestLoss': 0,
+                'avgRMultiple': 0, 'winCount': 0, 'lossCount': 0, 'longPnL': 0, 'shortPnL': 0
+            })
+        
+        initial_equity = 100000
+        
+        # Basic metrics
+        wins = [t for t in trades if t['netPnL'] > 0]
+        losses = [t for t in trades if t['netPnL'] < 0]
+        
+        total_trades = len(trades)
+        win_count = len(wins)
+        loss_count = len(losses)
+        
+        net_pnl = sum(t['netPnL'] for t in trades)
+        net_pnl_percent = (net_pnl / initial_equity) * 100
+        
+        win_rate = (win_count / total_trades * 100) if total_trades > 0 else 0
+        
+        gross_profit = sum(t['netPnL'] for t in wins)
+        gross_loss = abs(sum(t['netPnL'] for t in losses))
+        profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else float('inf') if gross_profit > 0 else 0
+        
+        expectancy = net_pnl / total_trades if total_trades > 0 else 0
+        
+        avg_win = gross_profit / win_count if win_count > 0 else 0
+        avg_loss = gross_loss / loss_count if loss_count > 0 else 0
+        
+        largest_win = max((t['netPnL'] for t in trades), default=0)
+        largest_loss = min((t['netPnL'] for t in trades), default=0)
+        
+        avg_r = sum(t['rMultiple'] for t in trades) / total_trades if total_trades > 0 else 0
+        
+        # Direction breakdown
+        long_trades = [t for t in trades if t['direction'] == 'LONG']
+        short_trades = [t for t in trades if t['direction'] == 'SHORT']
+        long_pnl = sum(t['netPnL'] for t in long_trades)
+        short_pnl = sum(t['netPnL'] for t in short_trades)
+        
+        # Max drawdown calculation
+        max_drawdown = 0
+        max_drawdown_percent = 0
+        peak_equity = initial_equity
+        
+        for trade in trades:
+            current_equity = trade['equity']
+            if current_equity > peak_equity:
+                peak_equity = current_equity
+            drawdown = peak_equity - current_equity
+            drawdown_percent = (drawdown / peak_equity) * 100 if peak_equity > 0 else 0
+            if drawdown > max_drawdown:
+                max_drawdown = drawdown
+                max_drawdown_percent = drawdown_percent
+        
+        return jsonify({
+            'netPnL': round(net_pnl, 2),
+            'netPnLPercent': round(net_pnl_percent, 2),
+            'winRate': round(win_rate, 2),
+            'profitFactor': round(profit_factor, 2) if profit_factor != float('inf') else 999.99,
+            'expectancy': round(expectancy, 2),
+            'totalTrades': total_trades,
+            'maxDrawdown': round(max_drawdown, 2),
+            'maxDrawdownPercent': round(max_drawdown_percent, 2),
+            'avgWin': round(avg_win, 2),
+            'avgLoss': round(avg_loss, 2),
+            'largestWin': round(largest_win, 2),
+            'largestLoss': round(largest_loss, 2),
+            'avgRMultiple': round(avg_r, 2),
+            'winCount': win_count,
+            'lossCount': loss_count,
+            'longPnL': round(long_pnl, 2),
+            'shortPnL': round(short_pnl, 2),
+            'longTrades': len(long_trades),
+            'shortTrades': len(short_trades),
+            'longWinRate': round(len([t for t in long_trades if t['netPnL'] > 0]) / len(long_trades) * 100, 2) if long_trades else 0,
+            'shortWinRate': round(len([t for t in short_trades if t['netPnL'] > 0]) / len(short_trades) * 100, 2) if short_trades else 0
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/equity-curve', methods=['GET'])
+def get_equity_curve():
+    """Get equity curve with drawdown data for charting."""
+    try:
+        trades = _get_trades()
+        initial_equity = 100000
+        
+        if not trades:
+            return jsonify({'data': [], 'drawdown': []})
+        
+        equity_data = [{'t': None, 'equity': initial_equity, 'cumPnL': 0, 'drawdown': 0}]
+        peak = initial_equity
+        
+        for trade in trades:
+            timestamp = trade['exitTime']
+            equity = trade['equity']
+            cum_pnl = trade['cumulativePnL']
+            
+            if equity > peak:
+                peak = equity
+            drawdown = ((peak - equity) / peak) * 100 if peak > 0 else 0
+            
+            equity_data.append({
+                't': timestamp,
+                'equity': equity,
+                'cumPnL': cum_pnl,
+                'drawdown': round(drawdown, 2)
+            })
+        
+        return jsonify({
+            'data': equity_data,
+            'initialEquity': initial_equity,
+            'finalEquity': trades[-1]['equity'] if trades else initial_equity,
+            'peakEquity': peak
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/pnl-distribution', methods=['GET'])
+def get_pnl_distribution():
+    """Get P&L distribution for histogram."""
+    try:
+        trades = _get_trades()
+        
+        if not trades:
+            return jsonify({'buckets': [], 'stats': {}})
+        
+        pnls = [t['netPnL'] for t in trades]
+        
+        # Create buckets
+        min_pnl = min(pnls)
+        max_pnl = max(pnls)
+        
+        # 10 buckets
+        num_buckets = 10
+        bucket_size = (max_pnl - min_pnl) / num_buckets if max_pnl != min_pnl else 1
+        
+        buckets = []
+        for i in range(num_buckets):
+            lower = min_pnl + i * bucket_size
+            upper = min_pnl + (i + 1) * bucket_size
+            count = len([p for p in pnls if lower <= p < upper or (i == num_buckets - 1 and p == upper)])
+            buckets.append({
+                'range': f"${lower:.0f} to ${upper:.0f}",
+                'lower': round(lower, 2),
+                'upper': round(upper, 2),
+                'count': count,
+                'isProfit': (lower + upper) / 2 > 0
+            })
+        
+        # Stats
+        import statistics
+        mean = statistics.mean(pnls)
+        median = statistics.median(pnls)
+        std_dev = statistics.stdev(pnls) if len(pnls) > 1 else 0
+        
+        return jsonify({
+            'buckets': buckets,
+            'stats': {
+                'mean': round(mean, 2),
+                'median': round(median, 2),
+                'stdDev': round(std_dev, 2),
+                'min': round(min_pnl, 2),
+                'max': round(max_pnl, 2)
+            }
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/time-analysis', methods=['GET'])
+def get_time_analysis():
+    """Get performance by time of day and day of week."""
+    try:
+        trades = _get_trades()
+        
+        if not trades:
+            return jsonify({'hourly': [], 'daily': []})
+        
+        # Hourly analysis
+        hourly = {}
+        for hour in range(24):
+            hourly[hour] = {'pnl': 0, 'trades': 0, 'wins': 0}
+        
+        # Daily analysis
+        daily = {}
+        for day in range(7):  # 0=Monday, 6=Sunday
+            daily[day] = {'pnl': 0, 'trades': 0, 'wins': 0}
+        
+        for trade in trades:
+            try:
+                entry_dt = datetime.fromisoformat(trade['entryTime'].replace('Z', '+00:00'))
+                hour = entry_dt.hour
+                day = entry_dt.weekday()
+                
+                hourly[hour]['pnl'] += trade['netPnL']
+                hourly[hour]['trades'] += 1
+                if trade['netPnL'] > 0:
+                    hourly[hour]['wins'] += 1
+                
+                daily[day]['pnl'] += trade['netPnL']
+                daily[day]['trades'] += 1
+                if trade['netPnL'] > 0:
+                    daily[day]['wins'] += 1
+            except:
+                continue
+        
+        day_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+        
+        hourly_data = [
+            {'hour': h, 'label': f"{h:02d}:00", 'pnl': round(hourly[h]['pnl'], 2), 
+             'trades': hourly[h]['trades'], 'winRate': round(hourly[h]['wins'] / hourly[h]['trades'] * 100, 1) if hourly[h]['trades'] > 0 else 0}
+            for h in range(9, 17)  # Market hours only
+        ]
+        
+        daily_data = [
+            {'day': d, 'label': day_names[d], 'pnl': round(daily[d]['pnl'], 2),
+             'trades': daily[d]['trades'], 'winRate': round(daily[d]['wins'] / daily[d]['trades'] * 100, 1) if daily[d]['trades'] > 0 else 0}
+            for d in range(5)  # Weekdays only
+        ]
+        
+        return jsonify({
+            'hourly': hourly_data,
+            'daily': daily_data
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/strategy-performance', methods=['GET'])
+def get_strategy_performance():
+    """Get performance breakdown by strategy."""
+    try:
+        trades = _get_trades()
+        
+        if not trades:
+            return jsonify({'strategies': [], 'directions': {}})
+        
+        strategy_stats = {}
+        
+        for trade in trades:
+            strat = trade.get('strategy', 'Unknown')
+            if strat not in strategy_stats:
+                strategy_stats[strat] = {'pnl': 0, 'trades': 0, 'wins': 0}
+            
+            strategy_stats[strat]['pnl'] += trade['netPnL']
+            strategy_stats[strat]['trades'] += 1
+            if trade['netPnL'] > 0:
+                strategy_stats[strat]['wins'] += 1
+        
+        strategies = [
+            {
+                'name': name,
+                'pnl': round(stats['pnl'], 2),
+                'trades': stats['trades'],
+                'winRate': round(stats['wins'] / stats['trades'] * 100, 1) if stats['trades'] > 0 else 0
+            }
+            for name, stats in strategy_stats.items()
+        ]
+        strategies.sort(key=lambda x: x['pnl'], reverse=True)
+        
+        # Direction breakdown
+        long_trades = [t for t in trades if t['direction'] == 'LONG']
+        short_trades = [t for t in trades if t['direction'] == 'SHORT']
+        
+        directions = {
+            'long': {
+                'pnl': round(sum(t['netPnL'] for t in long_trades), 2),
+                'trades': len(long_trades),
+                'winRate': round(len([t for t in long_trades if t['netPnL'] > 0]) / len(long_trades) * 100, 1) if long_trades else 0
+            },
+            'short': {
+                'pnl': round(sum(t['netPnL'] for t in short_trades), 2),
+                'trades': len(short_trades),
+                'winRate': round(len([t for t in short_trades if t['netPnL'] > 0]) / len(short_trades) * 100, 1) if short_trades else 0
+            }
+        }
+        
+        return jsonify({
+            'strategies': strategies,
+            'directions': directions
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# =============================================================================
+# Dashboard API Endpoints
+# =============================================================================
+
+# Import dashboard API module
+try:
+    from dashboard_api import (
+        get_dashboard_metrics,
+        get_all_strategies,
+        save_strategies,
+        toggle_strategy,
+        get_all_trades,
+        add_trade,
+        get_account_info,
+        save_account_info,
+        calculate_equity_curve,
+        calculate_time_based_pnl,
+        get_recent_trades,
+        generate_demo_data
+    )
+    DASHBOARD_API_AVAILABLE = True
+    print('✅ Dashboard API module loaded')
+except ImportError as e:
+    print(f'⚠️ Dashboard API not available: {e}')
+    DASHBOARD_API_AVAILABLE = False
+
+
+@app.route('/api/dashboard/metrics', methods=['GET'])
+def dashboard_metrics():
+    """
+    Get all dashboard metrics in a single call.
+    Query params:
+      - enabled_only: 'true' to filter to enabled strategies only (default true)
+      - date_range: '1D', '1W', '1M', '3M', '1Y', 'ALL' (default '1M')
+    """
+    if not DASHBOARD_API_AVAILABLE:
+        return jsonify({'error': 'Dashboard API not available'}), 500
+    
+    try:
+        enabled_only = request.args.get('enabled_only', 'true').lower() == 'true'
+        date_range = request.args.get('date_range', '1M')
+        
+        metrics = get_dashboard_metrics(
+            enabled_strategies_only=enabled_only,
+            date_range=date_range
+        )
+        return jsonify(metrics)
+    except Exception as e:
+        print(f'Dashboard metrics error: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/strategies', methods=['GET'])
+def dashboard_strategies():
+    """Get all saved strategies with their states."""
+    if not DASHBOARD_API_AVAILABLE:
+        return jsonify({'error': 'Dashboard API not available'}), 500
+    
+    try:
+        strategies = get_all_strategies()
+        strategy_list = [
+            {
+                'name': name,
+                'enabled': data.get('enabled', False),
+                'created_at': data.get('created_at'),
+                'updated_at': data.get('updated_at')
+            }
+            for name, data in strategies.items()
+        ]
+        return jsonify({'strategies': strategy_list})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/strategies/<strategy_name>/toggle', methods=['POST'])
+def dashboard_toggle_strategy(strategy_name):
+    """Toggle a strategy on/off and start/stop real-time monitoring."""
+    try:
+        data = request.get_json()
+        enabled = data.get('enabled', False)
+        
+        # Update enabled_strategies.json
+        enabled_file = os.path.join(DATA_DIR, 'enabled_strategies.json')
+        enabled_map = {}
+        
+        if os.path.exists(enabled_file):
+            try:
+                with open(enabled_file, 'r') as f:
+                    enabled_map = json.load(f)
+            except:
+                enabled_map = {}
+        
+        enabled_map[strategy_name] = enabled
+        
+        try:
+            with open(enabled_file, 'w') as f:
+                json.dump(enabled_map, f, indent=2)
+        except Exception as write_err:
+            print(f"❌ Error writing enabled_strategies.json: {write_err}")
+            return jsonify({'error': f'Failed to save: {str(write_err)}'}), 500
+        
+        # Start/stop real-time monitoring based on enabled strategies
+        enabled_count = sum(1 for v in enabled_map.values() if v)
+        
+        if enabled_count > 0 and not _realtime_monitoring_active:
+            try:
+                _start_realtime_monitoring()
+                print(f"✅ Real-time monitoring started ({enabled_count} strategies enabled)")
+            except Exception as monitor_err:
+                print(f"⚠️ Failed to start monitoring: {monitor_err}")
+        elif enabled_count == 0 and _realtime_monitoring_active:
+            try:
+                _stop_realtime_monitoring()
+                print("⏸️ Real-time monitoring stopped (no strategies enabled)")
+            except Exception as stop_err:
+                print(f"⚠️ Failed to stop monitoring: {stop_err}")
+        
+        return jsonify({
+            'success': True,
+            'strategy': strategy_name,
+            'enabled': enabled,
+            'monitoring_active': _realtime_monitoring_active,
+            'enabled_count': enabled_count
+        })
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"❌ Toggle error: {error_trace}")
+        return jsonify({'error': str(e), 'trace': error_trace}), 500
+
+
+@app.route('/api/dashboard/strategies', methods=['POST'])
+def dashboard_save_strategy():
+    """Save or update a strategy."""
+    if not DASHBOARD_API_AVAILABLE:
+        return jsonify({'error': 'Dashboard API not available'}), 500
+    
+    try:
+        data = request.get_json()
+        if not data or 'name' not in data:
+            return jsonify({'error': 'Strategy name required'}), 400
+        
+        strategies = get_all_strategies()
+        name = data['name']
+        
+        strategies[name] = {
+            'enabled': data.get('enabled', False),
+            'nodes': data.get('nodes', []),
+            'connections': data.get('connections', []),
+            'created_at': strategies.get(name, {}).get('created_at', datetime.utcnow().isoformat()),
+            'updated_at': datetime.utcnow().isoformat()
+        }
+        
+        save_strategies(strategies)
+        return jsonify({'message': 'Strategy saved', 'name': name})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/equity-curve', methods=['GET'])
+def dashboard_equity_curve():
+    """
+    Get equity curve data.
+    Query params:
+      - enabled_only: filter to enabled strategies (default true)
+      - date_range: '1D', '1W', '1M', '3M', '1Y', 'ALL'
+    """
+    if not DASHBOARD_API_AVAILABLE:
+        return jsonify({'error': 'Dashboard API not available'}), 500
+    
+    try:
+        enabled_only = request.args.get('enabled_only', 'true').lower() == 'true'
+        
+        strategies = get_all_strategies()
+        enabled_names = [n for n, d in strategies.items() if d.get('enabled')] if enabled_only else None
+        
+        trades = get_all_trades(strategy_names=enabled_names)
+        curve = calculate_equity_curve(trades)
+        
+        return jsonify({'equity_curve': curve})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/time-pnl', methods=['GET'])
+def dashboard_time_pnl():
+    """
+    Get time-based P&L aggregation.
+    Query params:
+      - group_by: 'day_of_week' or 'hour_of_day' (default 'day_of_week')
+      - enabled_only: filter to enabled strategies (default true)
+    """
+    if not DASHBOARD_API_AVAILABLE:
+        return jsonify({'error': 'Dashboard API not available'}), 500
+    
+    try:
+        group_by = request.args.get('group_by', 'day_of_week')
+        enabled_only = request.args.get('enabled_only', 'true').lower() == 'true'
+        
+        strategies = get_all_strategies()
+        enabled_names = [n for n, d in strategies.items() if d.get('enabled')] if enabled_only else None
+        
+        trades = get_all_trades(strategy_names=enabled_names)
+        data = calculate_time_based_pnl(trades, group_by)
+        
+        return jsonify({'data': data, 'group_by': group_by})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/recent-trades', methods=['GET'])
+def dashboard_recent_trades():
+    """
+    Get recent trades.
+    Query params:
+      - limit: number of trades to return (default 5)
+      - enabled_only: filter to enabled strategies (default true)
+    """
+    if not DASHBOARD_API_AVAILABLE:
+        return jsonify({'error': 'Dashboard API not available'}), 500
+    
+    try:
+        limit = int(request.args.get('limit', '5'))
+        enabled_only = request.args.get('enabled_only', 'true').lower() == 'true'
+        
+        strategies = get_all_strategies()
+        enabled_names = [n for n, d in strategies.items() if d.get('enabled')] if enabled_only else None
+        
+        trades = get_recent_trades(limit, enabled_names)
+        
+        return jsonify({'trades': trades})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/trades', methods=['POST'])
+def dashboard_add_trade():
+    """Add a new executed trade."""
+    if not DASHBOARD_API_AVAILABLE:
+        return jsonify({'error': 'Dashboard API not available'}), 500
+    
+    try:
+        trade = request.get_json()
+        if not trade:
+            return jsonify({'error': 'Trade data required'}), 400
+        
+        success = add_trade(trade)
+        if success:
+            return jsonify({'message': 'Trade added', 'trade': trade})
+        return jsonify({'error': 'Failed to add trade'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/account', methods=['GET'])
+def dashboard_get_account():
+    """Get account information."""
+    if not DASHBOARD_API_AVAILABLE:
+        return jsonify({'error': 'Dashboard API not available'}), 500
+    
+    try:
+        account = get_account_info()
+        return jsonify(account)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/account', methods=['POST'])
+def dashboard_update_account():
+    """Update account information."""
+    if not DASHBOARD_API_AVAILABLE:
+        return jsonify({'error': 'Dashboard API not available'}), 500
+    
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Account data required'}), 400
+        
+        # Merge with existing
+        account = get_account_info()
+        account.update(data)
+        
+        success = save_account_info(account)
+        if success:
+            return jsonify({'message': 'Account updated', 'account': account})
+        return jsonify({'error': 'Failed to update account'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/demo-data', methods=['POST'])
+def dashboard_generate_demo():
+    """Generate demo data for testing the dashboard."""
+    if not DASHBOARD_API_AVAILABLE:
+        return jsonify({'error': 'Dashboard API not available'}), 500
+    
+    try:
+        result = generate_demo_data()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# =============================================================================
+# Analytics API Routes
+# =============================================================================
+
+try:
+    from .analytics_api import (
+        get_analytics_overview, calculate_flow_grade, get_equity_curve_data,
+        get_trades_paginated, calculate_pnl_distribution, calculate_duration_distribution,
+        calculate_heatmap, calculate_strategy_contribution, run_monte_carlo,
+        create_recompute_job, get_recompute_job_status, get_recent_activity
+    )
+    ANALYTICS_API_AVAILABLE = True
+    print('✅ Analytics API module loaded')
+except ImportError as e:
+    ANALYTICS_API_AVAILABLE = False
+    print(f'⚠️ Analytics API not available: {e}')
+
+
+@app.route('/api/analytics/overview', methods=['GET'])
+def analytics_overview():
+    """Get comprehensive analytics overview with KPIs and Flow Grade."""
+    if not ANALYTICS_API_AVAILABLE:
+        return jsonify({'error': 'Analytics API not available'}), 500
+    
+    try:
+        enabled_only = request.args.get('enabled_only', 'true').lower() == 'true'
+        date_range = request.args.get('range', 'ALL')
+        
+        result = get_analytics_overview(
+            enabled_strategies_only=enabled_only,
+            date_range=date_range
+        )
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/flow-grade', methods=['GET'])
+def analytics_flow_grade():
+    """Get Flow Grade performance score with breakdown."""
+    if not ANALYTICS_API_AVAILABLE:
+        return jsonify({'error': 'Analytics API not available'}), 500
+    
+    try:
+        from .dashboard_api import get_all_trades, get_account_info
+        
+        trades = get_all_trades()
+        account = get_account_info()
+        
+        result = calculate_flow_grade(trades, account)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/equity-curve', methods=['GET'])
+def analytics_equity_curve():
+    """Get equity curve time-series data."""
+    if not ANALYTICS_API_AVAILABLE:
+        return jsonify({'error': 'Analytics API not available'}), 500
+    
+    try:
+        timeframe = request.args.get('timeframe', 'ALL')
+        include_drawdown = request.args.get('drawdown', 'true').lower() == 'true'
+        
+        result = get_equity_curve_data(timeframe, include_drawdown)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/trades', methods=['GET'])
+def analytics_trades():
+    """Get paginated trades list."""
+    if not ANALYTICS_API_AVAILABLE:
+        return jsonify({'error': 'Analytics API not available'}), 500
+    
+    try:
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))
+        strategy = request.args.get('strategy')
+        symbol = request.args.get('symbol')
+        sort_by = request.args.get('sort_by', 'timestamp')
+        sort_order = request.args.get('sort_order', 'desc')
+        
+        result = get_trades_paginated(
+            page=page,
+            per_page=per_page,
+            strategy_name=strategy,
+            symbol=symbol,
+            sort_by=sort_by,
+            sort_order=sort_order
+        )
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/distributions', methods=['GET'])
+def analytics_distributions():
+    """Get P&L and duration distributions."""
+    if not ANALYTICS_API_AVAILABLE:
+        return jsonify({'error': 'Analytics API not available'}), 500
+    
+    try:
+        from .dashboard_api import get_all_trades
+        
+        trades = get_all_trades()
+        dist_type = request.args.get('type', 'pnl')
+        bins = int(request.args.get('bins', 20))
+        
+        if dist_type == 'pnl':
+            result = calculate_pnl_distribution(trades, bins)
+        elif dist_type == 'duration':
+            result = calculate_duration_distribution(trades, bins)
+        else:
+            result = {'error': 'Invalid distribution type. Use pnl or duration.'}
+        
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/heatmap', methods=['GET'])
+def analytics_heatmap():
+    """Get P&L heatmap by hour/day or instrument."""
+    if not ANALYTICS_API_AVAILABLE:
+        return jsonify({'error': 'Analytics API not available'}), 500
+    
+    try:
+        from .dashboard_api import get_all_trades
+        
+        trades = get_all_trades()
+        heatmap_type = request.args.get('type', 'hour_day')
+        
+        result = calculate_heatmap(trades, heatmap_type)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/strategy-contrib', methods=['GET'])
+def analytics_strategy_contrib():
+    """Get strategy contribution analysis."""
+    if not ANALYTICS_API_AVAILABLE:
+        return jsonify({'error': 'Analytics API not available'}), 500
+    
+    try:
+        from .dashboard_api import get_all_trades
+        
+        trades = get_all_trades()
+        result = calculate_strategy_contribution(trades)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/montecarlo', methods=['GET'])
+def analytics_montecarlo():
+    """Get Monte Carlo simulation results."""
+    if not ANALYTICS_API_AVAILABLE:
+        return jsonify({'error': 'Analytics API not available'}), 500
+    
+    try:
+        from .dashboard_api import get_all_trades, get_account_info
+        
+        trades = get_all_trades()
+        account = get_account_info()
+        
+        num_sims = int(request.args.get('simulations', 1000))
+        is_premium = request.args.get('premium', 'false').lower() == 'true'
+        
+        result = run_monte_carlo(
+            trades,
+            num_simulations=num_sims,
+            starting_capital=account.get('starting_capital', 100000),
+            is_premium=is_premium
+        )
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/recompute', methods=['POST'])
+def analytics_recompute():
+    """Trigger a metrics recompute job."""
+    if not ANALYTICS_API_AVAILABLE:
+        return jsonify({'error': 'Analytics API not available'}), 500
+    
+    try:
+        data = request.get_json() or {}
+        enabled_strategies = data.get('enabled_strategies', [])
+        trigger = data.get('trigger', 'manual')
+        
+        result = create_recompute_job(enabled_strategies, trigger)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/recompute/<job_id>/status', methods=['GET'])
+def analytics_recompute_status(job_id):
+    """Get status of a recompute job."""
+    if not ANALYTICS_API_AVAILABLE:
+        return jsonify({'error': 'Analytics API not available'}), 500
+    
+    try:
+        result = get_recompute_job_status(job_id)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/recent-activity', methods=['GET'])
+def analytics_recent_activity():
+    """Get recent signals and trade events."""
+    if not ANALYTICS_API_AVAILABLE:
+        return jsonify({'error': 'Analytics API not available'}), 500
+    
+    try:
+        limit = int(request.args.get('limit', 20))
+        result = get_recent_activity(limit)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# =============================================================================
+# SSE Stream for Live Updates (Analytics)
+# =============================================================================
+
+@app.route('/api/analytics/stream')
+def analytics_stream():
+    """Server-Sent Events stream for live analytics updates."""
+    def generate():
+        """Generate SSE events."""
+        import time
+        
+        # Send initial connection event
+        yield f"event: connected\ndata: {json.dumps({'status': 'connected', 'timestamp': datetime.utcnow().isoformat()})}\n\n"
+        
+        last_trade_count = 0
+        
+        while True:
+            try:
+                # Check for new trades
+                if DASHBOARD_API_AVAILABLE:
+                    trades = get_all_trades()
+                    current_count = len(trades)
+                    
+                    if current_count != last_trade_count:
+                        # New trade detected, send update
+                        last_trade_count = current_count
+                        
+                        if ANALYTICS_API_AVAILABLE:
+                            overview = get_analytics_overview()
+                            yield f"event: metrics_update\ndata: {json.dumps(overview)}\n\n"
+                
+                # Send heartbeat every 30 seconds
+                yield f"event: heartbeat\ndata: {json.dumps({'timestamp': datetime.utcnow().isoformat()})}\n\n"
+                
+                time.sleep(5)  # Check every 5 seconds
+                
+            except GeneratorExit:
+                break
+            except Exception as e:
+                yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+                break
+    
+    response = make_response(generate())
+    response.headers['Content-Type'] = 'text/event-stream'
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['Connection'] = 'keep-alive'
+    response.headers['X-Accel-Buffering'] = 'no'
+    return response
+
+
+# =============================================================================
+# Trade Engine API Routes (Percent-Only Alternating Trades)
+# =============================================================================
+
+# Import trade engine
+try:
+    from api.trade_engine import (
+        ingest_signal, log_external_trade, get_all_percent_trades,
+        compute_analytics, get_equity_curve_pct, get_pnl_distribution,
+        get_pnl_heatmap, get_current_signals, get_position, clear_position,
+        clear_all_positions, clear_all_trades
+    )
+    TRADE_ENGINE_AVAILABLE = True
+    print('✅ Trade engine initialized')
+except ImportError as e:
+    print(f'⚠️ Trade engine not available: {e}')
+    TRADE_ENGINE_AVAILABLE = False
+
+
+@app.route('/api/signals/ingest', methods=['POST'])
+def api_ingest_signal():
+    """
+    Ingest a signal from frontend StrategyRunner.
+    
+    Body: {
+        strategy_id: str,
+        signal: BUY|SELL|HOLD,
+        price: float,
+        ts: str (optional),
+        fee_pct: float (optional),
+        slippage_pct: float (optional),
+        meta: dict (optional)
+    }
+    """
+    if not TRADE_ENGINE_AVAILABLE:
+        return jsonify({'error': 'Trade engine not available'}), 503
+    
+    try:
+        data = request.json or {}
+        
+        result = ingest_signal(
+            strategy_id=data.get('strategy_id'),
+            signal=data.get('signal'),
+            price=data.get('price'),
+            ts=data.get('ts'),
+            fee_pct=data.get('fee_pct', 0.0),
+            slippage_pct=data.get('slippage_pct', 0.0),
+            meta=data.get('meta')
+        )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f'❌ Error ingesting signal: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/trades/log', methods=['POST'])
+def api_log_trade():
+    """
+    Log an externally-sourced completed trade.
+    
+    Body: {
+        strategy_id: str,
+        open_price: float,
+        close_price: float,
+        open_ts: str,
+        close_ts: str,
+        open_side: LONG|SHORT (optional, default LONG),
+        gross_pct: float (optional, computed if missing),
+        fee_pct_total: float (optional),
+        net_pct: float (optional, computed if missing),
+        meta: dict (optional)
+    }
+    """
+    if not TRADE_ENGINE_AVAILABLE:
+        return jsonify({'error': 'Trade engine not available'}), 503
+    
+    try:
+        data = request.json or {}
+        
+        result = log_external_trade(
+            strategy_id=data.get('strategy_id'),
+            open_price=data.get('open_price'),
+            close_price=data.get('close_price'),
+            open_ts=data.get('open_ts'),
+            close_ts=data.get('close_ts'),
+            open_side=data.get('open_side', 'LONG'),
+            gross_pct=data.get('gross_pct'),
+            fee_pct_total=data.get('fee_pct_total', 0.0),
+            net_pct=data.get('net_pct'),
+            meta=data.get('meta')
+        )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f'❌ Error logging trade: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/trades', methods=['GET'])
+def api_get_trades():
+    """
+    Get completed trades (percent-based).
+    
+    Query params:
+        strategy_id: str (optional)
+        start_ts: str (optional)
+        end_ts: str (optional)
+        limit: int (default 100)
+        offset: int (default 0)
+    """
+    if not TRADE_ENGINE_AVAILABLE:
+        return jsonify({'error': 'Trade engine not available'}), 503
+    
+    try:
+        result = get_all_percent_trades(
+            strategy_id=request.args.get('strategy_id'),
+            start_ts=request.args.get('start_ts'),
+            end_ts=request.args.get('end_ts'),
+            limit=int(request.args.get('limit', 100)),
+            offset=int(request.args.get('offset', 0))
+        )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f'❌ Error getting trades: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/trades', methods=['DELETE'])
+def api_clear_trades():
+    """Clear all completed trades."""
+    if not TRADE_ENGINE_AVAILABLE:
+        return jsonify({'error': 'Trade engine not available'}), 503
+    
+    try:
+        success = clear_all_trades()
+        return jsonify({'success': success})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/overview', methods=['GET'])
+def api_analytics_overview():
+    """
+    Get analytics KPIs computed from percent trades.
+    
+    Query params:
+        strategies: comma-separated list (optional)
+        start_ts: str (optional)
+        end_ts: str (optional)
+        use_cache: bool (default true)
+    """
+    if not TRADE_ENGINE_AVAILABLE:
+        return jsonify({'error': 'Trade engine not available'}), 503
+    
+    try:
+        strategy_ids = None
+        strategies_param = request.args.get('strategies')
+        if strategies_param:
+            strategy_ids = [s.strip() for s in strategies_param.split(',') if s.strip()]
+        
+        result = compute_analytics(
+            strategy_ids=strategy_ids,
+            start_ts=request.args.get('start_ts'),
+            end_ts=request.args.get('end_ts'),
+            use_cache=request.args.get('use_cache', 'true').lower() == 'true'
+        )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f'❌ Error computing analytics: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/equity-curve', methods=['GET'])
+def api_equity_curve():
+    """
+    Get equity curve as percentage returns.
+    
+    Returns: [{ts, equity_pct, drawdown_pct}, ...]
+    """
+    if not TRADE_ENGINE_AVAILABLE:
+        return jsonify({'error': 'Trade engine not available'}), 503
+    
+    try:
+        strategy_ids = None
+        strategies_param = request.args.get('strategies')
+        if strategies_param:
+            strategy_ids = [s.strip() for s in strategies_param.split(',') if s.strip()]
+        
+        curve = get_equity_curve_pct(
+            strategy_ids=strategy_ids,
+            start_ts=request.args.get('start_ts'),
+            end_ts=request.args.get('end_ts')
+        )
+        
+        return jsonify({'curve': curve})
+        
+    except Exception as e:
+        print(f'❌ Error getting equity curve: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/distributions', methods=['GET'])
+def api_distributions():
+    """
+    Get P&L distribution histogram.
+    
+    Returns: {bins: [...], stats: {...}}
+    """
+    if not TRADE_ENGINE_AVAILABLE:
+        return jsonify({'error': 'Trade engine not available'}), 503
+    
+    try:
+        strategy_ids = None
+        strategies_param = request.args.get('strategies')
+        if strategies_param:
+            strategy_ids = [s.strip() for s in strategies_param.split(',') if s.strip()]
+        
+        result = get_pnl_distribution(
+            strategy_ids=strategy_ids,
+            bins=int(request.args.get('bins', 20))
+        )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f'❌ Error getting distributions: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/heatmap', methods=['GET'])
+def api_heatmap():
+    """
+    Get P&L heatmap by day/hour.
+    
+    Returns: {by_day: [...], by_hour: [...]}
+    """
+    if not TRADE_ENGINE_AVAILABLE:
+        return jsonify({'error': 'Trade engine not available'}), 503
+    
+    try:
+        strategy_ids = None
+        strategies_param = request.args.get('strategies')
+        if strategies_param:
+            strategy_ids = [s.strip() for s in strategies_param.split(',') if s.strip()]
+        
+        result = get_pnl_heatmap(strategy_ids=strategy_ids)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f'❌ Error getting heatmap: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/signals/current', methods=['GET'])
+def api_current_signals():
+    """
+    Get current signal state for all strategies with open positions.
+    
+    Returns: [{strategy_id, position, last_signal, entry_price, entry_ts}]
+    """
+    if not TRADE_ENGINE_AVAILABLE:
+        return jsonify({'error': 'Trade engine not available'}), 503
+    
+    try:
+        signals = get_current_signals()
+        return jsonify({'signals': signals})
+    except Exception as e:
+        print(f'❌ Error getting current signals: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/positions/<strategy_id>', methods=['GET'])
+def api_get_position(strategy_id):
+    """Get position state for a specific strategy."""
+    if not TRADE_ENGINE_AVAILABLE:
+        return jsonify({'error': 'Trade engine not available'}), 503
+    
+    try:
+        position = get_position(strategy_id)
+        return jsonify(position)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/positions/<strategy_id>', methods=['DELETE'])
+def api_clear_position(strategy_id):
+    """Clear position state for a strategy (reset to NONE)."""
+    if not TRADE_ENGINE_AVAILABLE:
+        return jsonify({'error': 'Trade engine not available'}), 503
+    
+    try:
+        success = clear_position(strategy_id)
+        return jsonify({'success': success})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/positions', methods=['DELETE'])
+def api_clear_all_positions():
+    """Clear all position states."""
+    if not TRADE_ENGINE_AVAILABLE:
+        return jsonify({'error': 'Trade engine not available'}), 503
+    
+    try:
+        success = clear_all_positions()
+        return jsonify({'success': success})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     print("FlowGrid Trading Backend Server")
     print("Running on http://localhost:5000")
     print("Refresh your browser to connect the dashboard")
     print("\nPress Ctrl+C to stop\n")
     app.run(host='0.0.0.0', port=5000, debug=False)
+

@@ -1,0 +1,2244 @@
+/* ========================================
+   Analytics Page Styles - FlowGrid Trading
+   Desktop-first, single-screen, no vertical scroll
+   ======================================== */
+
+/* ========================================
+   Tab Navigation
+   ======================================== */
+
+.analytics-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--secondary-bg);
+  padding: 4px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+.analytics-tab {
+  padding: 10px 18px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.analytics-tab:hover:not(.active) {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.analytics-tab.active {
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.analytics-tab.premium {
+  position: relative;
+}
+
+.analytics-tab.premium::after {
+  content: '⭐';
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  font-size: 10px;
+}
+
+/* ========================================
+   Analytics Grid Layouts
+   ======================================== */
+
+.analytics-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Overview Tab Layout */
+.analytics-overview-grid {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  grid-template-rows: auto 1fr auto;
+  gap: 14px;
+  height: 100%;
+  min-height: 0;
+}
+
+.overview-kpis {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 12px;
+}
+
+.overview-main {
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+}
+
+.overview-sidebar {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+}
+
+/* Trade Analytics Layout */
+.trade-analytics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 14px;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Strategy Attribution Layout */
+.attribution-grid {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 14px;
+  height: 100%;
+  min-height: 0;
+}
+
+/* Risk & Drawdown Layout */
+.risk-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto 1fr;
+  gap: 14px;
+  height: 100%;
+  min-height: 0;
+}
+
+.risk-kpis {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+
+/* Time Analysis Layout */
+.time-analysis-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  height: 100%;
+  min-height: 0;
+}
+
+/* ========================================
+   Flow Grade Card
+   ======================================== */
+
+.flow-grade-card {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.flow-grade-score {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  margin-bottom: 12px;
+}
+
+.flow-grade-ring {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.flow-grade-ring-bg {
+  fill: none;
+  stroke: var(--secondary-bg);
+  stroke-width: 8;
+}
+
+.flow-grade-ring-progress {
+  fill: none;
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s ease-out;
+}
+
+.flow-grade-ring-progress.grade-a { stroke: #22c55e; }
+.flow-grade-ring-progress.grade-b { stroke: #84cc16; }
+.flow-grade-ring-progress.grade-c { stroke: #eab308; }
+.flow-grade-ring-progress.grade-d { stroke: #f97316; }
+.flow-grade-ring-progress.grade-f { stroke: #ef4444; }
+
+.flow-grade-inner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.flow-grade-letter {
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.flow-grade-letter.grade-a { color: #22c55e; }
+.flow-grade-letter.grade-b { color: #84cc16; }
+.flow-grade-letter.grade-c { color: #eab308; }
+.flow-grade-letter.grade-d { color: #f97316; }
+.flow-grade-letter.grade-f { color: #ef4444; }
+
+.flow-grade-number {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.flow-grade-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.flow-grade-reasons {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.flow-grade-reason {
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  background: var(--secondary-bg);
+  border-radius: 4px;
+}
+
+.flow-grade-breakdown-btn {
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: var(--accent);
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.flow-grade-breakdown-btn:hover {
+  background: rgba(59, 130, 246, 0.2);
+}
+
+/* ========================================
+   Chart Panel
+   ======================================== */
+
+.chart-panel {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.chart-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.chart-panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.chart-panel-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.chart-mode-btn {
+  padding: 5px 10px;
+  font-size: 11px;
+  background: var(--secondary-bg);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.chart-mode-btn:hover:not(.active) {
+  color: var(--text-primary);
+}
+
+.chart-mode-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+.chart-canvas-container {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.chart-canvas-container canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ========================================
+   Empty State
+   ======================================== */
+
+.empty-state-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  padding: 32px;
+}
+
+.empty-state-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-state-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.empty-state-message {
+  font-size: 13px;
+  color: var(--text-secondary);
+  max-width: 300px;
+  line-height: 1.5;
+}
+
+.empty-state-cta {
+  margin-top: 16px;
+  padding: 10px 20px;
+  background: var(--accent);
+  border: none;
+  color: #ffffff;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.empty-state-cta:hover {
+  background: #2563eb;
+}
+
+/* ========================================
+   Skeleton Loading
+   ======================================== */
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--secondary-bg) 0%,
+    rgba(255, 255, 255, 0.05) 50%,
+    var(--secondary-bg) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-metric {
+  height: 80px;
+  border-radius: 10px;
+}
+
+.skeleton-chart {
+  height: 100%;
+  min-height: 200px;
+  border-radius: 12px;
+}
+
+.skeleton-text {
+  height: 16px;
+  margin-bottom: 8px;
+}
+
+.skeleton-text.short {
+  width: 60%;
+}
+
+/* ========================================
+   Recent Activity Panel
+   ======================================== */
+
+.activity-panel {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.activity-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.activity-panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.activity-live-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(34, 197, 94, 0.1);
+  border-radius: 12px;
+  font-size: 11px;
+  color: var(--positive);
+}
+
+.activity-live-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--positive);
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.activity-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.activity-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--secondary-bg);
+  border-radius: 8px;
+  transition: background 0.2s ease;
+}
+
+.activity-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.activity-icon {
+  font-size: 16px;
+}
+
+.activity-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.activity-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activity-subtitle {
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.activity-pnl {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.activity-pnl.positive {
+  color: var(--positive);
+}
+
+.activity-pnl.negative {
+  color: var(--negative);
+}
+
+.activity-time {
+  font-size: 10px;
+  color: var(--text-dimmed);
+  white-space: nowrap;
+}
+
+/* ========================================
+   Strategy Control Panel
+   ======================================== */
+
+.strategy-control-panel {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.strategy-control-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.strategy-control-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.strategy-limit-badge {
+  font-size: 11px;
+  padding: 4px 8px;
+  background: var(--secondary-bg);
+  border-radius: 4px;
+  color: var(--text-secondary);
+}
+
+.strategy-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.strategy-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--secondary-bg);
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.strategy-item.enabled {
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.strategy-item.loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.strategy-toggle {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+
+.strategy-toggle.enabled {
+  background: var(--positive);
+}
+
+.strategy-toggle.disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.strategy-toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #ffffff;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+}
+
+.strategy-toggle.enabled::after {
+  transform: translateX(16px);
+}
+
+.strategy-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.strategy-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.strategy-meta {
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.strategy-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.strategy-status.running {
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--positive);
+}
+
+.strategy-status.stopped {
+  background: var(--secondary-bg);
+  color: var(--text-dimmed);
+}
+
+/* ========================================
+   Heatmap Component
+   ======================================== */
+
+.heatmap-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.heatmap-grid {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+}
+
+.heatmap-cell {
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-primary);
+  transition: transform 0.1s ease;
+  cursor: pointer;
+}
+
+.heatmap-cell:hover {
+  transform: scale(1.05);
+  z-index: 1;
+}
+
+.heatmap-label {
+  font-size: 10px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.heatmap-row-label {
+  font-size: 10px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  padding-right: 8px;
+}
+
+/* ========================================
+   Distribution Chart
+   ======================================== */
+
+.histogram-container {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 100%;
+  padding: 16px 0;
+}
+
+.histogram-bar {
+  flex: 1;
+  background: var(--accent);
+  border-radius: 2px 2px 0 0;
+  min-height: 4px;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.histogram-bar:hover {
+  background: #2563eb;
+}
+
+.histogram-bar.positive {
+  background: var(--positive);
+}
+
+.histogram-bar.negative {
+  background: var(--negative);
+}
+
+.histogram-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.9);
+  color: var(--text-primary);
+  font-size: 10px;
+  border-radius: 4px;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease;
+  z-index: 10;
+}
+
+.histogram-bar:hover .histogram-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* ========================================
+   Trades Table
+   ======================================== */
+
+.trades-table-container {
+  flex: 1;
+  overflow: auto;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.trades-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.trades-table th {
+  position: sticky;
+  top: 0;
+  background: var(--secondary-bg);
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border);
+}
+
+.trades-table th.sortable {
+  cursor: pointer;
+}
+
+.trades-table th.sortable:hover {
+  color: var(--text-primary);
+}
+
+.trades-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.trades-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.trades-table .pnl-cell.positive {
+  color: var(--positive);
+}
+
+.trades-table .pnl-cell.negative {
+  color: var(--negative);
+}
+
+/* ========================================
+   Waterfall Chart (Strategy Attribution)
+   ======================================== */
+
+.waterfall-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 12px;
+}
+
+.waterfall-bar-container {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 16px 0;
+}
+
+.waterfall-bar-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+}
+
+.waterfall-bar {
+  width: 100%;
+  max-width: 60px;
+  border-radius: 4px 4px 0 0;
+  transition: all 0.2s ease;
+  position: relative;
+  cursor: pointer;
+}
+
+.waterfall-bar.positive {
+  background: var(--positive);
+}
+
+.waterfall-bar.negative {
+  background: var(--negative);
+}
+
+.waterfall-bar:hover {
+  filter: brightness(1.1);
+}
+
+.waterfall-label {
+  font-size: 10px;
+  color: var(--text-secondary);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 80px;
+}
+
+.waterfall-value {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+/* ========================================
+   Monte Carlo Bands
+   ======================================== */
+
+.montecarlo-legend {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.montecarlo-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.montecarlo-legend-color {
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.montecarlo-legend-color.p5 { background: rgba(239, 68, 68, 0.5); }
+.montecarlo-legend-color.p25 { background: rgba(251, 191, 36, 0.5); }
+.montecarlo-legend-color.p50 { background: var(--accent); }
+.montecarlo-legend-color.p75 { background: rgba(132, 204, 22, 0.5); }
+.montecarlo-legend-color.p95 { background: rgba(34, 197, 94, 0.5); }
+
+/* ========================================
+   Premium Gate Overlay
+   ======================================== */
+
+.premium-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(13, 17, 23, 0.85);
+  backdrop-filter: blur(4px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  z-index: 10;
+}
+
+.premium-lock-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+}
+
+.premium-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.premium-description {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+  max-width: 250px;
+  margin-bottom: 16px;
+}
+
+.premium-upgrade-btn {
+  padding: 10px 24px;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  border: none;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.premium-upgrade-btn:hover {
+  transform: translateY(-2px);
+}
+
+/* ========================================
+   Recompute Toast
+   ======================================== */
+
+.recompute-toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  animation: slideInUp 0.3s ease-out;
+}
+
+@keyframes slideInUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.recompute-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.recompute-text {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.recompute-toast.complete {
+  border-color: rgba(34, 197, 94, 0.5);
+}
+
+.recompute-toast.complete .recompute-text {
+  color: var(--positive);
+}
+
+/* ========================================
+   Modal (Flow Grade Breakdown)
+   ======================================== */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-content {
+  background: var(--card-bg);
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  animation: scaleIn 0.2s ease-out;
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.modal-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+}
+
+.modal-close:hover {
+  color: var(--text-primary);
+}
+
+.grade-component-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.grade-component {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--secondary-bg);
+  border-radius: 8px;
+}
+
+.grade-component-label {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.grade-component-value {
+  font-size: 13px;
+  color: var(--text-secondary);
+  min-width: 60px;
+  text-align: right;
+}
+
+.grade-component-bar {
+  width: 80px;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.grade-component-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.grade-component-fill.high { background: var(--positive); }
+.grade-component-fill.medium { background: var(--warning); }
+.grade-component-fill.low { background: var(--negative); }
+
+.grade-suggestions {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.grade-suggestions-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.grade-suggestion {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.grade-suggestion::before {
+  content: '💡';
+}
+
+/* ========================================
+   Trade Logging Tab Styles
+   ======================================== */
+
+.trade-logging-tab,
+.trade-calendar-tab {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.trade-logging {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.trade-logging-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.trade-logging-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Filter Bar */
+.trade-filter-bar {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  padding: 12px;
+  background: var(--secondary-bg);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filter-group label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.filter-group select,
+.filter-group input {
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  min-width: 140px;
+}
+
+.filter-group select:focus,
+.filter-group input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.filter-group.date-range .date-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-separator {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.filter-clear-btn {
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-clear-btn:hover {
+  background: var(--bg);
+  color: var(--text-primary);
+}
+
+/* Summary Stats Bar */
+.trade-summary-bar {
+  display: flex;
+  gap: 24px;
+  padding: 12px 16px;
+  background: var(--secondary-bg);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.summary-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.summary-stat .stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.summary-stat .stat-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.summary-stat .stat-value.positive {
+  color: var(--positive);
+}
+
+.summary-stat .stat-value.negative {
+  color: var(--negative);
+}
+
+/* Export Dropdown */
+.export-dropdown {
+  position: relative;
+}
+
+.export-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--accent);
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.export-btn:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.export-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.export-arrow {
+  font-size: 10px;
+}
+
+.export-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  z-index: 100;
+  min-width: 140px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.export-menu button {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.export-menu button:hover {
+  background: var(--secondary-bg);
+}
+
+/* Trade Table */
+.trade-table-container {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.trade-table-wrapper {
+  flex: 1;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.trade-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.trade-table thead {
+  position: sticky;
+  top: 0;
+  background: var(--secondary-bg);
+  z-index: 10;
+}
+
+.trade-table th {
+  padding: 12px 14px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+
+.trade-table th:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.sort-icon {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--text-dimmed);
+}
+
+.sort-icon.active {
+  color: var(--accent);
+}
+
+.trade-table tbody tr {
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.trade-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.trade-table tbody tr.win {
+  border-left: 3px solid var(--positive);
+}
+
+.trade-table tbody tr.loss {
+  border-left: 3px solid var(--negative);
+}
+
+.trade-table td {
+  padding: 12px 14px;
+  color: var(--text-primary);
+}
+
+.trade-table td.mono {
+  font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+  font-size: 12px;
+}
+
+.trade-table td.positive {
+  color: var(--positive);
+}
+
+.trade-table td.negative {
+  color: var(--negative);
+}
+
+.trade-table td.dimmed {
+  color: var(--text-dimmed);
+}
+
+.trade-table td.bold {
+  font-weight: 600;
+}
+
+/* Side Badge */
+.side-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.side-badge.long {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--positive);
+}
+
+.side-badge.short {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--negative);
+}
+
+/* View Button */
+.view-btn {
+  padding: 5px 12px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.view-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+/* Empty State */
+.trade-table-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  background: var(--secondary-bg);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.trade-table-empty .empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.trade-table-empty .empty-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.trade-table-empty .empty-message {
+  font-size: 14px;
+  color: var(--text-secondary);
+  max-width: 300px;
+}
+
+/* Loading State */
+.trade-logging-loading,
+.trade-calendar-loading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: var(--text-secondary);
+}
+
+.loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Error State */
+.trade-logging-error,
+.trade-calendar-error {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-secondary);
+}
+
+.trade-logging-error .error-icon,
+.trade-calendar-error .error-icon {
+  font-size: 32px;
+}
+
+.trade-logging-error button,
+.trade-calendar-error button {
+  padding: 8px 16px;
+  background: var(--accent);
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* ========================================
+   Trade Detail Modal Styles
+   ======================================== */
+
+.trade-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.trade-modal {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: modalSlideIn 0.2s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.modal-title .trade-id {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.modal-close {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.modal-close:hover {
+  background: var(--secondary-bg);
+  color: var(--text-primary);
+}
+
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.modal-section {
+  margin-bottom: 20px;
+}
+
+.modal-section:last-child {
+  margin-bottom: 0;
+}
+
+.section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modal-field {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.field-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.field-value {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.field-value.positive {
+  color: var(--positive);
+}
+
+.field-value.negative {
+  color: var(--negative);
+}
+
+.field-value.bold {
+  font-weight: 600;
+}
+
+.field-value.mono {
+  font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+  font-size: 12px;
+}
+
+.modal-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.modal-close-btn {
+  padding: 10px 20px;
+  background: var(--secondary-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.modal-close-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+/* ========================================
+   Trade Calendar Tab Styles
+   ======================================== */
+
+.trade-calendar {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: hidden;
+}
+
+/* Calendar Controls */
+.calendar-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.calendar-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nav-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--secondary-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.nav-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.current-month {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 180px;
+  text-align: center;
+}
+
+.today-btn {
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.today-btn:hover {
+  background: var(--secondary-bg);
+  color: var(--text-primary);
+}
+
+.calendar-filters select {
+  padding: 8px 12px;
+  background: var(--secondary-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+/* Calendar Grid */
+.calendar-grid {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--secondary-bg);
+  border-radius: 12px;
+  padding: 16px;
+  overflow: hidden;
+}
+
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.weekday-header {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  padding: 8px;
+}
+
+.calendar-days {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  overflow-y: auto;
+}
+
+/* Day Cell */
+.calendar-day {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  min-height: 80px;
+  background: var(--bg);
+  border-radius: 8px;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.calendar-day.empty {
+  background: transparent;
+  border: none;
+}
+
+.calendar-day.has-trades {
+  cursor: pointer;
+}
+
+.calendar-day.has-trades:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.calendar-day.today {
+  border-color: var(--accent);
+}
+
+.calendar-day.future {
+  opacity: 0.4;
+}
+
+.calendar-day.other-month {
+  opacity: 0.3;
+}
+
+.day-number {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.calendar-day.today .day-number {
+  color: var(--accent);
+}
+
+.trade-count {
+  font-size: 10px;
+  color: var(--text-dimmed);
+}
+
+.day-pnl {
+  margin-top: auto;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.day-pnl.positive {
+  color: var(--positive);
+}
+
+.day-pnl.negative {
+  color: var(--negative);
+}
+
+/* Day Popover */
+.day-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  min-width: 160px;
+  z-index: 100;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
+.popover-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.popover-header .positive {
+  color: var(--positive);
+}
+
+.popover-header .negative {
+  color: var(--negative);
+}
+
+.popover-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.popover-stat {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.popover-stat .label {
+  color: var(--text-secondary);
+}
+
+.popover-stat .value {
+  color: var(--text-primary);
+}
+
+.popover-stat .value.positive {
+  color: var(--positive);
+}
+
+.popover-stat .value.negative {
+  color: var(--negative);
+}
+
+.popover-hint {
+  font-size: 10px;
+  color: var(--text-dimmed);
+  text-align: center;
+}
+
+/* Month Summary */
+.month-summary {
+  display: flex;
+  gap: 24px;
+  padding: 16px 20px;
+  background: var(--secondary-bg);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.month-summary .summary-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.month-summary .stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.month-summary .stat-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.month-summary .stat-value.positive {
+  color: var(--positive);
+}
+
+.month-summary .stat-value.negative {
+  color: var(--negative);
+}
+
+.month-summary .summary-stat.highlight {
+  padding-left: 24px;
+  border-left: 2px solid var(--accent);
+}
+
+/* Day Detail Modal */
+.day-detail-modal {
+  max-width: 520px;
+}
+
+.day-detail-modal .modal-title .date-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.day-detail-modal .day-result {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.day-detail-modal .day-result.positive {
+  color: var(--positive);
+}
+
+.day-detail-modal .day-result.negative {
+  color: var(--negative);
+}
+
+.day-modal-summary {
+  display: flex;
+  gap: 20px;
+  padding: 12px 16px;
+  background: var(--secondary-bg);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.day-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.day-stat .label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.day-stat .value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.day-stat .value.positive {
+  color: var(--positive);
+}
+
+.day-stat .value.negative {
+  color: var(--negative);
+}
+
+.day-trades-list h4 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 0 0 12px 0;
+}
+
+.trades-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.trade-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--secondary-bg);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.trade-row:hover {
+  background: var(--bg);
+}
+
+.trade-row.win {
+  border-left: 3px solid var(--positive);
+}
+
+.trade-row.loss {
+  border-left: 3px solid var(--negative);
+}
+
+.trade-row .trade-time {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+}
+
+.trade-row .trade-strategy {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.trade-row .trade-pnl {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.trade-row .trade-pnl.positive {
+  color: var(--positive);
+}
+
+.trade-row .trade-pnl.negative {
+  color: var(--negative);
+}
+
+.no-trades {
+  text-align: center;
+  padding: 20px;
+  color: var(--text-dimmed);
+  font-size: 13px;
+}
+
+/* ========================================
+   Responsive Adjustments
+   ======================================== */
+
+@media (max-width: 1400px) {
+  .overview-kpis {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  
+  .analytics-overview-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .overview-sidebar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .metrics-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  
+  .trade-analytics-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .attribution-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .time-analysis-grid {
+    grid-template-columns: 1fr;
+  }
+}
