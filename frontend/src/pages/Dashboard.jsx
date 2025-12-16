@@ -1092,8 +1092,8 @@ const Dashboard = ({ onNavigate }) => {
       fetchDashboardData();
     }, 100);
     
-    // Refresh every 30 seconds
-    const interval = setInterval(() => fetchDashboardData(), 30000);
+    // Refresh every 10 seconds to catch new trades
+    const interval = setInterval(() => fetchDashboardData(), 10000);
     
     return () => {
       clearTimeout(timer);
@@ -1268,6 +1268,13 @@ const Dashboard = ({ onNavigate }) => {
       loadSignals(); // Refresh metrics when trade opens/closes
     };
     
+    // When a trade is completed by the backend trade engine, refresh dashboard data
+    const handleTradeCompleted = (e) => {
+      console.log('💰 Trade completed event received:', e.detail);
+      loadSignals(); // Refresh local metrics
+      fetchDashboardData(); // Refresh backend metrics immediately
+    };
+    
     const handleMaxReached = (e) => {
       alert(`Maximum ${e.detail.max} strategies can run at once!`);
     };
@@ -1286,6 +1293,7 @@ const Dashboard = ({ onNavigate }) => {
     window.addEventListener('flowgrid:strategy-stopped', handleStrategyChange);
     window.addEventListener('flowgrid:trade-opened', handleTradeEvent);
     window.addEventListener('flowgrid:trade-closed', handleTradeEvent);
+    window.addEventListener('flowgrid:trade-completed', handleTradeCompleted);
     window.addEventListener('flowgrid:max-strategies-reached', handleMaxReached);
     window.addEventListener('flowgrid:credentials-missing', handleCredentialsMissing);
     window.addEventListener('flowgrid:signals-cleared', handleSignalsCleared);
@@ -1299,12 +1307,14 @@ const Dashboard = ({ onNavigate }) => {
       window.removeEventListener('flowgrid:strategy-stopped', handleStrategyChange);
       window.removeEventListener('flowgrid:trade-opened', handleTradeEvent);
       window.removeEventListener('flowgrid:trade-closed', handleTradeEvent);
+      window.removeEventListener('flowgrid:trade-completed', handleTradeCompleted);
       window.removeEventListener('flowgrid:max-strategies-reached', handleMaxReached);
       window.removeEventListener('flowgrid:credentials-missing', handleCredentialsMissing);
       window.removeEventListener('flowgrid:signals-cleared', handleSignalsCleared);
       clearInterval(interval);
     };
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchDashboardData]);
   
   // Combine live signals with local trades and historical trades for display
   const allRecentActivity = useMemo(() => {
