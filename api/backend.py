@@ -41,7 +41,15 @@ from io import BytesIO
 from integrations.telegram_notifier import get_notifier, load_telegram_settings, save_telegram_settings
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for browser access
+# Enable CORS for Firebase and localhost
+CORS(app, origins=[
+    'https://flowtrade210.web.app',
+    'https://flowtrade210.firebaseapp.com',
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:5175',
+    'http://127.0.0.1:5173'
+])
 
 # Initialize workflow engine
 workflow_engine = WorkflowEngine()

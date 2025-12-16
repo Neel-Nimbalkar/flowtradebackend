@@ -1,1 +1,14 @@
-﻿{}
+{
+  "1": {
+    "position": "LONG",
+    "last_signal": "BUY",
+    "open_trade": {
+      "entry_price": 680.99,
+      "entry_ts": "2025-12-16T04:20:30.955Z",
+      "side": "LONG",
+      "meta": {
+        "source": "StrategyRunner"
+      }
+    }
+  }
+}
