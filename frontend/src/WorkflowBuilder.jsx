@@ -388,7 +388,7 @@ const WorkflowBuilder = ({ onNavigate }) => {
     const endpoints = [
       `${baseUrl}/execute_workflow_v2`,
       '/execute_workflow_v2',
-      'http://127.0.0.1:5000/execute_workflow_v2',
+      `${(typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE) ? import.meta.env.VITE_API_BASE.replace(/\/$/, '') : 'http://127.0.0.1:5000'}/execute_workflow_v2`,
       'http://localhost:5000/execute_workflow_v2'
     ];
 

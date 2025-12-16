@@ -13,7 +13,9 @@ const MAX_SIGNALS = 50;
 const POLL_INTERVAL = 1000; // 1 second between strategy checks
 
 // API base URL
-const API_BASE = 'http://127.0.0.1:5000';
+const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE)
+  ? import.meta.env.VITE_API_BASE.replace(/\/$/, '')
+  : 'http://127.0.0.1:5000';
 
 // Track running strategy loops
 const runningLoops = new Map(); // strategyName -> { abort: AbortController, interval: number }

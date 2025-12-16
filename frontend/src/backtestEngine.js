@@ -166,7 +166,7 @@ async function fetchHistoricalData(symbol, timeframe, startDate, endDate) {
     const endpoints = [
       `${baseUrl}/backtest_data`,
       'http://localhost:5000/backtest_data',
-      'http://127.0.0.1:5000/backtest_data',
+      `${(typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE) ? import.meta.env.VITE_API_BASE.replace(/\/$/, '') : 'http://127.0.0.1:5000'}/backtest_data`,
       '/backtest_data'
     ];
 
@@ -258,7 +258,7 @@ async function generateSignals(workflow, historicalData, symbol, timeframe, back
     const endpoints = [
       `${baseUrl}/execute_backtest`,
       '/execute_backtest',
-      'http://127.0.0.1:5000/execute_backtest',
+      `${(typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE) ? import.meta.env.VITE_API_BASE.replace(/\/$/, '') : 'http://127.0.0.1:5000'}/execute_backtest`,
       'http://localhost:5000/execute_backtest'
     ];
 
