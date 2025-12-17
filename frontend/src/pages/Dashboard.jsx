@@ -299,57 +299,20 @@ const EquityChart = ({ equityCurve, cumulativePnl, timeframe, showDrawdown = tru
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
     
-    // Get values
-    const values = data.map(d => d.v);
-    const drawdowns = data.map(d => d.drawdown || 0);
-    const minVal = Math.min(...values) * 0.98;
-    const maxVal = Math.max(...values) * 1.02;
-    const range = maxVal - minVal || 1;
+    // Get values - prepend origin point for single data points
+    const baseValue = chartMode === 'equity' ? 100 : 0;
+    let values = data.map(d => d.v);
+    let drawdowns = data.map(d => d.drawdown || 0);
     
-    // Handle single data point - draw line from origin to current value
+    // If single point, prepend origin to draw a line from corner
     if (values.length === 1) {
-      const baseValue = chartMode === 'equity' ? 100 : 0;
-      const currentValue = values[0];
-      const isPositive = currentValue >= baseValue;
-      
-      // Calculate Y positions for origin and current value
-      const originY = padding.top + ((maxVal - baseValue) / range) * chartHeight;
-      const currentY = padding.top + ((maxVal - currentValue) / range) * chartHeight;
-      
-      // Draw area gradient from origin to current
-      const gradient = ctx.createLinearGradient(0, padding.top, 0, height - padding.bottom);
-      if (isPositive) {
-        gradient.addColorStop(0, 'rgba(34, 197, 94, 0.3)');
-        gradient.addColorStop(1, 'rgba(34, 197, 94, 0)');
-      } else {
-        gradient.addColorStop(0, 'rgba(239, 68, 68, 0.3)');
-        gradient.addColorStop(1, 'rgba(239, 68, 68, 0)');
-      }
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.moveTo(padding.left, height - padding.bottom);
-      ctx.lineTo(padding.left, originY);
-      ctx.lineTo(padding.left + chartWidth, currentY);
-      ctx.lineTo(padding.left + chartWidth, height - padding.bottom);
-      ctx.closePath();
-      ctx.fill();
-      
-      // Draw line from origin to current value
-      ctx.strokeStyle = isPositive ? '#22c55e' : '#ef4444';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(padding.left, originY);
-      ctx.lineTo(padding.left + chartWidth, currentY);
-      ctx.stroke();
-      
-      // Draw endpoint dot
-      ctx.fillStyle = isPositive ? '#22c55e' : '#ef4444';
-      ctx.beginPath();
-      ctx.arc(padding.left + chartWidth, currentY, 4, 0, Math.PI * 2);
-      ctx.fill();
-      
-      return; // Exit early
+      values = [baseValue, values[0]];
+      drawdowns = [0, drawdowns[0]];
     }
+    
+    const minVal = Math.min(...values, baseValue) * 0.98;
+    const maxVal = Math.max(...values, baseValue) * 1.02;
+    const range = maxVal - minVal || 1;
     
     // Draw grid
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
