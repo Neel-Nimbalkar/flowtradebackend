@@ -299,16 +299,10 @@ const EquityChart = ({ equityCurve, cumulativePnl, timeframe, showDrawdown = tru
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
     
-    // Get values - prepend origin point for single data points
+    // Get values - ALWAYS prepend origin point so graph starts from baseline
     const baseValue = chartMode === 'equity' ? 100 : 0;
-    let values = data.map(d => d.v);
-    let drawdowns = data.map(d => d.drawdown || 0);
-    
-    // If single point, prepend origin to draw a line from corner
-    if (values.length === 1) {
-      values = [baseValue, values[0]];
-      drawdowns = [0, drawdowns[0]];
-    }
+    let values = [baseValue, ...data.map(d => d.v)];
+    let drawdowns = [0, ...data.map(d => d.drawdown || 0)];
     
     const minVal = Math.min(...values, baseValue) * 0.98;
     const maxVal = Math.max(...values, baseValue) * 1.02;

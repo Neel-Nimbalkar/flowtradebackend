@@ -282,13 +282,10 @@ const EquityChart = ({ data, loading, chartMode, onModeChange }) => {
     const chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
     
-    // Get values - prepend origin for single point to draw line from corner
+    // Get values - ALWAYS prepend origin so graph starts from baseline
     const baseValue = 100; // Starting equity baseline
-    let curveData = [...data.curve];
-    if (curveData.length === 1) {
-      // Prepend origin point to draw line from corner
-      curveData = [{ t: curveData[0].t - 1, v: baseValue, drawdown: 0 }, curveData[0]];
-    }
+    const firstTime = data.curve.length > 0 ? data.curve[0].t : Date.now();
+    let curveData = [{ t: firstTime - 1, v: baseValue, drawdown: 0 }, ...data.curve];
     
     const values = curveData.map(d => d.v);
     const minVal = Math.min(...values, baseValue) * 0.98;
