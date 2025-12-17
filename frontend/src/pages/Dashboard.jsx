@@ -269,7 +269,7 @@ const EquityChart = ({ equityCurve, cumulativePnl, timeframe, showDrawdown = tru
     return chartMode === 'equity' ? equityCurve : cumulativePnl;
   }, [chartMode, equityCurve, cumulativePnl]);
   
-  const hasData = data && data.length > 1;
+  const hasData = data && data.length >= 1;
   const isEmpty = !hasData || data.every(d => d.v === (chartMode === 'equity' ? data[0]?.v : 0));
   
   useEffect(() => {

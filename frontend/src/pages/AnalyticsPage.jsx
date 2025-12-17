@@ -261,7 +261,7 @@ const EquityChart = ({ data, loading, chartMode, onModeChange }) => {
   const canvasRef = useRef(null);
   const [hoveredPoint, setHoveredPoint] = useState(null);
   
-  const hasData = data && data.curve && data.curve.length > 1;
+  const hasData = data && data.curve && data.curve.length >= 1;
   
   useEffect(() => {
     if (!canvasRef.current || !hasData) return;
@@ -317,8 +317,12 @@ const EquityChart = ({ data, loading, chartMode, onModeChange }) => {
     // Draw line/area chart
     ctx.beginPath();
     
+    const numPoints = data.curve.length;
     data.curve.forEach((point, idx) => {
-      const x = padding.left + (idx / (data.curve.length - 1)) * chartWidth;
+      // Handle single point case - center it
+      const x = numPoints === 1 
+        ? padding.left + chartWidth / 2 
+        : padding.left + (idx / (numPoints - 1)) * chartWidth;
       const y = padding.top + chartHeight - ((point.v - minVal) / range) * chartHeight;
       
       if (idx === 0) {
@@ -327,6 +331,24 @@ const EquityChart = ({ data, loading, chartMode, onModeChange }) => {
         ctx.lineTo(x, y);
       }
     });
+    
+    // For single point, draw a dot instead of a line
+    if (numPoints === 1) {
+      const point = data.curve[0];
+      const x = padding.left + chartWidth / 2;
+      const y = padding.top + chartHeight - ((point.v - minVal) / range) * chartHeight;
+      const isPositive = point.v >= 100; // Assuming 100 is baseline
+      ctx.fillStyle = isPositive ? '#22c55e' : '#ef4444';
+      ctx.beginPath();
+      ctx.arc(x, y, 6, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Draw value label
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.font = '12px Inter, system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${point.v.toFixed(2)}%`, x, y - 12);
+    }
     
     if (chartMode === 'area') {
       // Fill area

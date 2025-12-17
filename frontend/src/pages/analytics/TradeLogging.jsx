@@ -1,15 +1,12 @@
 /**
  * Trade Logging Tab - FlowGrid Trading
  * Displays completed trades with filters, summary stats, and export
+ * Reads from backend API with localStorage fallback
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import TradeDetailModal from './TradeDetailModal';
-
-// API base URL
-const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE)
-  ? import.meta.env.VITE_API_BASE.replace(/\/$/, '')
-  : 'http://127.0.0.1:5000';
+import { getAllTrades, getTradesAsBackendFormat, fetchTradesFromBackend } from '../../services/tradeService';
 
 // =============================================================================
 // Utility Functions
@@ -55,7 +52,8 @@ const formatDuration = (openTs, closeTs) => {
 
 const shortUUID = (id) => {
   if (!id) return '--';
-  return id.slice(0, 8);
+  const str = String(id);
+  return str.slice(0, 8);
 };
 
 // =============================================================================
@@ -411,41 +409,63 @@ const TradeLogging = () => {
     endDate: ''
   });
   
-  // Fetch trades from backend
+  // Fetch trades from localStorage (no backend)
   const fetchTrades = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE}/api/trades`);
-      if (res.ok) {
-        const data = await res.json();
-        setTrades(data.trades || []);
+      setError(null);
+      
+      // Try backend first, fallback to localStorage
+      const backendTrades = await fetchTradesFromBackend({ limit: 1000 });
+      
+      if (backendTrades && backendTrades.length > 0) {
+        // Transform backend format to expected format
+        const formattedTrades = backendTrades.map(t => ({
+          id: t.id,
+          strategy_id: t.strategy_id,
+          open_side: t.open_side,
+          open_price: t.open_price,
+          open_ts: t.open_ts,
+          close_side: t.close_side,
+          close_price: t.close_price,
+          close_ts: t.close_ts,
+          gross_pct: t.gross_pct,
+          fee_pct_total: t.fee_pct_total,
+          net_pct: t.net_pct,
+          meta: t.meta
+        }));
+        setTrades(formattedTrades);
+        console.log(`[TradeLogging] Loaded ${formattedTrades.length} trades from backend`);
       } else {
-        setError('Failed to fetch trades');
+        // Fallback to localStorage
+        const data = getTradesAsBackendFormat();
+        setTrades(data.trades || []);
+        console.log(`[TradeLogging] Loaded ${data.trades?.length || 0} trades from localStorage`);
       }
     } catch (err) {
-      console.error('Error fetching trades:', err);
-      setError('Failed to connect to backend');
+      console.error('Error loading trades:', err);
+      // Fallback to localStorage on error
+      const data = getTradesAsBackendFormat();
+      setTrades(data.trades || []);
+      console.log(`[TradeLogging] Fallback - loaded ${data.trades?.length || 0} trades from localStorage`);
     } finally {
       setLoading(false);
     }
   }, []);
   
-  // Fetch strategies for name lookup
+  // Fetch strategies for name lookup (from localStorage)
   const fetchStrategies = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/dashboard/strategies`);
-      if (res.ok) {
-        const data = await res.json();
+      // Get strategies from localStorage
+      const raw = localStorage.getItem('flowgrid_workflow_v1::saves');
+      if (raw) {
+        const saved = JSON.parse(raw);
         const stratMap = {};
-        if (Array.isArray(data)) {
-          data.forEach(s => { stratMap[s.name] = s.name; });
-        } else if (data && typeof data === 'object') {
-          Object.keys(data).forEach(k => { stratMap[k] = data[k].name || k; });
-        }
+        Object.keys(saved).forEach(k => { stratMap[k] = k; });
         setStrategies(stratMap);
       }
     } catch (err) {
-      console.error('Error fetching strategies:', err);
+      console.error('Error loading strategies:', err);
     }
   }, []);
   
