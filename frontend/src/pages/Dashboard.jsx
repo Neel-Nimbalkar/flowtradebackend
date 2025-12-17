@@ -386,7 +386,7 @@ const EquityChart = ({ equityCurve, cumulativePnl, timeframe, showDrawdown = tru
     ctx.fill();
     
     // Draw line
-    ctx.strokeStyle = isPositive ? '#22c55e' : '#ef4444';
+    ctx.strokeStyle = '#10B981';
     ctx.lineWidth = 2;
     ctx.beginPath();
     
@@ -407,7 +407,7 @@ const EquityChart = ({ equityCurve, cumulativePnl, timeframe, showDrawdown = tru
       const x = padding.left + (hoveredPoint / (values.length - 1)) * chartWidth;
       const y = padding.top + ((maxVal - values[hoveredPoint]) / range) * chartHeight;
       
-      ctx.fillStyle = isPositive ? '#22c55e' : '#ef4444';
+      ctx.fillStyle = '#10B981';
       ctx.beginPath();
       ctx.arc(x, y, 5, 0, Math.PI * 2);
       ctx.fill();

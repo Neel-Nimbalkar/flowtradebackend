@@ -367,7 +367,7 @@ const EquityChart = ({ data, loading, chartMode, onModeChange }) => {
     }
     
     const isPositive = values[values.length - 1] >= values[0];
-    ctx.strokeStyle = isPositive ? '#22c55e' : '#ef4444';
+    ctx.strokeStyle = '#10B981';
     ctx.lineWidth = 2;
     ctx.stroke();
     
