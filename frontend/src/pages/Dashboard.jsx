@@ -270,7 +270,13 @@ const EquityChart = ({ equityCurve, cumulativePnl, timeframe, showDrawdown = tru
   }, [chartMode, equityCurve, cumulativePnl]);
   
   const hasData = data && data.length >= 1;
-  const isEmpty = !hasData || data.every(d => d.v === (chartMode === 'equity' ? data[0]?.v : 0));
+  // For single point data, only consider empty if value is the base (100 for equity, 0 for pnl)
+  const baseValue = chartMode === 'equity' ? 100 : 0;
+  const isEmpty = !hasData || (data.length === 1 && data[0]?.v === baseValue) || 
+    (data.length > 1 && data.every(d => d.v === data[0]?.v));
+  
+  // Check if we have a single data point (special rendering)
+  const isSinglePoint = hasData && data.length === 1 && data[0]?.v !== baseValue;
   
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -299,6 +305,40 @@ const EquityChart = ({ equityCurve, cumulativePnl, timeframe, showDrawdown = tru
     const minVal = Math.min(...values) * 0.98;
     const maxVal = Math.max(...values) * 1.02;
     const range = maxVal - minVal || 1;
+    
+    // Handle single data point - draw dot with value
+    if (values.length === 1) {
+      const centerX = padding.left + chartWidth / 2;
+      const centerY = padding.top + chartHeight / 2;
+      const isPositive = values[0] >= (chartMode === 'equity' ? 100 : 0);
+      
+      // Draw point
+      ctx.fillStyle = isPositive ? '#22c55e' : '#ef4444';
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, 8, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Draw ring
+      ctx.strokeStyle = isPositive ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, 16, 0, Math.PI * 2);
+      ctx.stroke();
+      
+      // Draw value label
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 14px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      const displayVal = chartMode === 'equity' ? formatCurrency(values[0]) : `${values[0].toFixed(2)}%`;
+      ctx.fillText(displayVal, centerX, centerY - 30);
+      
+      // Draw subtitle
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.font = '11px Inter, sans-serif';
+      ctx.fillText('1 trade completed', centerX, centerY + 40);
+      
+      return; // Exit early - no need for line drawing
+    }
     
     // Draw grid
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';

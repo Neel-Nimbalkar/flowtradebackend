@@ -464,16 +464,22 @@ def compute_analytics(
             computed_at: timestamp
         }
     """
-    # Check cache
-    if use_cache:
+    # Get all trades first to check if we have any
+    trades_data = get_all_percent_trades(limit=10000)
+    trades = trades_data.get('trades', [])
+    
+    # Check cache - but only if trades exist (cache might be stale after deploy)
+    if use_cache and len(trades) > 0:
         with _analytics_lock:
             cache = _load_json(ANALYTICS_CACHE_FILE, {})
             if cache.get('valid') and cache.get('data'):
-                return cache['data']
-    
-    # Get all trades
-    trades_data = get_all_percent_trades(limit=10000)
-    trades = trades_data.get('trades', [])
+                # Verify cache trade count matches actual trades
+                cached_count = cache['data'].get('metrics', {}).get('trade_count', 0)
+                if cached_count == len(trades):
+                    return cache['data']
+                # Cache is stale, invalidate
+                cache['valid'] = False
+                _save_json(ANALYTICS_CACHE_FILE, cache)
     
     # Filter by strategy
     if strategy_ids:
