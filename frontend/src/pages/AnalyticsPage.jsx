@@ -2,6 +2,7 @@
  * Analytics Page - FlowGrid Trading
  * Comprehensive analytics dashboard with multiple visualization modes
  * Single-screen, desktop-first, no vertical scroll
+ * Now reads from localStorage via tradeService (no backend, no mock data)
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -10,8 +11,23 @@ import TradeLogging from './analytics/TradeLogging';
 import TradeCalendar from './analytics/TradeCalendar';
 import './Dashboard.css';
 import './Analytics.css';
+import {
+  getAllTrades,
+  calculateMetrics,
+  getEquityCurve,
+  getCumulativePnLCurve,
+  getTimePnL,
+  getStrategyAttribution,
+  getPnLDistribution,
+  getRecentTrades,
+  fetchAnalyticsFromBackend,
+  fetchEquityCurveFromBackend,
+  fetchHeatmapFromBackend,
+  fetchDistributionFromBackend,
+  fetchTradesFromBackend
+} from '../services/tradeService';
 
-// API base URL
+// API base URL (kept for signals endpoint only)
 const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE)
   ? import.meta.env.VITE_API_BASE.replace(/\/$/, '')
   : 'http://127.0.0.1:5000';
@@ -143,7 +159,7 @@ const FlowGradeCard = ({ gradeData, onShowBreakdown, loading }) => {
   const { score, letter, reasons } = gradeData;
   const circumference = 2 * Math.PI * 45;
   const progress = (score / 100) * circumference;
-  const gradeClass = `grade-${letter.toLowerCase()}`;
+  const gradeClass = `grade-${(letter || 'c').toLowerCase()}`;
   
   return (
     <div className="flow-grade-card">
@@ -867,303 +883,286 @@ const Analytics = ({ onNavigate }) => {
   // Track if initial data has been loaded (to avoid refetching mock data)
   const initialLoadDone = useRef(false);
   
-  // Fetch all data
+  // Fetch all data from backend API with localStorage fallback
   const fetchData = useCallback(async (forceRefresh = false) => {
     setLoading(true);
     setError(null);
     
     try {
-      let hasRealData = false;
+      let dataSource = 'localStorage';
+      let metrics, equityCurveData, cumulativePnl, byDay, byHour, stratAttribution, distribution, recentTrades;
+      let trades = getAllTrades();
       
-      // Skip re-fetching if we already have mock data loaded (unless forced)
-      if (isPreviewMode && overview && initialLoadDone.current && !forceRefresh) {
-        console.log('[Analytics] Already have mock data, skipping refetch');
-        setLoading(false);
-        return;
-      }
-      
-      // First try to fetch real overview data
+      // Try backend API first
       try {
-        const overviewRes = await fetch(`${API_BASE}/api/analytics/overview`);
-        if (overviewRes.ok) {
-          const data = await overviewRes.json();
-          // Check if we have real trades (check both metrics formats)
-          const tradeCount = data.metrics?.total_trades || data.metrics?.trade_count || 0;
-          if (data.metrics && tradeCount > 0 && !data.empty) {
-            // Transform metrics to kpis format for consistency
-            const m = data.metrics;
-            setOverview({
-              ...data,
-              kpis: {
-                net_pnl_usd: m.net_pnl || m.net_return_pct * 1000, // Estimate USD from %
-                net_pnl_pct: m.net_pnl_percent || m.net_return_pct || 0,
-                win_rate: m.win_rate || 0,
-                profit_factor: m.profit_factor || 0,
-                expectancy: m.expectancy || 0,
-                max_drawdown_pct: m.max_drawdown_pct || 0,
-                max_drawdown_usd: m.max_drawdown_value || 0,
-                total_trades: m.total_trades || m.trade_count || 0,
-                wins: m.wins || 0,
-                losses: m.losses || 0,
-                avg_win: m.avg_win || m.avg_win_pct || 0,
-                avg_loss: m.avg_loss || m.avg_loss_pct || 0,
-                largest_win: m.largest_win || m.largest_win_pct || 0,
-                largest_loss: m.largest_loss || m.largest_loss_pct || 0
-              }
-            });
-            hasRealData = true;
-            setIsPreviewMode(false);
-            initialLoadDone.current = true;
-          }
-        }
-      } catch (err) {
-        console.warn('Could not fetch real analytics overview:', err);
-      }
-      
-      // If no real data and we haven't loaded mock data yet, generate it
-      if (!hasRealData && !initialLoadDone.current) {
-        console.log('[Analytics] No real trades, generating mock data from backtests...');
-        try {
-          const mockRes = await fetch(`${API_BASE}/api/dashboard/generate-mock-data`, {
-            method: 'POST'
-          });
+        const [analyticsRes, equityRes, heatmapRes, distRes, tradesRes] = await Promise.all([
+          fetchAnalyticsFromBackend(),
+          fetchEquityCurveFromBackend(),
+          fetchHeatmapFromBackend(),
+          fetchDistributionFromBackend(),
+          fetchTradesFromBackend({ limit: 100 })
+        ]);
+        
+        if (analyticsRes && !analyticsRes.empty) {
+          dataSource = 'backend';
+          console.log(`[Analytics] Using backend API data`);
           
-          if (mockRes.ok) {
-            const mockData = await mockRes.json();
-            console.log('[Analytics] Mock data received:', mockData.source, mockData.metrics?.total_trades, 'trades');
-            
-            // Convert mock data to overview format (using kpis key for compatibility)
-            setOverview({
-              empty: false,
-              is_preview: true,
-              source: mockData.source,
-              kpis: {
-                net_pnl_usd: mockData.metrics.net_pnl,
-                net_pnl_pct: mockData.metrics.net_pnl_percent,
-                win_rate: mockData.metrics.win_rate,
-                profit_factor: mockData.metrics.profit_factor,
-                expectancy: mockData.metrics.expectancy,
-                max_drawdown_pct: mockData.metrics.max_drawdown_pct,
-                max_drawdown_usd: mockData.metrics.max_drawdown_value || 0,
-                total_trades: mockData.metrics.total_trades,
-                wins: mockData.metrics.wins,
-                losses: mockData.metrics.losses,
-                avg_win: mockData.metrics.avg_win,
-                avg_loss: mockData.metrics.avg_loss,
-                largest_win: mockData.metrics.largest_win,
-                largest_loss: mockData.metrics.largest_loss
-              },
-              flow_grade: {
-                score: Math.round(mockData.metrics.win_rate * 0.9),
-                breakdown: { consistency: 75, risk_mgmt: 70, win_quality: 80, trade_efficiency: 72 }
-              }
-            });
-            
-            // Set equity curve from mock data
-            setEquityCurve({
-              curve: mockData.equity_curve || [],
-              cumulative_pnl: mockData.cumulative_pnl_curve || []
-            });
-            
-            // Set heatmap from mock data
-            setHeatmap({
-              by_day: mockData.time_pnl_by_day || []
-            });
-            
-            // Set activity from recent trades
-            setActivity((mockData.recent_trades || []).map(t => ({
-              type: 'trade',
-              timestamp: t.exitTime || t.close_ts,
-              strategy: t.strategy,
-              symbol: t.symbol,
-              pnl: t.netPnL || t.pnl,
-              direction: t.direction || t.open_side
-            })));
-            
-            // Set strategies
-            const stratObj = {};
-            (mockData.strategies || []).forEach(s => {
-              stratObj[s.name] = s;
-            });
-            setStrategies(stratObj);
-            
-            setIsPreviewMode(true);
-            initialLoadDone.current = true; // Mark that we have loaded mock data
-            console.log('[Analytics] Mock data loaded and cached, will not refetch');
+          // Transform backend metrics to expected format
+          const backendMetrics = analyticsRes.metrics || {};
+          metrics = {
+            net_pnl: backendMetrics.net_return_pct || 0,
+            net_pnl_percent: backendMetrics.net_return_pct || 0,
+            win_rate: backendMetrics.win_rate || 0,
+            profit_factor: typeof backendMetrics.profit_factor === 'string' ? Infinity : (backendMetrics.profit_factor || 0),
+            expectancy: backendMetrics.expectancy || 0,
+            max_drawdown_pct: backendMetrics.max_drawdown_pct || 0,
+            max_drawdown_value: backendMetrics.max_drawdown_pct || 0,
+            total_trades: backendMetrics.trade_count || 0,
+            wins: backendMetrics.wins || 0,
+            losses: backendMetrics.losses || 0,
+            avg_win: backendMetrics.avg_win_pct || 0,
+            avg_loss: backendMetrics.avg_loss_pct || 0,
+            largest_win: backendMetrics.largest_win_pct || 0,
+            largest_loss: backendMetrics.largest_loss_pct || 0
+          };
+          
+          // Transform equity curve
+          equityCurveData = (equityRes || []).map(pt => ({
+            t: new Date(pt.ts).getTime(),
+            v: 100 + (pt.equity_pct || 0),
+            drawdown: pt.drawdown_pct || 0
+          }));
+          
+          cumulativePnl = (equityRes || []).map(pt => ({
+            t: new Date(pt.ts).getTime(),
+            v: pt.equity_pct || 0
+          }));
+          
+          // Use heatmap data
+          byDay = heatmapRes?.by_day || [];
+          byHour = heatmapRes?.by_hour || [];
+          
+          // Transform strategy attribution
+          stratAttribution = Object.entries(analyticsRes.by_strategy || {}).map(([name, data]) => ({
+            name,
+            total_pnl: data.net_return_pct || 0,
+            trade_count: data.trade_count || 0,
+            wins: data.wins || 0,
+            losses: data.losses || 0
+          }));
+          
+          // P&L distribution
+          distribution = {
+            bins: (distRes?.histogram || []).map(h => `${h.bin_start} to ${h.bin_end}`),
+            counts: (distRes?.histogram || []).map(h => h.count)
+          };
+          
+          // Recent trades
+          recentTrades = (tradesRes || []).slice(0, 15);
+          trades = tradesRes || trades;
+        }
+      } catch (backendErr) {
+        console.warn('[Analytics] Backend fetch failed, using localStorage:', backendErr.message);
+      }
+      
+      // Fallback to localStorage if backend didn't provide data
+      if (dataSource === 'localStorage') {
+        metrics = calculateMetrics();
+        equityCurveData = getEquityCurve();
+        cumulativePnl = getCumulativePnLCurve();
+        const timePnl = getTimePnL();
+        byDay = timePnl.byDay;
+        byHour = timePnl.byHour;
+        stratAttribution = getStrategyAttribution();
+        distribution = getPnLDistribution();
+        recentTrades = getRecentTrades(15);
+      }
+      
+      console.log(`[Analytics] Loaded ${trades.length || metrics.total_trades || 0} trades from ${dataSource}`);
+      
+      // Set overview with kpis format for compatibility
+      setOverview({
+        empty: (trades.length || metrics.total_trades || 0) === 0,
+        is_preview: false,
+        source: dataSource,
+        kpis: {
+          net_pnl_usd: metrics.net_pnl,
+          net_pnl_pct: metrics.net_pnl_percent,
+          win_rate: metrics.win_rate,
+          profit_factor: metrics.profit_factor,
+          expectancy: metrics.expectancy,
+          max_drawdown_pct: metrics.max_drawdown_pct,
+          max_drawdown_usd: metrics.max_drawdown_value,
+          total_trades: metrics.total_trades,
+          wins: metrics.wins,
+          losses: metrics.losses,
+          avg_win: metrics.avg_win,
+          avg_loss: metrics.avg_loss,
+          largest_win: metrics.largest_win,
+          largest_loss: metrics.largest_loss
+        },
+        flow_grade: (trades.length || metrics.total_trades || 0) > 0 ? {
+          score: Math.round((metrics.win_rate || 0) * 0.9),
+          letter: (metrics.win_rate || 0) >= 80 ? 'A' : (metrics.win_rate || 0) >= 60 ? 'B' : (metrics.win_rate || 0) >= 40 ? 'C' : (metrics.win_rate || 0) >= 20 ? 'D' : 'F',
+          reasons: [
+            `Win rate: ${(metrics.win_rate || 0).toFixed(1)}%`,
+            `Profit factor: ${metrics.profit_factor === Infinity ? '∞' : (metrics.profit_factor || 0).toFixed(2)}`,
+            (metrics.max_drawdown_pct || 0) < 10 ? 'Low drawdown' : 'Monitor drawdown'
+          ],
+          breakdown: { 
+            consistency: Math.min(95, Math.max(0, 50 + (metrics.profit_factor === Infinity ? 10 : (metrics.profit_factor || 0)) * 10)),
+            risk_mgmt: Math.max(0, 100 - (metrics.max_drawdown_pct || 0) * 2),
+            win_quality: metrics.win_rate || 0,
+            trade_efficiency: (metrics.profit_factor || 0) > 1 ? 70 + ((metrics.profit_factor === Infinity ? 5 : (metrics.profit_factor || 0)) - 1) * 20 : 50
           }
-        } catch (mockErr) {
-          console.warn('[Analytics] Could not generate mock data:', mockErr);
-        }
+        } : null
+      });
+      
+      // Set equity curve
+      setEquityCurve({
+        curve: equityCurveData,
+        cumulative_pnl: cumulativePnl
+      });
+      
+      // Set heatmap - transform byDay/byHour to matrix format
+      const dayLabels = byDay.map(d => d.label);
+      const hourLabels = byHour.map(h => h.label);
+      const matrix = [byDay.map(d => d.pnl)]; // Single row for days
+      const allValues = [...byDay.map(d => d.pnl), ...byHour.map(h => h.pnl)];
+      const heatmapRange = {
+        min: Math.min(...allValues, 0),
+        max: Math.max(...allValues, 0)
+      };
+      setHeatmap({
+        matrix: matrix,
+        x_labels: dayLabels,
+        y_labels: ['P&L'],
+        range: heatmapRange,
+        by_day: byDay,
+        by_hour: byHour
+      });
+      
+      // Set activity from recent trades
+      setActivity(recentTrades.map(t => ({
+        type: 'trade',
+        timestamp: t.exitTime || t.close_ts,
+        strategy: t.strategyName || t.strategy_id,
+        symbol: t.symbol,
+        pnl: t.netPnL || t.net_pct,
+        direction: t.direction || t.open_side
+      })));
+      
+      // Set P&L distribution - transform to histogram format
+      const pnlValues = trades.map(t => t.net_pct ?? t.netPnL ?? 0);
+      const histogram = [];
+      if (distribution.bins && distribution.bins.length > 0) {
+        distribution.bins.forEach((binLabel, idx) => {
+          const parts = binLabel.split(' to ');
+          histogram.push({
+            bin_start: parseFloat(parts[0]) || 0,
+            bin_end: parseFloat(parts[1]) || 0,
+            count: distribution.counts[idx] || 0
+          });
+        });
+      }
+      const mean = pnlValues.length > 0 ? pnlValues.reduce((a, b) => a + b, 0) / pnlValues.length : 0;
+      const variance = pnlValues.length > 0 ? pnlValues.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / pnlValues.length : 0;
+      const std = Math.sqrt(variance);
+      setPnlDistribution({
+        histogram: histogram,
+        stats: { mean, std },
+        empty: trades.length === 0
+      });
+      
+      // Set strategy attribution - transform to contributions format
+      const totalPnl = stratAttribution.reduce((sum, s) => sum + (s.total_pnl || 0), 0);
+      setAttribution({
+        contributions: stratAttribution.map(s => ({
+          strategy_name: s.name,
+          pnl: s.total_pnl || 0,
+          trades: s.trade_count || 0,
+          win_rate: s.trade_count > 0 ? ((s.wins || 0) / s.trade_count * 100).toFixed(1) : '0',
+          contribution_pct: totalPnl !== 0 ? ((s.total_pnl || 0) / Math.abs(totalPnl) * 100).toFixed(1) : '0'
+        })),
+        total_pnl: totalPnl,
+        empty: stratAttribution.length === 0
+      });
+      
+      // Load strategies from localStorage
+      const savedStrategies = localStorage.getItem('flowgrid_workflow_v1::saves');
+      if (savedStrategies) {
+        const parsed = JSON.parse(savedStrategies);
+        const stratObj = {};
+        Object.keys(parsed).forEach(name => {
+          const stratData = stratAttribution.find(s => s.name === name);
+          stratObj[name] = {
+            name,
+            enabled: parsed[name].enabled || false,
+            net_pnl: stratData?.total_pnl || 0,
+            win_rate: stratData ? (stratData.wins / (stratData.trade_count || 1)) * 100 : 0,
+            trade_count: stratData?.trade_count || 0
+          };
+        });
+        setStrategies(stratObj);
       }
       
-      // If we have real data, fetch supplementary endpoints
-      if (hasRealData) {
-        // Fetch equity curve
-        const equityRes = await fetch(`${API_BASE}/api/analytics/equity-curve`);
-        if (equityRes.ok) {
-          setEquityCurve(await equityRes.json());
-        }
-        
-        // Fetch recent activity
-        const activityRes = await fetch(`${API_BASE}/api/analytics/recent-activity?limit=15`);
-        if (activityRes.ok) {
-          const data = await activityRes.json();
-          setActivity(data.activity || []);
-        }
-        
-        // Fetch strategies
-        const strategiesRes = await fetch(`${API_BASE}/api/dashboard/strategies`);
-        if (strategiesRes.ok) {
-          const data = await strategiesRes.json();
-          if (Array.isArray(data)) {
-            const obj = {};
-            data.forEach(s => { obj[s.name] = s; });
-            setStrategies(obj);
-          } else {
-            setStrategies(data);
-          }
-        }
-      }
-      
-      // Fetch tab-specific data based on active tab
-      if (activeTab === 'trade-analytics') {
-        const distRes = await fetch(`${API_BASE}/api/analytics/distributions?type=pnl`);
-        if (distRes.ok) {
-          setPnlDistribution(await distRes.json());
-        }
-      }
-      
-      if (activeTab === 'attribution') {
-        const attrRes = await fetch(`${API_BASE}/api/analytics/strategy-contrib`);
-        if (attrRes.ok) {
-          setAttribution(await attrRes.json());
-        }
-      }
-      
-      if (activeTab === 'time-analysis' && hasRealData) {
-        const heatmapRes = await fetch(`${API_BASE}/api/analytics/heatmap?type=hour_day`);
-        if (heatmapRes.ok) {
-          setHeatmap(await heatmapRes.json());
-        }
-      }
-      
-      if (activeTab === 'risk') {
-        const mcRes = await fetch(`${API_BASE}/api/analytics/montecarlo?premium=${isPremium}`);
-        if (mcRes.ok) {
-          setMonteCarlo(await mcRes.json());
-        }
-      }
+      setIsPreviewMode(false);
+      initialLoadDone.current = true;
       
     } catch (err) {
-      console.error('Error fetching analytics data:', err);
-      setError('Failed to load analytics data. Check backend connection.');
+      console.error('Error loading analytics data:', err);
+      setError('Failed to load analytics data from localStorage.');
     } finally {
       setLoading(false);
     }
-  }, [activeTab, isPremium, isPreviewMode]);
+  }, [activeTab]);
   
   // Initial fetch
   useEffect(() => {
     fetchData();
   }, [fetchData]);
   
-  // Setup SSE for live updates - only when NOT in preview mode
+  // Listen for trade completion events to refresh data
   useEffect(() => {
-    // Don't connect SSE if we're showing preview data
-    if (isPreviewMode) {
-      console.log('[Analytics] Preview mode - SSE disabled');
-      return;
-    }
-    
-    const connectSSE = () => {
-      try {
-        eventSourceRef.current = new EventSource(`${API_BASE}/api/analytics/stream`);
-        
-        eventSourceRef.current.addEventListener('metrics_update', (e) => {
-          try {
-            const data = JSON.parse(e.data);
-            // Only update if we have real trades (not preview)
-            if (!isPreviewMode && data.metrics?.trade_count > 0) {
-              setOverview(data);
-            }
-          } catch (err) {
-            console.error('Error parsing SSE data:', err);
-          }
-        });
-        
-        eventSourceRef.current.onerror = () => {
-          eventSourceRef.current?.close();
-          // Reconnect after 5 seconds only if not preview mode
-          if (!isPreviewMode) {
-            setTimeout(connectSSE, 5000);
-          }
-        };
-      } catch (err) {
-        console.error('SSE connection failed:', err);
-      }
+    const handleTradeCompleted = () => {
+      console.log('[Analytics] Trade completed event - refreshing data');
+      fetchData(true);
     };
     
-    connectSSE();
+    const handleTradesUpdated = () => {
+      console.log('[Analytics] Trades updated event - refreshing data');
+      fetchData(true);
+    };
+    
+    window.addEventListener('flowgrid:trade-completed', handleTradeCompleted);
+    window.addEventListener('flowgrid:trades-updated', handleTradesUpdated);
     
     return () => {
-      eventSourceRef.current?.close();
+      window.removeEventListener('flowgrid:trade-completed', handleTradeCompleted);
+      window.removeEventListener('flowgrid:trades-updated', handleTradesUpdated);
     };
-  }, [isPreviewMode]);
+  }, [fetchData]);
   
-  // Handle strategy toggle
+  // Handle strategy toggle (localStorage only, no backend)
   const handleStrategyToggle = useCallback(async (name, enabled) => {
     // Update local state immediately
     const newEnabled = { ...enabledStrategies, [name]: enabled };
     setEnabledStrategies(newEnabled);
     localStorage.setItem(ENABLED_STRATEGIES_KEY, JSON.stringify(newEnabled));
     
-    // Trigger recompute
+    // Refresh data from localStorage
     setRecomputing(true);
     setRecomputeStatus('processing');
     
     try {
-      // Call toggle API
-      await fetch(`${API_BASE}/api/dashboard/strategies/${name}/toggle`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled })
-      });
+      // Just refresh data - no backend call needed
+      await fetchData(true);
       
-      // Trigger recompute
-      const recomputeRes = await fetch(`${API_BASE}/api/analytics/recompute`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          enabled_strategies: Object.keys(newEnabled).filter(k => newEnabled[k]),
-          trigger: 'toggle'
-        })
-      });
-      
-      if (recomputeRes.ok) {
-        const { job_id } = await recomputeRes.json();
-        
-        // Poll for completion
-        const pollStatus = async () => {
-          const statusRes = await fetch(`${API_BASE}/api/analytics/recompute/${job_id}/status`);
-          if (statusRes.ok) {
-            const status = await statusRes.json();
-            if (status.status === 'completed') {
-              setRecomputeStatus('complete');
-              setTimeout(() => {
-                setRecomputing(false);
-                setRecomputeStatus(null);
-              }, 2000);
-              
-              // Refresh data
-              fetchData();
-            } else if (status.status === 'processing') {
-              setTimeout(pollStatus, 500);
-            }
-          }
-        };
-        
-        pollStatus();
-      }
+      setRecomputeStatus('complete');
+      setTimeout(() => {
+        setRecomputing(false);
+        setRecomputeStatus(null);
+      }, 1000);
     } catch (err) {
       console.error('Error toggling strategy:', err);
       setRecomputing(false);

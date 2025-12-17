@@ -41,7 +41,15 @@ from io import BytesIO
 from integrations.telegram_notifier import get_notifier, load_telegram_settings, save_telegram_settings
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for browser access
+# Enable CORS for Firebase and localhost
+CORS(app, origins=[
+    'https://flowtrade210.web.app',
+    'https://flowtrade210.firebaseapp.com',
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:5175',
+    'http://127.0.0.1:5173'
+])
 
 # Initialize workflow engine
 workflow_engine = WorkflowEngine()
@@ -3372,8 +3380,8 @@ def _load_strategy(strategy_name):
     return None
 
 
-@app.route('/api/trades', methods=['GET'])
-def get_trades():
+@app.route('/api/trades-legacy', methods=['GET'])
+def get_trades_legacy():
     """Get all trades with optional filtering."""
     try:
         trades = _get_trades()
@@ -3403,8 +3411,8 @@ def get_trades():
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/trades/recent', methods=['GET'])
-def get_recent_trades():
+@app.route('/api/trades/recent-legacy', methods=['GET'])
+def get_recent_trades_legacy():
     """Get most recent trades (default 5)."""
     try:
         limit = int(request.args.get('limit', 5))
@@ -4046,9 +4054,9 @@ except ImportError as e:
     print(f'⚠️ Analytics API not available: {e}')
 
 
-@app.route('/api/analytics/overview', methods=['GET'])
+@app.route('/api/analytics/overview-legacy', methods=['GET'])
 def analytics_overview():
-    """Get comprehensive analytics overview with KPIs and Flow Grade."""
+    """LEGACY: Get comprehensive analytics overview with KPIs and Flow Grade."""
     if not ANALYTICS_API_AVAILABLE:
         return jsonify({'error': 'Analytics API not available'}), 500
     
@@ -4083,9 +4091,9 @@ def analytics_flow_grade():
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/analytics/equity-curve', methods=['GET'])
+@app.route('/api/analytics/equity-curve-legacy', methods=['GET'])
 def analytics_equity_curve():
-    """Get equity curve time-series data."""
+    """LEGACY: Get equity curve time-series data."""
     if not ANALYTICS_API_AVAILABLE:
         return jsonify({'error': 'Analytics API not available'}), 500
     
@@ -4126,9 +4134,9 @@ def analytics_trades():
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/analytics/distributions', methods=['GET'])
+@app.route('/api/analytics/distributions-legacy', methods=['GET'])
 def analytics_distributions():
-    """Get P&L and duration distributions."""
+    """LEGACY: Get P&L and duration distributions."""
     if not ANALYTICS_API_AVAILABLE:
         return jsonify({'error': 'Analytics API not available'}), 500
     
@@ -4151,9 +4159,9 @@ def analytics_distributions():
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/analytics/heatmap', methods=['GET'])
+@app.route('/api/analytics/heatmap-legacy', methods=['GET'])
 def analytics_heatmap():
-    """Get P&L heatmap by hour/day or instrument."""
+    """LEGACY: Get P&L heatmap by hour/day or instrument."""
     if not ANALYTICS_API_AVAILABLE:
         return jsonify({'error': 'Analytics API not available'}), 500
     

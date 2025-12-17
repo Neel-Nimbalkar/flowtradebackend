@@ -6,14 +6,22 @@ import {
   getLiveSignals, 
   getRunningCount,
   isStrategyRunning,
-  calculateMetrics,
-  getTrades,
   MAX_STRATEGIES,
   clearAllSignals,
   deleteStrategy
 } from '../services/StrategyRunner';
+import {
+  getAllTrades,
+  calculateMetrics as calcTradeMetrics,
+  getEquityCurve,
+  getCumulativePnLCurve,
+  getTimePnL,
+  getRecentTrades,
+  getDashboardData as getLocalDashboardData,
+  getDashboardDataAsync
+} from '../services/tradeService';
 
-// API base URL - use Vite env var or default to local backend
+// API base URL - use Vite env var or default to local backend (kept for signals/strategies endpoints)
 const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE)
   ? import.meta.env.VITE_API_BASE.replace(/\/$/, '')
   : 'http://127.0.0.1:5000';
@@ -962,73 +970,46 @@ const Dashboard = ({ onNavigate }) => {
     }
   }, []);
   
-  // Fetch dashboard data from backend (or use mock data)
+  // Fetch dashboard data from backend API with localStorage fallback
   const fetchDashboardData = useCallback(async (dateRange) => {
-    const range = dateRange || timeframe;
     try {
       setError(null);
       
-      // Try to fetch from backend API
-      const response = await fetch(
-        `${API_BASE}/api/dashboard/metrics?enabled_only=true&date_range=${range}`
-      );
+      // Try to get data from backend API first, falls back to localStorage
+      const localData = await getDashboardDataAsync();
       
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
+      // Log data source for debugging
+      console.log(`[Dashboard] Data source: ${localData.source || 'unknown'}`);
       
-      const data = await response.json();
-      setDashboardData(data);
-      setLastUpdate(new Date());
-    } catch (err) {
-      console.error('Failed to fetch dashboard data:', err);
-      setError(err.message);
-      
-      // Fallback: Generate demo data and retry
-      try {
-        await fetch(`${API_BASE}/api/dashboard/demo-data`, { method: 'POST' });
-        const retryResponse = await fetch(
-          `${API_BASE}/api/dashboard/metrics?enabled_only=true&date_range=${range}`
-        );
-        if (retryResponse.ok) {
-          const data = await retryResponse.json();
-          setDashboardData(data);
-          setError(null);
-        }
-      } catch (retryErr) {
-        console.error('Failed to generate demo data:', retryErr);
-        
-        // Final fallback: Use localStorage strategies with empty metrics
-        const mockData = {
-          account: { starting_capital: 100000, current_equity: 100000, cash: 100000 },
-          metrics: {
-            net_pnl: 0, net_pnl_percent: 0, gross_pnl: 0, total_fees: 0,
-            win_rate: 0, wins: 0, losses: 0, total_trades: 0,
-            profit_factor: 0, expectancy: 0, avg_win: 0, avg_loss: 0,
-            max_drawdown_pct: 0, max_drawdown_value: 0
-          },
-          risk: { avg_win: 0, avg_loss: 0, largest_win: 0, largest_loss: 0, profit_factor: 0, risk_reward_ratio: 0 },
-          strategies: localStrategies.map(s => ({
-            name: s.name,
-            enabled: s.enabled,
-            net_pnl: 0,
-            win_rate: 0,
-            trade_count: 0,
-            created_at: s.savedAt,
-            updated_at: s.savedAt
-          })),
-          equity_curve: [{ t: Date.now(), v: 100000, drawdown: 0 }],
-          cumulative_pnl_curve: [{ t: Date.now(), v: 0 }],
-          time_pnl_by_day: [
-            { label: 'Mon', pnl: 0 }, { label: 'Tue', pnl: 0 }, { label: 'Wed', pnl: 0 },
-            { label: 'Thu', pnl: 0 }, { label: 'Fri', pnl: 0 }
-          ],
-          time_pnl_by_hour: [],
-          recent_trades: [],
-          computed_at: new Date().toISOString()
+      // Merge with local strategies info
+      const strategiesWithMetrics = localStrategies.map(s => {
+        const stratData = localData.strategies?.find(st => st.name === s.name);
+        return {
+          name: s.name,
+          enabled: s.enabled,
+          net_pnl: stratData?.total_pnl || 0,
+          win_rate: stratData ? (stratData.wins / (stratData.trade_count || 1)) * 100 : 0,
+          trade_count: stratData?.trade_count || 0,
+          created_at: s.savedAt,
+          updated_at: s.savedAt
         };
-        setDashboardData(mockData);
-      }
+      });
+      
+      const dashData = {
+        ...localData,
+        strategies: strategiesWithMetrics
+      };
+      
+      setDashboardData(dashData);
+      setLastUpdate(new Date());
+      
+      // Log trade count for debugging
+      const trades = getAllTrades();
+      console.log(`[Dashboard] Loaded ${localData.metrics?.total_trades || trades.length} trades`);
+      
+    } catch (err) {
+      console.error('Failed to load dashboard data:', err);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -1101,6 +1082,27 @@ const Dashboard = ({ onNavigate }) => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  
+  // Listen for trade completion to refresh metrics
+  useEffect(() => {
+    const handleTradeCompleted = (e) => {
+      console.log('[Dashboard] Trade completed event - refreshing metrics', e.detail);
+      fetchDashboardData();
+    };
+    
+    const handleTradesUpdated = () => {
+      console.log('[Dashboard] Trades updated event - refreshing metrics');
+      fetchDashboardData();
+    };
+    
+    window.addEventListener('flowgrid:trade-completed', handleTradeCompleted);
+    window.addEventListener('flowgrid:trades-updated', handleTradesUpdated);
+    
+    return () => {
+      window.removeEventListener('flowgrid:trade-completed', handleTradeCompleted);
+      window.removeEventListener('flowgrid:trades-updated', handleTradesUpdated);
+    };
+  }, [fetchDashboardData]);
   
   // Handle timeframe change
   const handleTimeframeChange = useCallback((tf) => {
@@ -1242,9 +1244,9 @@ const Dashboard = ({ onNavigate }) => {
       setRunningCount(getRunningCount());
       
       // Load trades and calculate metrics
-      const trades = getTrades();
+      const trades = getAllTrades();
       setLocalTrades(trades);
-      const calculatedMetrics = calculateMetrics();
+      const calculatedMetrics = calcTradeMetrics();
       if (calculatedMetrics.total_trades > 0) {
         setLiveMetrics(calculatedMetrics);
       }
