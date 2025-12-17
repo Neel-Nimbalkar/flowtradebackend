@@ -318,72 +318,97 @@ const EquityChart = ({ data, loading, chartMode, onModeChange }) => {
     ctx.beginPath();
     
     const numPoints = data.curve.length;
-    data.curve.forEach((point, idx) => {
-      // Handle single point case - center it
-      const x = numPoints === 1 
-        ? padding.left + chartWidth / 2 
-        : padding.left + (idx / (numPoints - 1)) * chartWidth;
-      const y = padding.top + chartHeight - ((point.v - minVal) / range) * chartHeight;
-      
-      if (idx === 0) {
-        ctx.moveTo(x, y);
-      } else {
-        ctx.lineTo(x, y);
-      }
-    });
     
-    // For single point, draw a dot instead of a line
+    // Handle single point - draw line from origin (100) to current value
     if (numPoints === 1) {
       const point = data.curve[0];
-      const x = padding.left + chartWidth / 2;
-      const y = padding.top + chartHeight - ((point.v - minVal) / range) * chartHeight;
-      const isPositive = point.v >= 100; // Assuming 100 is baseline
-      ctx.fillStyle = isPositive ? '#22c55e' : '#ef4444';
-      ctx.beginPath();
-      ctx.arc(x, y, 6, 0, Math.PI * 2);
-      ctx.fill();
+      const baseValue = 100; // Origin baseline
+      const isPositive = point.v >= baseValue;
       
-      // Draw value label
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.font = '12px Inter, system-ui';
-      ctx.textAlign = 'center';
-      ctx.fillText(`${point.v.toFixed(2)}%`, x, y - 12);
-    }
-    
-    if (chartMode === 'area') {
-      // Fill area
-      ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight);
-      ctx.lineTo(padding.left, padding.top + chartHeight);
-      ctx.closePath();
+      const originY = padding.top + chartHeight - ((baseValue - minVal) / range) * chartHeight;
+      const currentY = padding.top + chartHeight - ((point.v - minVal) / range) * chartHeight;
       
+      // Draw area gradient
       const gradient = ctx.createLinearGradient(0, padding.top, 0, padding.top + chartHeight);
-      const isPositive = values[values.length - 1] >= values[0];
-      
       if (isPositive) {
         gradient.addColorStop(0, 'rgba(34, 197, 94, 0.3)');
-        gradient.addColorStop(1, 'rgba(34, 197, 94, 0.0)');
+        gradient.addColorStop(1, 'rgba(34, 197, 94, 0)');
       } else {
         gradient.addColorStop(0, 'rgba(239, 68, 68, 0.3)');
-        gradient.addColorStop(1, 'rgba(239, 68, 68, 0.0)');
+        gradient.addColorStop(1, 'rgba(239, 68, 68, 0)');
       }
-      
       ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.moveTo(padding.left, padding.top + chartHeight);
+      ctx.lineTo(padding.left, originY);
+      ctx.lineTo(padding.left + chartWidth, currentY);
+      ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight);
+      ctx.closePath();
       ctx.fill();
       
-      // Draw line on top
+      // Draw line
+      ctx.strokeStyle = isPositive ? '#22c55e' : '#ef4444';
+      ctx.lineWidth = 2;
       ctx.beginPath();
+      ctx.moveTo(padding.left, originY);
+      ctx.lineTo(padding.left + chartWidth, currentY);
+      ctx.stroke();
+      
+      // Draw endpoint dot
+      ctx.fillStyle = isPositive ? '#22c55e' : '#ef4444';
+      ctx.beginPath();
+      ctx.arc(padding.left + chartWidth, currentY, 4, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Skip the rest of the chart drawing for single point
+    } else {
+      // Multiple points - draw normal curve
       data.curve.forEach((point, idx) => {
-        const x = padding.left + (idx / (data.curve.length - 1)) * chartWidth;
+        const x = padding.left + (idx / (numPoints - 1)) * chartWidth;
         const y = padding.top + chartHeight - ((point.v - minVal) / range) * chartHeight;
-        if (idx === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        
+        if (idx === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
       });
-    }
     
-    const isPositive = values[values.length - 1] >= values[0];
-    ctx.strokeStyle = isPositive ? '#22c55e' : '#ef4444';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+      if (chartMode === 'area') {
+        // Fill area
+        ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight);
+        ctx.lineTo(padding.left, padding.top + chartHeight);
+        ctx.closePath();
+        
+        const gradient = ctx.createLinearGradient(0, padding.top, 0, padding.top + chartHeight);
+        const isPositive = values[values.length - 1] >= values[0];
+        
+        if (isPositive) {
+          gradient.addColorStop(0, 'rgba(34, 197, 94, 0.3)');
+          gradient.addColorStop(1, 'rgba(34, 197, 94, 0.0)');
+        } else {
+          gradient.addColorStop(0, 'rgba(239, 68, 68, 0.3)');
+          gradient.addColorStop(1, 'rgba(239, 68, 68, 0.0)');
+        }
+        
+        ctx.fillStyle = gradient;
+        ctx.fill();
+        
+        // Draw line on top
+        ctx.beginPath();
+        data.curve.forEach((point, idx) => {
+          const x = padding.left + (idx / (data.curve.length - 1)) * chartWidth;
+          const y = padding.top + chartHeight - ((point.v - minVal) / range) * chartHeight;
+          if (idx === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+      }
+      
+      const isPositive = values[values.length - 1] >= values[0];
+      ctx.strokeStyle = isPositive ? '#22c55e' : '#ef4444';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
     
     // Draw drawdown shading if enabled
     if (chartMode === 'area' && data.curve.some(d => d.drawdown > 0)) {

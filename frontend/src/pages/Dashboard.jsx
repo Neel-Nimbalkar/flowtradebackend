@@ -306,38 +306,49 @@ const EquityChart = ({ equityCurve, cumulativePnl, timeframe, showDrawdown = tru
     const maxVal = Math.max(...values) * 1.02;
     const range = maxVal - minVal || 1;
     
-    // Handle single data point - draw dot with value
+    // Handle single data point - draw line from origin to current value
     if (values.length === 1) {
-      const centerX = padding.left + chartWidth / 2;
-      const centerY = padding.top + chartHeight / 2;
-      const isPositive = values[0] >= (chartMode === 'equity' ? 100 : 0);
+      const baseValue = chartMode === 'equity' ? 100 : 0;
+      const currentValue = values[0];
+      const isPositive = currentValue >= baseValue;
       
-      // Draw point
-      ctx.fillStyle = isPositive ? '#22c55e' : '#ef4444';
+      // Calculate Y positions for origin and current value
+      const originY = padding.top + ((maxVal - baseValue) / range) * chartHeight;
+      const currentY = padding.top + ((maxVal - currentValue) / range) * chartHeight;
+      
+      // Draw area gradient from origin to current
+      const gradient = ctx.createLinearGradient(0, padding.top, 0, height - padding.bottom);
+      if (isPositive) {
+        gradient.addColorStop(0, 'rgba(34, 197, 94, 0.3)');
+        gradient.addColorStop(1, 'rgba(34, 197, 94, 0)');
+      } else {
+        gradient.addColorStop(0, 'rgba(239, 68, 68, 0.3)');
+        gradient.addColorStop(1, 'rgba(239, 68, 68, 0)');
+      }
+      ctx.fillStyle = gradient;
       ctx.beginPath();
-      ctx.arc(centerX, centerY, 8, 0, Math.PI * 2);
+      ctx.moveTo(padding.left, height - padding.bottom);
+      ctx.lineTo(padding.left, originY);
+      ctx.lineTo(padding.left + chartWidth, currentY);
+      ctx.lineTo(padding.left + chartWidth, height - padding.bottom);
+      ctx.closePath();
       ctx.fill();
       
-      // Draw ring
-      ctx.strokeStyle = isPositive ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)';
-      ctx.lineWidth = 3;
+      // Draw line from origin to current value
+      ctx.strokeStyle = isPositive ? '#22c55e' : '#ef4444';
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(centerX, centerY, 16, 0, Math.PI * 2);
+      ctx.moveTo(padding.left, originY);
+      ctx.lineTo(padding.left + chartWidth, currentY);
       ctx.stroke();
       
-      // Draw value label
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 14px Inter, sans-serif';
-      ctx.textAlign = 'center';
-      const displayVal = chartMode === 'equity' ? formatCurrency(values[0]) : `${values[0].toFixed(2)}%`;
-      ctx.fillText(displayVal, centerX, centerY - 30);
+      // Draw endpoint dot
+      ctx.fillStyle = isPositive ? '#22c55e' : '#ef4444';
+      ctx.beginPath();
+      ctx.arc(padding.left + chartWidth, currentY, 4, 0, Math.PI * 2);
+      ctx.fill();
       
-      // Draw subtitle
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-      ctx.font = '11px Inter, sans-serif';
-      ctx.fillText('1 trade completed', centerX, centerY + 40);
-      
-      return; // Exit early - no need for line drawing
+      return; // Exit early
     }
     
     // Draw grid
