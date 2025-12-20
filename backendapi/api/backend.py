@@ -1934,6 +1934,10 @@ def execute_backtest():
     """Execute workflow against historical data and return signals"""
     try:
         req = request.json or {}
+        
+        # Debug: Log request keys to see what frontend is sending
+        print(f"📥 /execute_backtest received keys: {list(req.keys())}")
+        
         symbol = req.get('symbol', 'SPY')
         timeframe = req.get('timeframe', '1Hour')
         workflow = req.get('workflow', [])
@@ -1959,6 +1963,12 @@ def execute_backtest():
 
         print(f"🔄 Executing backtest workflow: {len(workflow)} blocks, {len(historical_data)} bars, {len(connections)} connections")
         print(f"⚙️  Config: TP={take_profit_pct}% SL={stop_loss_pct}% Shares={shares_per_trade} Capital=${initial_capital}")
+        
+        # Debug: Print first few connections
+        if connections:
+            print(f"📎 First 3 connections: {connections[:3]}")
+        else:
+            print(f"⚠️  No connections received from frontend!")
 
         # Convert historical_data to the format workflow_engine expects
         bars_dict = {
@@ -2057,6 +2067,9 @@ def execute_backtest():
                         if ema_vals and ema_vals[-1] is not None:
                             ema_values[node_id] = ema_vals[-1]
                             latest_data[f'ema_{node_id}'] = ema_vals[-1]
+                            # Also set generic 'ema' for sequential fallback (uses first EMA found)
+                            if 'ema' not in latest_data:
+                                latest_data['ema'] = ema_vals[-1]
 
             # Calculate SMA values for each SMA node
             sma_values = {}  # node_id -> sma_value
