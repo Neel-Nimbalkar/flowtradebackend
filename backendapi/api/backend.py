@@ -1949,12 +1949,15 @@ def execute_backtest():
         initial_capital = float(config.get('initialCapital', 10000))
         commission_per_trade = float(config.get('commissionPerTrade', 0))
 
+        # Also get connections array from request (for graph-based execution)
+        connections = req.get('connections', [])
+        
         if not workflow:
             return jsonify({'error': 'workflow required'}), 400
         if not historical_data:
             return jsonify({'error': 'historicalData required'}), 400
 
-        print(f"🔄 Executing backtest workflow: {len(workflow)} blocks, {len(historical_data)} bars")
+        print(f"🔄 Executing backtest workflow: {len(workflow)} blocks, {len(historical_data)} bars, {len(connections)} connections")
         print(f"⚙️  Config: TP={take_profit_pct}% SL={stop_loss_pct}% Shares={shares_per_trade} Capital=${initial_capital}")
 
         # Convert historical_data to the format workflow_engine expects
@@ -2042,67 +2045,472 @@ def execute_backtest():
                         latest_data['bb_middle'] = middle[-1]
                         latest_data['bb_lower'] = lower[-1]
 
-            # Execute workflow for this bar
-            result = workflow_engine.execute_workflow(workflow, latest_data)
+            # Calculate EMA values for each EMA node (support multiple EMAs with different periods)
+            ema_values = {}  # node_id -> ema_value
+            for block in workflow:
+                if block.get('type') == 'ema':
+                    node_id = block.get('id')
+                    ema_params = block.get('params', {})
+                    ema_period = int(ema_params.get('period', ema_params.get('length', 20)))
+                    if len(closes_so_far) >= ema_period:
+                        ema_vals = ema(closes_so_far, ema_period)
+                        if ema_vals and ema_vals[-1] is not None:
+                            ema_values[node_id] = ema_vals[-1]
+                            latest_data[f'ema_{node_id}'] = ema_vals[-1]
 
-            # Extract signal from result
-            # WorkflowResult has .success and .final_decision
-            # If workflow passes, look for signal block to determine BUY/SELL direction
-            if result and result.success:
-                signal_value = None
+            # Calculate SMA values for each SMA node
+            sma_values = {}  # node_id -> sma_value
+            for block in workflow:
+                if block.get('type') == 'sma':
+                    node_id = block.get('id')
+                    sma_params = block.get('params', {})
+                    sma_period = int(sma_params.get('period', sma_params.get('length', 20)))
+                    if len(closes_so_far) >= sma_period:
+                        sma_vals = sma(closes_so_far, sma_period)
+                        if sma_vals and sma_vals[-1] is not None:
+                            sma_values[node_id] = sma_vals[-1]
+                            latest_data[f'sma_{node_id}'] = sma_vals[-1]
+
+            # Calculate VWAP if needed
+            vwap_values = {}
+            for block in workflow:
+                if block.get('type') == 'vwap':
+                    node_id = block.get('id')
+                    if len(closes_so_far) > 0:
+                        # Calculate VWAP
+                        cumulative_pv = sum(c * v for c, v in zip(closes_so_far, volumes_so_far))
+                        cumulative_vol = sum(volumes_so_far)
+                        if cumulative_vol > 0:
+                            vwap_val = cumulative_pv / cumulative_vol
+                            vwap_values[node_id] = vwap_val
+                            latest_data[f'vwap_{node_id}'] = vwap_val
+
+            # Calculate volume spike for each volume_spike node
+            vol_spike_values = {}
+            for block in workflow:
+                if block.get('type') == 'volume_spike':
+                    node_id = block.get('id')
+                    vs_params = block.get('params', {})
+                    vs_period = int(vs_params.get('period', 20))
+                    vs_mult = float(vs_params.get('multiplier', 1.5))
+                    if len(volumes_so_far) >= vs_period:
+                        avg_vol = sum(volumes_so_far[-vs_period:]) / vs_period
+                        current_vol = volumes_so_far[-1]
+                        is_spike = current_vol > avg_vol * vs_mult
+                        vol_spike_values[node_id] = is_spike
+                        latest_data[f'vol_spike_{node_id}'] = is_spike
+
+            # Calculate RSI values for each RSI node
+            rsi_values = {}
+            for block in workflow:
+                if block.get('type') == 'rsi':
+                    node_id = block.get('id')
+                    rsi_params = block.get('params', {})
+                    rsi_period = int(rsi_params.get('period', rsi_params.get('length', 14)))
+                    if len(closes_so_far) >= rsi_period + 1:
+                        from indicators.rsiIndicator import rsi as calc_rsi
+                        rsi_vals = calc_rsi(closes_so_far, rsi_period)
+                        if rsi_vals and rsi_vals[-1] is not None:
+                            rsi_values[node_id] = rsi_vals[-1]
+                            latest_data[f'rsi_{node_id}'] = rsi_vals[-1]
+                            # Check RSI thresholds and generate boolean signal
+                            oversold = float(rsi_params.get('oversold', rsi_params.get('threshold_low', 30)))
+                            overbought = float(rsi_params.get('overbought', rsi_params.get('threshold_high', 70)))
+                            rsi_val = rsi_vals[-1]
+                            # RSI generates a signal if oversold or overbought
+                            rsi_signal = rsi_val < oversold or rsi_val > overbought
+                            latest_data[f'rsi_signal_{node_id}'] = rsi_signal
+
+            # ═══════════════════════════════════════════════════════════════════════
+            # GRAPH-BASED EXECUTION: Process nodes through connections
+            # ═══════════════════════════════════════════════════════════════════════
+            signal_value = None
+            
+            if connections and len(connections) > 0:
+                # Build node outputs dictionary
+                node_outputs = {}  # node_id -> {port: value}
                 
-                # Check if final_decision already specifies BUY/SELL
-                if result.final_decision and result.final_decision.upper() in ['BUY', 'SELL', 'LONG', 'SHORT']:
-                    signal_value = result.final_decision.upper()
-                    print(f"  [SIGNAL] From final_decision: {signal_value}")
-                else:
-                    # Look for a signal block in the workflow to determine direction
-                    signal_block = next((b for b in workflow if b.get('type') == 'signal'), None)
-                    if signal_block:
-                        # Extract signal from params or data
-                        signal_value = signal_block.get('params', {}).get('signal') or signal_block.get('params', {}).get('action')
-                        if signal_value:
-                            print(f"  [SIGNAL] From signal block params: {signal_value}")
+                # Initialize outputs from indicator nodes
+                for block in workflow:
+                    node_id = block.get('id')
+                    node_type = block.get('type')
+                    node_params = block.get('params', {})
                     
-                    # If no explicit signal yet, infer from RSI condition
-                    if not signal_value:
-                        # Check RSI block for oversold (BUY) or overbought (SELL)
-                        rsi_block = next((b for b in result.blocks if b.block_type == 'rsi' and b.status.value == 'passed'), None)
-                        if rsi_block:
-                            msg_lower = rsi_block.message.lower()
-                            if 'oversold' in msg_lower:
-                                signal_value = 'BUY'
-                                print(f"  [RSI] Oversold detected → BUY")
-                            elif 'overbought' in msg_lower:
-                                signal_value = 'SELL'
-                                print(f"  [RSI] Overbought detected → SELL")
+                    if node_type == 'input':
+                        # Input node outputs the current price
+                        node_outputs[node_id] = {
+                            'prices': latest_data['close'],
+                            'close': latest_data['close'],
+                            'price': latest_data['close']
+                        }
+                    elif node_type == 'volume_history':
+                        node_outputs[node_id] = {
+                            'volumes': latest_data['volume'],
+                            'volume': latest_data['volume']
+                        }
+                    elif node_type == 'ema' and node_id in ema_values:
+                        node_outputs[node_id] = {
+                            'ema': ema_values[node_id],
+                            'value': ema_values[node_id]
+                        }
+                    elif node_type == 'sma' and node_id in sma_values:
+                        node_outputs[node_id] = {
+                            'sma': sma_values[node_id],
+                            'value': sma_values[node_id]
+                        }
+                    elif node_type == 'rsi' and node_id in rsi_values:
+                        rsi_params = block.get('params', {})
+                        oversold = float(rsi_params.get('oversold', 30))
+                        overbought = float(rsi_params.get('overbought', 70))
+                        rsi_val = rsi_values[node_id]
+                        # RSI output can be used for comparison or as a boolean signal
+                        node_outputs[node_id] = {
+                            'rsi': rsi_val,
+                            'value': rsi_val,
+                            'signal': rsi_val < oversold or rsi_val > overbought
+                        }
+                    elif node_type == 'vwap' and node_id in vwap_values:
+                        # VWAP can output the value or a signal (price vs vwap)
+                        vwap_val = vwap_values[node_id]
+                        node_outputs[node_id] = {
+                            'vwap': vwap_val,
+                            'value': vwap_val,
+                            'signal': latest_data['close'] > vwap_val  # True if above VWAP
+                        }
+                    elif node_type == 'volume_spike' and node_id in vol_spike_values:
+                        node_outputs[node_id] = {
+                            'spike': vol_spike_values[node_id],
+                            'signal': vol_spike_values[node_id],
+                            'result': vol_spike_values[node_id]
+                        }
+                    elif node_type == 'bollinger':
+                        if 'bb_upper' in latest_data:
+                            node_outputs[node_id] = {
+                                'upper': latest_data['bb_upper'],
+                                'middle': latest_data['bb_middle'],
+                                'lower': latest_data['bb_lower']
+                            }
+                    elif node_type == 'macd':
+                        if 'macd' in latest_data:
+                            hist = latest_data.get('macd_histogram', 0)
+                            node_outputs[node_id] = {
+                                'macd': latest_data['macd'],
+                                'signal': latest_data.get('macd_signal'),
+                                'histogram': hist,
+                                # MACD signal: positive histogram = bullish
+                                'result': hist > 0 if hist else False
+                            }
+
+                # Build adjacency list from connections
+                connections_from = {}  # node_id -> [(to_node_id, from_port, to_port)]
+                for conn in connections:
+                    from_node = conn.get('from', {}).get('nodeId')
+                    to_node = conn.get('to', {}).get('nodeId')
+                    from_port = conn.get('from', {}).get('port', 'output')
+                    to_port = conn.get('to', {}).get('port', 'input')
+                    if from_node is not None and to_node is not None:
+                        if from_node not in connections_from:
+                            connections_from[from_node] = []
+                        connections_from[from_node].append((to_node, from_port, to_port))
+
+                # Process nodes in topological order (simple iteration until all processed)
+                # Logic nodes: compare, and, or, not
+                max_iterations = 20
+                for iteration in range(max_iterations):
+                    progress = False
+                    for block in workflow:
+                        node_id = block.get('id')
+                        node_type = block.get('type')
+                        node_params = block.get('params', {})
+                        
+                        if node_id in node_outputs and 'result' in node_outputs[node_id]:
+                            continue  # Already computed
+                        
+                        # Get inputs from connected nodes
+                        inputs = {}  # port -> value
+                        for conn in connections:
+                            to_node = conn.get('to', {}).get('nodeId')
+                            if to_node == node_id:
+                                from_node = conn.get('from', {}).get('nodeId')
+                                from_port = conn.get('from', {}).get('port', 'output')
+                                to_port = conn.get('to', {}).get('port', 'input')
+                                if from_node in node_outputs:
+                                    from_outputs = node_outputs[from_node]
+                                    if from_port in from_outputs:
+                                        inputs[to_port] = from_outputs[from_port]
+                                    elif 'value' in from_outputs:
+                                        inputs[to_port] = from_outputs['value']
+                                    elif 'result' in from_outputs:
+                                        inputs[to_port] = from_outputs['result']
+
+                        # Process compare node
+                        if node_type == 'compare':
+                            a_val = inputs.get('a')
+                            b_val = inputs.get('b')
+                            if a_val is not None and b_val is not None:
+                                operator = node_params.get('operator', '>')
+                                try:
+                                    a_num = float(a_val) if not isinstance(a_val, bool) else (1 if a_val else 0)
+                                    b_num = float(b_val) if not isinstance(b_val, bool) else (1 if b_val else 0)
+                                    if operator == '>':
+                                        result = a_num > b_num
+                                    elif operator == '>=':
+                                        result = a_num >= b_num
+                                    elif operator == '<':
+                                        result = a_num < b_num
+                                    elif operator == '<=':
+                                        result = a_num <= b_num
+                                    elif operator == '==':
+                                        result = a_num == b_num
+                                    elif operator == '!=':
+                                        result = a_num != b_num
+                                    else:
+                                        result = False
+                                    node_outputs[node_id] = {'result': result}
+                                    progress = True
+                                except (ValueError, TypeError):
+                                    node_outputs[node_id] = {'result': False}
+                                    progress = True
+
+                        # Process AND gate
+                        elif node_type == 'and':
+                            a_val = inputs.get('a')
+                            b_val = inputs.get('b')
+                            if a_val is not None and b_val is not None:
+                                # Convert to boolean
+                                a_bool = bool(a_val) if not isinstance(a_val, bool) else a_val
+                                b_bool = bool(b_val) if not isinstance(b_val, bool) else b_val
+                                node_outputs[node_id] = {'result': a_bool and b_bool}
+                                progress = True
+
+                        # Process OR gate
+                        elif node_type == 'or':
+                            a_val = inputs.get('a')
+                            b_val = inputs.get('b')
+                            if a_val is not None and b_val is not None:
+                                a_bool = bool(a_val) if not isinstance(a_val, bool) else a_val
+                                b_bool = bool(b_val) if not isinstance(b_val, bool) else b_val
+                                node_outputs[node_id] = {'result': a_bool or b_bool}
+                                progress = True
+
+                        # Process NOT gate
+                        elif node_type == 'not':
+                            a_val = inputs.get('a') or inputs.get('input')
+                            if a_val is not None:
+                                a_bool = bool(a_val) if not isinstance(a_val, bool) else a_val
+                                node_outputs[node_id] = {'result': not a_bool}
+                                progress = True
+
+                        # Process threshold node
+                        elif node_type == 'threshold':
+                            value = inputs.get('value') or inputs.get('a')
+                            if value is not None:
+                                threshold = float(node_params.get('threshold', node_params.get('value', 0)))
+                                direction = node_params.get('direction', 'above').lower()
+                                try:
+                                    val_num = float(value)
+                                    if direction == 'above':
+                                        result = val_num > threshold
+                                    else:
+                                        result = val_num < threshold
+                                    node_outputs[node_id] = {'result': result}
+                                    progress = True
+                                except (ValueError, TypeError):
+                                    pass
+
+                        # Process crossover node
+                        elif node_type == 'crossover':
+                            # Crossover needs current and previous values
+                            # For now, just compare current values
+                            fast = inputs.get('fast') or inputs.get('a')
+                            slow = inputs.get('slow') or inputs.get('b')
+                            if fast is not None and slow is not None:
+                                try:
+                                    direction = node_params.get('direction', 'bullish').lower()
+                                    if direction == 'bullish':
+                                        result = float(fast) > float(slow)
+                                    else:
+                                        result = float(fast) < float(slow)
+                                    node_outputs[node_id] = {'result': result}
+                                    progress = True
+                                except (ValueError, TypeError):
+                                    pass
+
+                        # Process output node - extract the final signal
+                        elif node_type == 'output':
+                            signal_input = inputs.get('signal') or inputs.get('input') or inputs.get('a')
+                            if signal_input is not None:
+                                signal_bool = bool(signal_input) if not isinstance(signal_input, bool) else signal_input
+                                node_outputs[node_id] = {'result': signal_bool, 'signal': signal_bool}
+                                progress = True
+
+                    if not progress:
+                        break  # No more progress possible
+
+                # Extract final signal from output node
+                output_node = next((b for b in workflow if b.get('type') == 'output'), None)
+                if output_node:
+                    output_id = output_node.get('id')
+                    if output_id in node_outputs:
+                        output_result = node_outputs[output_id]
+                        final_signal = output_result.get('result') or output_result.get('signal')
+                        if final_signal:
+                            # Graph produced a signal - determine BUY/SELL from indicator conditions
+                            # Check if it's a bullish or bearish setup
+                            output_params = output_node.get('params', {})
+                            explicit_action = output_params.get('signal') or output_params.get('action')
+                            if explicit_action and explicit_action.upper() in ['BUY', 'SELL', 'LONG', 'SHORT']:
+                                signal_value = 'BUY' if explicit_action.upper() in ['BUY', 'LONG'] else 'SELL'
                             else:
-                                signal_value = 'BUY'  # Default fallback
-                        else:
-                            signal_value = 'BUY'  # Default fallback
-                
-                # Normalize LONG->BUY, SHORT->SELL
-                if signal_value == 'LONG':
-                    signal_value = 'BUY'
-                elif signal_value == 'SHORT':
-                    signal_value = 'SELL'
-                
+                                # Infer direction from connected indicators
+                                # Check RSI for oversold/overbought
+                                for node_id, rsi_val in rsi_values.items():
+                                    rsi_block = next((b for b in workflow if b.get('id') == node_id), None)
+                                    if rsi_block:
+                                        rsi_params = rsi_block.get('params', {})
+                                        oversold = float(rsi_params.get('oversold', 30))
+                                        overbought = float(rsi_params.get('overbought', 70))
+                                        if rsi_val < oversold:
+                                            signal_value = 'BUY'
+                                            break
+                                        elif rsi_val > overbought:
+                                            signal_value = 'SELL'
+                                            break
+                                
+                                # Check EMA crossover direction
+                                if not signal_value and len(ema_values) >= 2:
+                                    ema_list = sorted(ema_values.items(), key=lambda x: x[1])
+                                    # If shorter EMA > longer EMA, bullish
+                                    for block in workflow:
+                                        if block.get('type') == 'compare':
+                                            comp_result = node_outputs.get(block.get('id'), {}).get('result')
+                                            if comp_result:
+                                                signal_value = 'BUY'
+                                                break
+                                
+                                # Check MACD
+                                if not signal_value and 'macd_histogram' in latest_data:
+                                    hist = latest_data['macd_histogram']
+                                    if hist is not None:
+                                        signal_value = 'BUY' if hist > 0 else 'SELL'
+                                
+                                # Check VWAP position
+                                if not signal_value:
+                                    for node_id, vwap_val in vwap_values.items():
+                                        if latest_data['close'] > vwap_val:
+                                            signal_value = 'BUY'
+                                        else:
+                                            signal_value = 'SELL'
+                                        break
+                                
+                                # Default to BUY if we can't determine direction
+                                if not signal_value:
+                                    signal_value = 'BUY'
+                            
+                            if i < 5:
+                                print(f"  [GRAPH] Bar {i}: Graph signal={signal_value}")
+
+            # ═══════════════════════════════════════════════════════════════════════
+            # FALLBACK: Original sequential execution if no graph signal
+            # ═══════════════════════════════════════════════════════════════════════
+            if not signal_value:
+                # Execute workflow for this bar (sequential fallback)
+                result = workflow_engine.execute_workflow(workflow, latest_data)
+
+                # Extract signal from result
+                if result and result.success:
+                    # Strategy 1: Check output/signal block in workflow for explicit action
+                    output_block = next((b for b in workflow if b.get('type') in ['output', 'signal']), None)
+                    if output_block:
+                        params = output_block.get('params', {})
+                        action = params.get('signal') or params.get('action') or params.get('side')
+                        if action and action.upper() in ['BUY', 'SELL', 'LONG', 'SHORT']:
+                            signal_value = 'BUY' if action.upper() in ['BUY', 'LONG'] else 'SELL'
+                            if i < 5:  # Debug first few bars
+                                print(f"  [OUTPUT] Bar {i}: Signal from output block: {signal_value}")
+                    
+                    # Strategy 2: Infer from RSI indicator value and thresholds
+                    if not signal_value and 'rsi' in latest_data:
+                        rsi_val = latest_data['rsi']
+                        # Find RSI block params to get thresholds
+                        rsi_block = next((b for b in workflow if b.get('type') == 'rsi'), None)
+                        if rsi_block:
+                            rsi_params = rsi_block.get('params', {})
+                            oversold = float(rsi_params.get('oversold', rsi_params.get('threshold_low', 30)))
+                            overbought = float(rsi_params.get('overbought', rsi_params.get('threshold_high', 70)))
+                            
+                            if rsi_val < oversold:
+                                signal_value = 'BUY'
+                                if i < 5:
+                                    print(f"  [RSI] Bar {i}: RSI {rsi_val:.2f} < {oversold} → BUY (oversold)")
+                            elif rsi_val > overbought:
+                                signal_value = 'SELL'
+                                if i < 5:
+                                    print(f"  [RSI] Bar {i}: RSI {rsi_val:.2f} > {overbought} → SELL (overbought)")
+                    
+                    # Strategy 3: Infer from RSI block messages (fallback)
+                    if not signal_value and result:
+                        for block_result in result.blocks:
+                            if block_result.block_type == 'rsi' and block_result.status.value == 'passed':
+                                msg_lower = block_result.message.lower()
+                                if 'oversold' in msg_lower or '<' in msg_lower:
+                                    signal_value = 'BUY'
+                                    if i < 5:
+                                        print(f"  [RSI MSG] Bar {i}: Oversold condition → BUY (msg: {block_result.message})")
+                                elif 'overbought' in msg_lower or '>' in msg_lower:
+                                    signal_value = 'SELL'
+                                    if i < 5:
+                                        print(f"  [RSI MSG] Bar {i}: Overbought condition → SELL (msg: {block_result.message})")
+                                break
+                    
+                    # Strategy 4: Infer from MACD crossover
+                    if not signal_value and result:
+                        for block_result in result.blocks:
+                            if block_result.block_type == 'macd' and block_result.status.value == 'passed':
+                                msg_lower = block_result.message.lower()
+                                if 'above' in msg_lower or 'bullish' in msg_lower or 'positive' in msg_lower:
+                                    signal_value = 'BUY'
+                                    if i < 5:
+                                        print(f"  [MACD] Bar {i}: Bullish signal → BUY")
+                                elif 'below' in msg_lower or 'bearish' in msg_lower or 'negative' in msg_lower:
+                                    signal_value = 'SELL'
+                                    if i < 5:
+                                        print(f"  [MACD] Bar {i}: Bearish signal → SELL")
+                                break
+                    
+                    # Strategy 5: Infer from Bollinger Bands
+                    if not signal_value and result:
+                        for block_result in result.blocks:
+                            if block_result.block_type in ['bollinger', 'bollingerBands'] and block_result.status.value == 'passed':
+                                msg_lower = block_result.message.lower()
+                                if 'below lower' in msg_lower or 'oversold' in msg_lower:
+                                    signal_value = 'BUY'
+                                    if i < 5:
+                                        print(f"  [BB] Bar {i}: Below lower band → BUY")
+                                elif 'above upper' in msg_lower or 'overbought' in msg_lower:
+                                    signal_value = 'SELL'
+                                    if i < 5:
+                                        print(f"  [BB] Bar {i}: Above upper band → SELL")
+                                break
+            
+            # ═══════════════════════════════════════════════════════════════════════
+            # ADD SIGNAL TO LIST (works for both graph and fallback paths)
+            # ═══════════════════════════════════════════════════════════════════════
+            if signal_value:
                 # Only add signal if it's different from the last one (deduplication)
                 last_signal = signals[-1]['signal'] if signals else None
-                if signal_value in ['BUY', 'SELL']:
-                    if signal_value != last_signal:
-                        # Signal changed - this is a valid entry/exit
-                        signals.append({
-                            'time': bar['t'],
-                            'timestamp': bar['t'],
-                            'signal': signal_value,
-                            'price': bar['c'],
-                            'close': bar['c']
-                        })
-                        print(f"  📍 Bar {i+1}/{len(historical_data)}: {signal_value} @ ${bar['c']:.2f} | time={bar['t']} [Total signals: {len(signals)}]")
-                    else:
-                        # Same signal repeated - skip it
-                        print(f"  [SKIP] Bar {i+1}/{len(historical_data)}: {signal_value} (duplicate, last was {last_signal})")
+                if signal_value != last_signal:
+                    # Signal changed - this is a valid entry/exit
+                    signals.append({
+                        'time': bar['t'],
+                        'timestamp': bar['t'],
+                        'signal': signal_value,
+                        'price': bar['c'],
+                        'close': bar['c']
+                    })
+                    print(f"  📍 Bar {i+1}/{len(historical_data)}: {signal_value} @ ${bar['c']:.2f} | time={bar['t']} [Total signals: {len(signals)}]")
+            elif i < 5:
+                print(f"  [SKIP] Bar {i}: No signal generated")
 
         print(f"✅ Generated {len(signals)} signals from backtest")
         

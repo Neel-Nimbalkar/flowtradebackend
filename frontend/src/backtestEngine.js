@@ -217,6 +217,8 @@ async function generateSignals(workflow, historicalData, symbol, timeframe, back
 
     // Prepare workflow blocks - handle both direct array and object with nodes property
     let workflowBlocks;
+    let connections = [];
+    
     if (Array.isArray(workflow)) {
       // Workflow is already an array of nodes
       workflowBlocks = workflow.map(n => ({
@@ -231,16 +233,21 @@ async function generateSignals(workflow, historicalData, symbol, timeframe, back
         type: n.type,
         params: n.configValues || n.params || {}
       }));
+      // Also extract connections if present
+      if (workflow.connections && Array.isArray(workflow.connections)) {
+        connections = workflow.connections;
+      }
     } else {
       throw new Error('Invalid workflow format - expected array or object with nodes');
     }
 
-    console.log(`[BacktestEngine] Prepared ${workflowBlocks.length} workflow blocks`, workflowBlocks);
+    console.log(`[BacktestEngine] Prepared ${workflowBlocks.length} workflow blocks, ${connections.length} connections`);
 
     const payload = {
       symbol,
       timeframe,
       workflow: workflowBlocks,
+      connections: connections, // Include connections for graph-based execution
       historicalData, // Pass all historical data
       backtestMode: true,
       alpacaKeyId,
