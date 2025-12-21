@@ -388,7 +388,7 @@ function preparePayload(strategy) {
     days,
     workflow: workflow_blocks,
     connections: connections,  // ✅ Include connections for graph-based execution
-    priceType: 'current',
+    priceType: 'close',  // 🔧 Changed from 'current' to 'close' for 24/7 availability
     alpacaKeyId,
     alpacaSecretKey
   };

@@ -34,5 +34,17 @@
         "source": "StrategyRunner"
       }
     }
+  },
+  "LCID RSI": {
+    "position": "LONG",
+    "last_signal": "BUY",
+    "open_trade": {
+      "entry_price": 11.8,
+      "entry_ts": "2025-12-21T20:51:51.683Z",
+      "side": "LONG",
+      "meta": {
+        "source": "StrategyRunner"
+      }
+    }
   }
 }

@@ -56,7 +56,7 @@ const strategyTemplates = {
     nodes: [
       { id: 1, type: 'input', x: 80, y: 120, title: 'Price Input', configValues: { symbol: 'SPY', timeframe: '1Min', days: 1 } },
       { id: 2, type: 'volume_history', x: 80, y: 260, title: 'Volume Data', configValues: {} },
-      { id: 3, type: 'vwap', x: 280, y: 180, title: 'VWAP', configValues: { output: 'signal' } },
+      { id: 3, type: 'vwap', x: 280, y: 180, title: 'VWAP', configValues: { output: 'signal', condition: 'near' } },
       { id: 4, type: 'rsi', x: 280, y: 300, title: 'RSI Momentum', configValues: { period: 7, source: 'close', overbought: 70, oversold: 30 } },
       { id: 5, type: 'and', x: 480, y: 220, title: 'Confirm Entry', configValues: {} },
       { id: 6, type: 'output', x: 680, y: 220, title: 'Signal Output', configValues: {} },
@@ -66,8 +66,8 @@ const strategyTemplates = {
       { id: 'c1', from: { nodeId: 1, port: 'prices' }, to: { nodeId: 3, port: 'prices' } },
       { id: 'c2', from: { nodeId: 2, port: 'volumes' }, to: { nodeId: 3, port: 'volumes' } },
       { id: 'c3', from: { nodeId: 1, port: 'prices' }, to: { nodeId: 4, port: 'prices' } },
-      { id: 'c4', from: { nodeId: 3, port: 'vwap' }, to: { nodeId: 5, port: 'a' } },
-      { id: 'c5', from: { nodeId: 4, port: 'rsi' }, to: { nodeId: 5, port: 'b' } },
+      { id: 'c4', from: { nodeId: 3, port: 'signal' }, to: { nodeId: 5, port: 'a' } },
+      { id: 'c5', from: { nodeId: 4, port: 'signal' }, to: { nodeId: 5, port: 'b' } },
       { id: 'c6', from: { nodeId: 5, port: 'result' }, to: { nodeId: 6, port: 'signal' } }
     ]
   },
@@ -201,7 +201,7 @@ const strategyTemplates = {
       { id: 'c3', from: { nodeId: 1, port: 'prices' }, to: { nodeId: 4, port: 'prices' } },
       { id: 'c4', from: { nodeId: 1, port: 'prices' }, to: { nodeId: 5, port: 'prices' } },
       { id: 'c5', from: { nodeId: 4, port: 'atr' }, to: { nodeId: 6, port: 'b' } },
-      { id: 'c6', from: { nodeId: 5, port: 'rsi' }, to: { nodeId: 7, port: 'a' } },
+      { id: 'c6', from: { nodeId: 5, port: 'signal' }, to: { nodeId: 7, port: 'a' } },
       { id: 'c7', from: { nodeId: 6, port: 'result' }, to: { nodeId: 7, port: 'b' } },
       { id: 'c8', from: { nodeId: 7, port: 'result' }, to: { nodeId: 8, port: 'signal' } }
     ]
@@ -231,10 +231,10 @@ const strategyTemplates = {
       { id: 'c1', from: { nodeId: 1, port: 'prices' }, to: { nodeId: 3, port: 'prices' } },
       { id: 'c2', from: { nodeId: 2, port: 'volumes' }, to: { nodeId: 4, port: 'volumes' } },
       { id: 'c3', from: { nodeId: 1, port: 'prices' }, to: { nodeId: 5, port: 'prices' } },
-      { id: 'c4', from: { nodeId: 3, port: 'rsi' }, to: { nodeId: 6, port: 'a' } },
+      { id: 'c4', from: { nodeId: 3, port: 'signal' }, to: { nodeId: 6, port: 'a' } },
       { id: 'c5', from: { nodeId: 4, port: 'spike' }, to: { nodeId: 6, port: 'b' } },
       { id: 'c6', from: { nodeId: 6, port: 'result' }, to: { nodeId: 7, port: 'a' } },
-      { id: 'c7', from: { nodeId: 5, port: 'stoch' }, to: { nodeId: 7, port: 'b' } },
+      { id: 'c7', from: { nodeId: 5, port: 'signal' }, to: { nodeId: 7, port: 'b' } },
       { id: 'c8', from: { nodeId: 7, port: 'result' }, to: { nodeId: 8, port: 'signal' } }
     ]
   },
@@ -270,7 +270,7 @@ const strategyTemplates = {
       { id: 'c7', from: { nodeId: 6, port: 'result' }, to: { nodeId: 7, port: 'a' } },
       { id: 'c8', from: { nodeId: 3, port: 'spike' }, to: { nodeId: 7, port: 'b' } },
       { id: 'c9', from: { nodeId: 7, port: 'result' }, to: { nodeId: 8, port: 'a' } },
-      { id: 'c10', from: { nodeId: 5, port: 'ema' }, to: { nodeId: 8, port: 'b' } },
+      { id: 'c10', from: { nodeId: 5, port: 'signal' }, to: { nodeId: 8, port: 'b' } },
       { id: 'c11', from: { nodeId: 8, port: 'result' }, to: { nodeId: 9, port: 'signal' } }
     ]
   },
@@ -288,22 +288,17 @@ const strategyTemplates = {
       { id: 1, type: 'input', x: 80, y: 150, title: 'Price Input', configValues: { symbol: 'SPY', timeframe: '1Min', days: 1 } },
       { id: 2, type: 'volume_history', x: 80, y: 300, title: 'Volume Data', configValues: {} },
       { id: 3, type: 'volume_spike', x: 280, y: 300, title: 'Volume Surge', configValues: { period: 20, multiplier: 3.0 } },
-      { id: 4, type: 'atr', x: 280, y: 150, title: 'ATR (Volatility)', configValues: { period: 14, source: 'close' } },
-      { id: 5, type: 'macd', x: 480, y: 80, title: 'MACD Momentum', configValues: { fast: 12, slow: 26, signal: 9, source: 'close', output: 'histogram' } },
-      { id: 6, type: 'and', x: 480, y: 250, title: 'News Spike', configValues: {} },
-      { id: 7, type: 'and', x: 680, y: 180, title: 'Direction Confirm', configValues: {} },
-      { id: 8, type: 'output', x: 880, y: 180, title: 'Signal Output', configValues: {} },
-      { id: 9, type: 'note', x: 80, y: 460, title: 'Strategy Notes', configValues: { content: 'NEWS MOMENTUM\n\nTrigger: Relative volume surge (3x+ normal)\nEntry: Direction of strong candles post-news\nExit: Momentum stall (MACD histogram shrinking)\nRisk: Volatility-adjusted stop (1-2 ATR)\n\nKey: Quick reaction required, use hotkeys\nCaution: Wide spreads during news events' } }
+      { id: 4, type: 'macd', x: 280, y: 150, title: 'MACD Momentum', configValues: { fast: 12, slow: 26, signal: 9, source: 'close', output: 'histogram' } },
+      { id: 5, type: 'and', x: 480, y: 220, title: 'News Signal', configValues: {} },
+      { id: 6, type: 'output', x: 680, y: 220, title: 'Signal Output', configValues: {} },
+      { id: 7, type: 'note', x: 80, y: 460, title: 'Strategy Notes', configValues: { content: 'NEWS MOMENTUM\n\nTrigger: Relative volume surge (3x+ normal)\nEntry: Direction of strong candles post-news (MACD bullish)\nExit: Momentum stall (MACD histogram shrinking)\n\nKey: Quick reaction required, use hotkeys\nCaution: Wide spreads during news events' } }
     ],
     connections: [
-      { id: 'c1', from: { nodeId: 1, port: 'prices' }, to: { nodeId: 4, port: 'prices' } },
-      { id: 'c2', from: { nodeId: 2, port: 'volumes' }, to: { nodeId: 3, port: 'volumes' } },
-      { id: 'c3', from: { nodeId: 1, port: 'prices' }, to: { nodeId: 5, port: 'prices' } },
-      { id: 'c4', from: { nodeId: 3, port: 'spike' }, to: { nodeId: 6, port: 'a' } },
-      { id: 'c5', from: { nodeId: 4, port: 'atr' }, to: { nodeId: 6, port: 'b' } },
-      { id: 'c6', from: { nodeId: 6, port: 'result' }, to: { nodeId: 7, port: 'a' } },
-      { id: 'c7', from: { nodeId: 5, port: 'macd' }, to: { nodeId: 7, port: 'b' } },
-      { id: 'c8', from: { nodeId: 7, port: 'result' }, to: { nodeId: 8, port: 'signal' } }
+      { id: 'c1', from: { nodeId: 2, port: 'volumes' }, to: { nodeId: 3, port: 'volumes' } },
+      { id: 'c2', from: { nodeId: 1, port: 'prices' }, to: { nodeId: 4, port: 'prices' } },
+      { id: 'c3', from: { nodeId: 3, port: 'spike' }, to: { nodeId: 5, port: 'a' } },
+      { id: 'c4', from: { nodeId: 4, port: 'signal' }, to: { nodeId: 5, port: 'b' } },
+      { id: 'c5', from: { nodeId: 5, port: 'result' }, to: { nodeId: 6, port: 'signal' } }
     ]
   },
 
@@ -369,10 +364,10 @@ const strategyTemplates = {
       { id: 'c1', from: { nodeId: 1, port: 'prices' }, to: { nodeId: 2, port: 'prices' } },
       { id: 'c2', from: { nodeId: 1, port: 'prices' }, to: { nodeId: 3, port: 'prices' } },
       { id: 'c3', from: { nodeId: 1, port: 'prices' }, to: { nodeId: 4, port: 'prices' } },
-      { id: 'c4', from: { nodeId: 2, port: 'rsi' }, to: { nodeId: 5, port: 'a' } },
-      { id: 'c5', from: { nodeId: 3, port: 'stoch' }, to: { nodeId: 5, port: 'b' } },
+      { id: 'c4', from: { nodeId: 2, port: 'signal' }, to: { nodeId: 5, port: 'a' } },
+      { id: 'c5', from: { nodeId: 3, port: 'signal' }, to: { nodeId: 5, port: 'b' } },
       { id: 'c6', from: { nodeId: 5, port: 'result' }, to: { nodeId: 6, port: 'a' } },
-      { id: 'c7', from: { nodeId: 4, port: 'macd' }, to: { nodeId: 6, port: 'b' } },
+      { id: 'c7', from: { nodeId: 4, port: 'signal' }, to: { nodeId: 6, port: 'b' } },
       { id: 'c8', from: { nodeId: 6, port: 'result' }, to: { nodeId: 7, port: 'signal' } }
     ]
   },

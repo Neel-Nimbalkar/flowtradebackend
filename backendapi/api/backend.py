@@ -926,6 +926,12 @@ def execute_workflow():
     """
     try:
         data = request.json
+        if not data:
+            print("❌ ERROR: request.json is None or empty")
+            return jsonify({'error': 'Empty request body'}), 400
+        
+        print(f"📥 Received request with keys: {list(data.keys())}")
+        
         symbol = data.get('symbol', 'SPY')
         timeframe = data.get('timeframe', '1Hour')
         days = parse_days(data.get('days', 7), default=7)
@@ -949,16 +955,32 @@ def execute_workflow():
         
         print(f"🔄 Executing workflow: {symbol} {timeframe} {days}d - {len(workflow_blocks)} blocks, {len(connections)} connections - Price Type: {price_type}")
         
-        # Fetch data from Alpaca
+        # Fetch data from Alpaca - extend lookback for weekends/holidays
         end_date = datetime.now()
-        start_date = end_date - timedelta(days=days)
+        # Add extra days to account for weekends/holidays (markets closed Sat/Sun + holidays)
+        # For 1 day lookback, use 4 days to ensure we get data even on Monday morning
+        extended_days = max(days + 3, days * 2) if days <= 3 else days + 5
+        start_date = end_date - timedelta(days=extended_days)
         start_str = start_date.strftime('%Y-%m-%dT%H:%M:%SZ')
         end_str = end_date.strftime('%Y-%m-%dT%H:%M:%SZ')
         
         bars = fetch_bars_full(symbol, start_str, end_str, timeframe, api_key=alpaca_key_id, api_secret=alpaca_secret_key)
         
+        # If still no data, try an even longer lookback (handles long holiday weekends)
         if not bars['close']:
-            return jsonify({'error': 'No data returned from Alpaca'}), 400
+            print(f"⚠️ No data with {extended_days}d lookback, trying 14 days...")
+            start_date = end_date - timedelta(days=14)
+            start_str = start_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+            bars = fetch_bars_full(symbol, start_str, end_str, timeframe, api_key=alpaca_key_id, api_secret=alpaca_secret_key)
+        
+        if not bars['close']:
+            error_msg = f'No data returned from Alpaca for {symbol} {timeframe} ({start_str} to {end_str})'
+            if not alpaca_key_id or not alpaca_secret_key:
+                error_msg += ' - Missing Alpaca API credentials. Please configure API keys in Settings.'
+            else:
+                error_msg += ' - Check if market is open or try a different timeframe/symbol.'
+            print(f"❌ {error_msg}")
+            return jsonify({'error': error_msg}), 400
         
         # Extract OHLCV
         opens = bars['open']
@@ -1127,6 +1149,53 @@ def execute_workflow():
                 latest_data['stoch_k'] = k_vals[-1]
         
         # ═══════════════════════════════════════════════════════════════════════
+        # ATR (Average True Range) calculation
+        # ═══════════════════════════════════════════════════════════════════════
+        if 'atr' in block_types:
+            atr_params = indicator_params.get('atr', {})
+            atr_period = int(atr_params.get('period', 14))
+            atr_vals = atr(highs, lows, closes, atr_period)
+            if atr_vals and atr_vals[-1] is not None:
+                latest_data['atr'] = atr_vals[-1]
+                print(f"[INFO] Computed ATR({atr_period}): {latest_data['atr']:.4f}")
+        
+        # ═══════════════════════════════════════════════════════════════════════
+        # Support/Resistance calculation (simple pivot-based levels)
+        # ═══════════════════════════════════════════════════════════════════════
+        if 'support_resistance' in block_types:
+            sr_params = indicator_params.get('support_resistance', {})
+            lookback = int(sr_params.get('lookback', 20))
+            
+            # Calculate support and resistance using recent highs/lows
+            if len(closes) >= lookback:
+                recent_highs = highs[-lookback:]
+                recent_lows = lows[-lookback:]
+                recent_closes = closes[-lookback:]
+                
+                # Resistance = highest high in lookback
+                # Support = lowest low in lookback
+                resistance = max(recent_highs) if recent_highs else None
+                support = min(recent_lows) if recent_lows else None
+                
+                # Optional: use pivot points for more sophisticated S/R
+                # Classic Pivot: PP = (H + L + C) / 3
+                if recent_highs and recent_lows and recent_closes:
+                    h = recent_highs[-1]
+                    l = recent_lows[-1]
+                    c = recent_closes[-1]
+                    pivot = (h + l + c) / 3
+                    # R1 = 2*PP - L, S1 = 2*PP - H
+                    r1 = 2 * pivot - l
+                    s1 = 2 * pivot - h
+                    
+                    latest_data['support'] = support
+                    latest_data['resistance'] = resistance
+                    latest_data['pivot'] = pivot
+                    latest_data['r1'] = r1
+                    latest_data['s1'] = s1
+                    print(f"[INFO] Computed S/R: Support=${support:.2f}, Resistance=${resistance:.2f}, Pivot=${pivot:.2f}")
+        
+        # ═══════════════════════════════════════════════════════════════════════
         # UNIFIED EXECUTION: Use UnifiedStrategyExecutor when connections provided
         # This ensures live signals use the SAME execution path as backtesting
         # ═══════════════════════════════════════════════════════════════════════
@@ -1156,11 +1225,18 @@ def execute_workflow():
                     market_data=market_data_for_unified,
                     debug=True
                 )
+                # ENHANCED DEBUG: Show node outputs to trace false signals
                 print(f"  [UNIFIED LIVE] Signal={unified_signal}, nodes={unified_debug.get('nodes_count')}, connections={unified_debug.get('connections_count')}")
+                print(f"  [UNIFIED DEBUG] final_condition={unified_debug.get('final_condition')}, signal_direction={unified_debug.get('signal_direction')}")
+                if unified_debug.get('node_outputs'):
+                    for nid, outputs in unified_debug.get('node_outputs', {}).items():
+                        print(f"    Node {nid}: {outputs}")
             except Exception as ue:
                 print(f"  [UNIFIED ERROR] {ue}")
                 import traceback
                 traceback.print_exc()
+        else:
+            print(f"  [UNIFIED SKIP] No connections provided ({len(connections) if connections else 0} connections)")
         
         # Execute workflow sequentially (fallback / AI agent blocks are skipped here)
         workflow_result = workflow_engine.execute_workflow(workflow_blocks, latest_data)
@@ -1718,29 +1794,165 @@ def _build_v2_response(symbol: str, timeframe: str, days: int, engine_resp: Dict
     start_ts = ts[0] if ts else None
     end_ts = ts[-1] if ts else None
     blocks_raw = engine_resp.get('blocks', [])
+    
+    # ═══════════════════════════════════════════════════════════════════════
+    # FIX: Sort blocks according to unified executor's topological order
+    # This ensures blocks appear in proper execution order (input → indicators → logic → output)
+    # ═══════════════════════════════════════════════════════════════════════
+    unified_debug = engine_resp.get('unified_debug', {})
+    execution_order = unified_debug.get('execution_order', [])
+    
+    if execution_order and blocks_raw:
+        # Create a map of block_id to position in topological order
+        # The execution_order contains node IDs in correct dependency order
+        order_map = {}
+        for pos, node_id in enumerate(execution_order):
+            # Handle both string and int node IDs
+            order_map[str(node_id)] = pos
+            order_map[int(node_id) if str(node_id).isdigit() else node_id] = pos
+        
+        # Type-based priority for fallback (when block_id not in execution_order)
+        type_priority = {
+            'input': 0, 'symbol': 1, 'timeframe': 2, 'config': 3, 'alpaca_config': 4,
+            'volume_history': 5,
+            'rsi': 100, 'ema': 101, 'sma': 102, 'macd': 103, 'bollinger': 104,
+            'stochastic': 105, 'vwap': 106, 'obv': 107, 'atr': 108, 'volspike': 109,
+            'volume_spike': 109, 'support_resistance': 110, 'trendline': 111,
+            'compare': 200,
+            'and': 300, 'or': 301, 'not': 302,
+            'signal': 400, 'output': 401
+        }
+        
+        # Sort blocks_raw by their position in the topological order
+        def get_sort_key(block):
+            block_id = block.get('block_id')
+            block_type = block.get('block_type', '')
+            
+            # Primary: use execution_order position if available
+            if block_id is not None:
+                if str(block_id) in order_map:
+                    return (order_map[str(block_id)], 0)  # (position, tie-breaker)
+                if block_id in order_map:
+                    return (order_map[block_id], 0)
+            
+            # Fallback: use type-based priority
+            priority = type_priority.get(block_type, 150)
+            return (priority, block_id if block_id is not None else 9999)
+        
+        blocks_raw = sorted(blocks_raw, key=get_sort_key)
+        print(f"[DIAG] Sorted blocks by topological order: {[(b.get('block_id'), b.get('block_type')) for b in blocks_raw]}")
+    
     # Map block types to friendly names/emojis
     icon_map = {
         'rsi': ('⚡', 'RSI'), 'ema': ('⚡', 'EMA'), 'sma': ('⚡', 'SMA'), 'macd': ('⚡', 'MACD'),
         'bollinger': ('⚡', 'Bollinger Bands'), 'vwap': ('⚡', 'VWAP'), 'stochastic': ('⚡', 'Stochastic'),
         'obv': ('💧', 'OBV'), 'trendline': ('⚡', 'Trendline'), 'volspike': ('💧', 'Volume Spike'),
+        'atr': ('📊', 'ATR'), 'support_resistance': ('📈', 'Support/Resistance'),
         'and': ('➕', 'AND Gate'), 'or': ('➕', 'OR Gate'), 'not': ('➕', 'NOT Gate'),
         'compare': ('➕', 'Compare'), 'ai_agent': ('🤖', 'AI Agent')
     }
+    
+    # ═══════════════════════════════════════════════════════════════════════
+    # FIX: Use unified executor's node_outputs to get correct AND/OR gate results
+    # The sequential engine doesn't understand graph connections, but unified executor does
+    # ═══════════════════════════════════════════════════════════════════════
+    node_outputs = unified_debug.get('node_outputs', {})
+    
+    # Debug: log node_outputs keys vs blocks_raw block_ids
+    print(f"[V2 DEBUG] node_outputs keys: {list(node_outputs.keys()) if node_outputs else 'EMPTY'}")
+    print(f"[V2 DEBUG] blocks_raw block_ids: {[b.get('block_id') for b in blocks_raw]}")
+    
     blocks_v2: List[Dict[str, Any]] = []
     for i, b in enumerate(blocks_raw):
-        ico, nm = icon_map.get(b.get('block_type'), ('🧩', b.get('block_type')))
+        block_id = b.get('block_id', i)
+        block_type = b.get('block_type')
+        ico, nm = icon_map.get(block_type, ('🧩', block_type))
+        
+        # Default values from sequential engine
         status = str(b.get('status', 'skipped')).lower()
+        message = b.get('message') or ''
+        block_data = b.get('data') or {}
+        
+        # ═══════════════════════════════════════════════════════════════════
+        # OVERRIDE with unified executor results for logic gates and indicators
+        # This fixes the "AND gate missing input(s)" issue
+        # ═══════════════════════════════════════════════════════════════════
+        
+        # Debug for logic gates
+        if block_type in ['and', 'or', 'not']:
+            print(f"[V2 LOGIC] block_id={block_id}, type={block_type}, checking node_outputs...")
+            print(f"[V2 LOGIC]   str(block_id) in node_outputs: {str(block_id) in node_outputs if node_outputs else 'EMPTY'}")
+        
+        if node_outputs and str(block_id) in node_outputs:
+            unified_output = node_outputs[str(block_id)]
+            
+            if block_type in ['and', 'or', 'not']:
+                print(f"[V2 LOGIC]   FOUND! unified_output = {unified_output}")
+            
+            # Get the result from unified executor
+            result = unified_output.get('result')
+            if result is None:
+                result = unified_output.get('value')
+            if result is None:
+                result = unified_output.get('signal')
+            
+            # For AND/OR/NOT gates, use the unified executor's actual evaluation
+            if block_type in ['and', 'or', 'not']:
+                if result is True:
+                    status = 'passed'
+                    # Build message showing actual inputs
+                    a_val = unified_output.get('a', 'N/A')
+                    b_val = unified_output.get('b', 'N/A')
+                    if block_type == 'and':
+                        message = f"AND({a_val}, {b_val}) = True"
+                    elif block_type == 'or':
+                        message = f"OR({a_val}, {b_val}) = True"
+                    elif block_type == 'not':
+                        message = f"NOT({a_val}) = True"
+                elif result is False:
+                    status = 'failed'
+                    a_val = unified_output.get('a', 'N/A')
+                    b_val = unified_output.get('b', 'N/A')
+                    if block_type == 'and':
+                        message = f"AND({a_val}, {b_val}) = False"
+                    elif block_type == 'or':
+                        message = f"OR({a_val}, {b_val}) = False"
+                    elif block_type == 'not':
+                        message = f"NOT({a_val}) = False"
+                print(f"[V2 LOGIC]   OVERRIDE: status={status} message={message}")
+                block_data = {'condition_met': result, 'unified_output': unified_output}
+            
+            # For compare nodes
+            elif block_type == 'compare':
+                if result is True:
+                    status = 'passed'
+                elif result is False:
+                    status = 'failed'
+                a_val = unified_output.get('a', unified_output.get('value'))
+                b_val = unified_output.get('b', unified_output.get('threshold'))
+                op = unified_output.get('operator', '>')
+                message = f"{a_val} {op} {b_val} = {result}"
+                block_data = {'condition_met': result, 'unified_output': unified_output}
+            
+            # For indicators, include computed values
+            elif block_type in ['rsi', 'ema', 'sma', 'macd', 'bollinger', 'stochastic', 'vwap', 'obv', 'atr']:
+                # Indicators pass if they computed a value
+                has_value = any(v is not None for k, v in unified_output.items() if k not in ['signal', 'result'])
+                if has_value:
+                    status = 'passed'
+                block_data = {'condition_met': True, 'unified_output': unified_output, **unified_output}
+        
         blocks_v2.append({
-            'id': b.get('block_id', i),
-            'type': b.get('block_type'),
+            'id': block_id,
+            'type': block_type,
             'emoji': ico,
             'name': nm,
             'status': 'passed' if status == 'passed' else ('failed' if status == 'failed' else 'skipped'),
-            'outputs': b.get('data') or {},
-            'params': b.get('data') or {},
-            'logs': b.get('logs') or ([b.get('message')] if b.get('message') else []),
-            'explanation': b.get('message') or '',
-            'failReason': b.get('message') if status == 'failed' else None,
+            'outputs': block_data,
+            'params': block_data,
+            'logs': [message] if message else [],
+            'explanation': message,
+            'failReason': message if status == 'failed' else None,
             'executionTimeMs': float(b.get('execution_time_ms', 0) or 0),
             'raw': b
         })
@@ -1779,10 +1991,21 @@ def _build_v2_response(symbol: str, timeframe: str, days: int, engine_resp: Dict
     # Decide signal mapping
     # ✅ Use unified_signal if available (takes precedence over inference)
     unified_signal = engine_resp.get('unified_signal')
+    unified_debug = engine_resp.get('unified_debug', {})
+    has_connections = unified_debug.get('connections_count', 0) > 0
+    
     if unified_signal:
+        # Unified executor returned a signal (BUY or SELL) - use it
         final_signal = unified_signal
         print(f"[DIAG] Using unified_signal={final_signal}")
+    elif has_connections and unified_signal is None:
+        # ✅ FIX: Unified executor was used (has connections) but returned None
+        # This means workflow conditions were NOT met (e.g., AND gate failed)
+        # Do NOT fall back to inference - respect the unified executor's decision
+        final_signal = 'HOLD'
+        print(f"[DIAG] Unified executor returned None (conditions not met) -> HOLD")
     else:
+        # Fallback for sequential (non-graph) workflows without connections
         final_decision = (engine_resp.get('final_decision') or '')
         final_decision_up = str(final_decision).upper()
         final_signal = 'HOLD'

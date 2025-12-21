@@ -12,7 +12,7 @@ const blockDefs = {
     ]
   },
   input: {
-    name: 'Price Input', icon: 'inbox', color: 'color-input', inputs: ['symbol','timeframe','days'], outputs: ['prices','volumes'],
+    name: 'Price Input', icon: 'inbox', color: 'color-input', inputs: [], outputs: ['prices','volumes'],
     config: [
       { key: 'symbol', label: 'Symbol', type: 'text', value: 'SPY' },
       { key: 'timeframe', label: 'Timeframe', type: 'select', options: ['1Min','5Min','15Min','1Hour','1Day'], value: '1Hour' },
@@ -20,14 +20,22 @@ const blockDefs = {
     ]
   },
   price_history: {
-    name: 'Price History', icon: 'chart', color: 'color-input', inputs: ['symbol','timeframe','days'], outputs: ['prices'],
+    name: 'Price History', icon: 'chart', color: 'color-input', inputs: [], outputs: ['prices'],
     // Use global Alpaca config for symbol/timeframe/days
-    config: []
+    config: [
+      { key: 'symbol', label: 'Symbol', type: 'text', value: 'SPY' },
+      { key: 'timeframe', label: 'Timeframe', type: 'select', options: ['1Min','5Min','15Min','1Hour','1Day'], value: '1Hour' },
+      { key: 'days', label: 'Days', type: 'number', value: 7 }
+    ]
   },
   volume_history: {
-    name: 'Volume History', icon: 'chart', color: 'color-volume', inputs: ['symbol','timeframe','days'], outputs: ['volumes'],
+    name: 'Volume History', icon: 'chart', color: 'color-volume', inputs: [], outputs: ['volumes'],
     // Use global Alpaca config for symbol/timeframe/days
-    config: []
+    config: [
+      { key: 'symbol', label: 'Symbol', type: 'text', value: 'SPY' },
+      { key: 'timeframe', label: 'Timeframe', type: 'select', options: ['1Min','5Min','15Min','1Hour','1Day'], value: '1Hour' },
+      { key: 'days', label: 'Days', type: 'number', value: 7 }
+    ]
   },
   // Indicators
   rsi: {

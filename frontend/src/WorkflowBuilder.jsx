@@ -378,7 +378,14 @@ const WorkflowBuilder = ({ onNavigate }) => {
     let strategy_name = null;
     try { strategy_name = localStorage.getItem('workflow_active_id') || null; } catch (e) {}
 
-    return { symbol, timeframe, days, workflow: workflow_blocks, priceType: 'current', alpacaKeyId, alpacaSecretKey, strategy_name };
+    // Include connections for graph-based execution
+    const connectionsPayload = (connections || []).map(c => ({
+      id: c.id,
+      from: { nodeId: c.from?.nodeId || c.fromNodeId, port: c.from?.port || c.fromPort },
+      to: { nodeId: c.to?.nodeId || c.toNodeId, port: c.to?.port || c.toPort }
+    }));
+
+    return { symbol, timeframe, days, workflow: workflow_blocks, connections: connectionsPayload, priceType: 'current', alpacaKeyId, alpacaSecretKey, strategy_name };
   };
 
   // Execute a single workflow request. Returns parsed JSON or throws. Accepts optional AbortSignal.
