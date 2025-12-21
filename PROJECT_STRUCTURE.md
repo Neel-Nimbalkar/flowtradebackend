@@ -3,27 +3,32 @@
 ## Overview
 FlowGrid Trading is a comprehensive trading strategy platform with visual workflow builder, backtesting engine, and real-time analytics.
 
-## Project Structure
+## Clean Project Structure
 
 ```
 FlowGrid Trading/
-├── backendapi/                 # Backend API & Services
+├── backendapi/                 # Backend API & Services (ALL BACKEND CODE HERE)
 │   ├── api/                    # API endpoints & WebSocket server
-│   │   ├── backend.py         # Main Flask API server
+│   │   ├── backend.py         # Main Flask API server (ACTIVE)
+│   │   ├── trade_engine.py    # Trade execution engine
+│   │   ├── analytics_api.py   # Analytics endpoints
+│   │   ├── dashboard_api.py   # Dashboard endpoints
 │   │   └── flowgrid_ws.py     # WebSocket server for real-time updates
+│   │
+│   ├── workflows/              # Workflow engine & orchestration
+│   │   ├── workflow_engine.py         # Core workflow engine
+│   │   ├── unified_executor.py        # Graph-based unified executor
+│   │   ├── flowgrid_nodes.py          # Node definitions
+│   │   ├── flowgrid_orchestrator.py   # Workflow orchestrator
+│   │   ├── flowgrid_realtime.py       # Real-time workflow execution
+│   │   ├── graph_executor.py          # Graph execution logic
+│   │   └── run_workflow*.py           # Workflow runners
 │   │
 │   ├── indicators/             # Technical indicators
 │   │   ├── bollingerBands.py
 │   │   ├── macdIndicator.py
-│   │   └── rsiIndicator.py
-│   │
-│   ├── workflows/              # Workflow engine & orchestration
-│   │   ├── flowgrid_nodes.py          # Node definitions
-│   │   ├── flowgrid_orchestrator.py   # Workflow orchestrator
-│   │   ├── flowgrid_realtime.py       # Real-time workflow execution
-│   │   ├── workflow_engine.py         # Core workflow engine
-│   │   ├── run_workflow.py            # Workflow runner
-│   │   └── run_workflow_current.py    # Current workflow runner
+│   │   ├── rsiIndicator.py
+│   │   └── ...
 │   │
 │   ├── backtest/               # Backtesting engine
 │   │   ├── backtest_core.py        # Core backtesting logic
@@ -33,25 +38,21 @@ FlowGrid Trading/
 │   ├── integrations/           # External service integrations
 │   │   ├── alpaca_fetch.py         # Alpaca API integration
 │   │   ├── telegram_notifier.py    # Telegram notifications
-│   │   ├── telegram_settings.json  # Telegram config
 │   │   └── TELEGRAM_SETUP.md       # Telegram setup guide
 │   │
+│   ├── tests/                  # All backend tests
+│   │   ├── test_unified_executor.py
+│   │   ├── test_trade_engine.py
+│   │   ├── test_indicators.py
+│   │   ├── test_integration.py
+│   │   └── ...
+│   │
 │   ├── utils/                  # Utility scripts & helpers
-│   │   ├── analyze_execute_local.py
-│   │   ├── analyze_rsi_client.py
-│   │   ├── demo_realtime.py
 │   │   ├── strategy_cli.py
 │   │   ├── visualize.py
-│   │   ├── debug_infer_direction.py
-│   │   ├── debug_rsi_run.py
-│   │   ├── reconstruct_and_test.py
-│   │   ├── test_chart_endpoint.py
-│   │   ├── test_current_price.py
-│   │   ├── test_price_history.py
-│   │   └── last_response.json
+│   │   └── ...
 │   │
-│   ├── core/                   # Core business logic (future use)
-│   │
+│   ├── data/                   # Data storage (positions, trades, cache)
 │   ├── requirements.txt        # Python dependencies
 │   ├── pytest.ini             # Pytest configuration
 │   └── WORKFLOW_SYSTEM.md     # Workflow system documentation
@@ -60,66 +61,33 @@ FlowGrid Trading/
 │   ├── src/
 │   │   ├── components/        # React components
 │   │   │   ├── Backtest/     # Backtesting UI components
-│   │   │   ├── DashboardSidebar.jsx
-│   │   │   └── Icon.jsx
+│   │   │   ├── ResultsPanel/ # Strategy results display
+│   │   │   └── ...
 │   │   ├── pages/            # Page components
-│   │   │   ├── BacktestPage.jsx
 │   │   │   ├── Dashboard.jsx
-│   │   │   └── Analytics.jsx
-│   │   ├── backtestEngine.js # Client-side backtest engine
-│   │   └── ...
+│   │   │   └── ...
+│   │   ├── services/         # API services
+│   │   ├── utils/            # Utility functions
+│   │   └── main.jsx          # App entry point
 │   ├── public/               # Static assets
 │   ├── package.json         # Node.js dependencies
 │   └── vite.config.js       # Vite configuration
 │
-├── types/                      # TypeScript type definitions
-│   ├── alpaca.ts
-│   ├── atr.ts
-│   ├── bollingerBands.ts
-│   ├── compareLogic.ts
-│   ├── ema.ts
-│   ├── engine.ts
-│   ├── macdIndicator.ts
-│   ├── obv.ts
-│   ├── rsiIndicator.ts
-│   ├── stochastic.ts
-│   ├── volumeSpike.ts
-│   ├── vwap.ts
-│   └── types.ts
-│
-├── tests/                      # Test files
-│   ├── test_backend_indicators.py
-│   ├── test_indicators.py
-│   ├── test_mapping.py
-│   ├── test_realtime_integration.py
-│   ├── test_rsi_repro.py
-│   ├── test_volume_trend.py
-│   └── debug_backtest_core.py
-│
-├── scripts/                    # Utility scripts & examples
-│   ├── nvda_combined_report.py
-│   ├── nvda_price_rsi_chart.py
-│   ├── nvda_week_table.py
-│   ├── test_gemini.py
-│   ├── test_openai.py
-│   ├── test_tradingview_nvda.py
-│   └── verify_no_yahoo.py
+├── docs/                       # Documentation
+│   └── ANALYTICS_WORKFLOW.md
 │
 ├── outputs/                    # Backtest results & output files
 │   └── backtests/
 │
-├── backend/                    # Legacy backend (Java/Python)
-│   ├── java/
-│   └── python/
-│
 ├── archive/                    # Archived/deprecated code
-│
-├── flowtrade/                  # Additional trading modules
+│   └── cleanup_*/             # Timestamped cleanup archives
 │
 ├── .venv/                      # Python virtual environment
 ├── .github/                    # GitHub workflows & configs
-├── .gitignore                  # Git ignore rules
-├── package.json               # Root Node.js config
+│   └── copilot-instructions.md
+├── .gitignore                 # Git ignore rules
+├── Procfile                   # Heroku deployment config
+├── README.md                  # Project README
 └── PROJECT_STRUCTURE.md       # This file
 ```
 
@@ -132,12 +100,7 @@ FlowGrid Trading/
    cd backendapi
    ```
 
-2. Create virtual environment:
-   ```bash
-   python -m venv ../.venv
-   ```
-
-3. Activate virtual environment:
+2. Create/activate virtual environment:
    ```bash
    # Windows
    ..\.venv\Scripts\Activate.ps1
@@ -146,15 +109,14 @@ FlowGrid Trading/
    source ../.venv/bin/activate
    ```
 
-4. Install dependencies:
+3. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
-5. Run the API server:
+4. Run the API server:
    ```bash
-   cd ..
-   python -m backendapi.api.backend
+   python -m api.backend
    ```
 
 ### Frontend Setup
@@ -181,35 +143,39 @@ FlowGrid Trading/
 - **Advanced Analytics**: Performance metrics, risk analysis, monthly returns heatmap
 - **Real-time Execution**: Live strategy execution with WebSocket updates
 - **Multiple Integrations**: Alpaca API, Telegram notifications
-- **Technical Indicators**: RSI, MACD, Bollinger Bands, ATR, and more
+- **Technical Indicators**: RSI, MACD, Bollinger Bands, ATR, EMA, SMA, VWAP, and more
 
 ## Architecture
 
 ### Backend (`backendapi/`)
 - **API Layer**: Flask REST API with WebSocket support
-- **Workflow Engine**: Node-based visual programming engine
-- **Backtest Engine**: Historical data simulation with percentage-based position sizing
+- **Workflow Engine**: Node-based visual programming with graph-based execution
+- **Unified Executor**: Kahn's algorithm for topological execution order
+- **Backtest Engine**: Historical data simulation with percentage-based P&L
 - **Indicators**: Modular technical indicator implementations
 - **Integrations**: External service connectors (Alpaca, Telegram)
 
 ### Frontend (`frontend/`)
 - **React 18**: Modern component-based UI
 - **Vite**: Fast build tool and dev server
-- **Client-side Backtesting**: In-browser backtest execution
 - **Real-time Updates**: WebSocket integration for live data
-- **Responsive Design**: Mobile-friendly interface
+- **Results Panel**: Strategy execution results display
 
 ## Development Workflow
 
 1. **Backend Changes**: Edit files in `backendapi/` and restart Flask server
 2. **Frontend Changes**: Edit files in `frontend/src/` - Vite hot-reloads automatically
-3. **Testing**: Run tests from `tests/` directory using pytest
-4. **Type Definitions**: Update TypeScript types in `types/` as needed
+3. **Testing**: Run `pytest` from `backendapi/` directory
 
-## Notes
+## Ports
 
-- Backend API runs on `http://localhost:5000` by default
-- Frontend dev server runs on `http://localhost:5173` by default
-- WebSocket server runs on `ws://localhost:6789` by default
-- All Python dependencies should be added to `backendapi/requirements.txt`
-- All npm dependencies should be added to `frontend/package.json`
+- Backend API: `http://localhost:5000`
+- Frontend Dev Server: `http://localhost:5173`
+- WebSocket Server: `ws://localhost:6789`
+
+## Recent Changes (Dec 2024)
+
+- Fixed AND/OR gate signal propagation using unified executor
+- Added topological sorting for correct node execution order
+- Enhanced Results Panel to show actual indicator values
+- Cleaned up duplicate files and consolidated backend into `backendapi/`
