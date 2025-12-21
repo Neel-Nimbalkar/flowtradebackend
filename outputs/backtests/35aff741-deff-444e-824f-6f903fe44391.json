@@ -1,0 +1,14 @@
+{
+  "job_id": "35aff741-deff-444e-824f-6f903fe44391",
+  "status": "failed",
+  "created_at": "2025-11-25T19:51:39.361958Z",
+  "updated_at": "2025-11-25T19:51:39.543526Z",
+  "request": {
+    "days": 1,
+    "timeframe": "1h",
+    "symbol": "SPY"
+  },
+  "progress": 0,
+  "result_path": null,
+  "error": "type object 'datetime.datetime' has no attribute 'timedelta'"
+}

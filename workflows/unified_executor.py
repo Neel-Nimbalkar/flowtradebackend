@@ -83,6 +83,26 @@ class UnifiedStrategyExecutor:
             'macd_bearish': False,
         }
     
+    def _to_strict_bool(self, value: Any) -> bool:
+        """
+        Convert value to boolean with STRICT rules.
+        
+        CRITICAL: Only treats True, 1, 1.0 as True.
+        Raw indicator values (RSI=52, EMA=150) are NOT truthy for logic gates.
+        
+        This prevents false signals from passing numeric indicator values
+        directly to logic gates.
+        """
+        if value is None:
+            return False
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            # Only 1 or 1.0 is True (output of compare/logic gates)
+            return value == 1 or value == 1.0
+        # For strings or other types, use standard bool
+        return bool(value)
+    
     def _normalize_id(self, node_id: Any) -> int:
         """Normalize node ID to integer."""
         if node_id is None:
@@ -574,11 +594,17 @@ class UnifiedStrategyExecutor:
             ema_value = self._calculate_ema(close_history, period)
             
             if ema_value is not None:
+                # Boolean signal: price above EMA = bullish
+                above_ema = current_close > ema_value
+                
                 outputs = {
                     'ema': ema_value,
                     'ema_value': ema_value,  # Alias for common port names
                     'value': ema_value,
-                    'output': ema_value
+                    'output': ema_value,
+                    'signal': above_ema,  # Boolean: True if price above EMA
+                    'above': above_ema,
+                    'below': not above_ema
                 }
                 
                 # Track EMA relationship to price for signal inference
@@ -588,9 +614,9 @@ class UnifiedStrategyExecutor:
                     self.signal_context['ema_bearish'] = True
                 
                 if self.debug:
-                    logger.info(f"[EXEC] Node {node_id} (ema): period={period}, value={ema_value:.4f}")
+                    logger.info(f"[EXEC] Node {node_id} (ema): period={period}, value={ema_value:.4f}, above={above_ema}")
             else:
-                outputs = {'ema': None, 'ema_value': None, 'value': None, 'output': None}
+                outputs = {'ema': None, 'ema_value': None, 'value': None, 'output': None, 'signal': False, 'above': False, 'below': False}
                 if self.debug:
                     logger.warning(f"[EXEC] Node {node_id} (ema): Not enough data (need {period}, have {len(close_history)})")
         
@@ -602,11 +628,18 @@ class UnifiedStrategyExecutor:
             sma_value = self._calculate_sma(close_history, period)
             
             if sma_value is not None:
-                outputs = {'sma': sma_value, 'value': sma_value}
+                above_sma = current_close > sma_value
+                outputs = {
+                    'sma': sma_value, 
+                    'value': sma_value,
+                    'signal': above_sma,  # Boolean: True if price above SMA
+                    'above': above_sma,
+                    'below': not above_sma
+                }
                 if self.debug:
-                    logger.info(f"[EXEC] Node {node_id} (sma): period={period}, value={sma_value:.4f}")
+                    logger.info(f"[EXEC] Node {node_id} (sma): period={period}, value={sma_value:.4f}, above={above_sma}")
             else:
-                outputs = {'sma': None, 'value': None}
+                outputs = {'sma': None, 'value': None, 'signal': False, 'above': False, 'below': False}
         
         # ═══════════════════════════════════════════════════════════════════
         # RSI INDICATOR
@@ -654,15 +687,18 @@ class UnifiedStrategyExecutor:
             if macd_data:
                 hist = macd_data['histogram']
                 is_bullish = hist > 0 if hist is not None else False
+                macd_above_signal = macd_data['macd_line'] > macd_data['signal_line'] if macd_data['signal_line'] else False
                 
                 outputs = {
                     'macd': macd_data['macd_line'],
                     'macd_line': macd_data['macd_line'],
-                    'signal': macd_data['signal_line'],
-                    'signal_line': macd_data['signal_line'],
+                    'signal_line': macd_data['signal_line'],  # The actual signal line VALUE
                     'histogram': hist,
                     'value': hist,
-                    'result': is_bullish
+                    'result': is_bullish,
+                    'signal': is_bullish,  # Boolean: True when histogram > 0 (bullish)
+                    'bullish': is_bullish,
+                    'bearish': not is_bullish
                 }
                 
                 # Track for signal inference
@@ -674,7 +710,7 @@ class UnifiedStrategyExecutor:
                 if self.debug:
                     logger.info(f"[EXEC] Node {node_id} (macd): histogram={hist:.4f}, bullish={is_bullish}")
             else:
-                outputs = {'macd': None, 'signal': None, 'histogram': None, 'value': None, 'result': False}
+                outputs = {'macd': None, 'signal_line': None, 'histogram': None, 'value': None, 'result': False, 'signal': False, 'bullish': False, 'bearish': True}
         
         # ═══════════════════════════════════════════════════════════════════
         # BOLLINGER BANDS INDICATOR
@@ -710,16 +746,45 @@ class UnifiedStrategyExecutor:
             
             if vwap_value is not None:
                 above_vwap = current_close > vwap_value
+                
+                # Check VWAP condition from params (default: 'signal' means proximity check for scalping)
+                condition = params.get('condition', params.get('vwap_condition', 'any')).lower()
+                output_type = params.get('output', 'value').lower()
+                
+                # Calculate proximity to VWAP (within 0.05% threshold)
+                threshold_pct = float(params.get('threshold', params.get('near_threshold', 0.0005)))
+                pct_diff = abs(current_close - vwap_value) / vwap_value
+                near_vwap = pct_diff < threshold_pct
+                
+                # Determine signal based on condition type
+                if condition == 'above':
+                    signal_result = above_vwap
+                    signal_msg = 'above' if above_vwap else 'below'
+                elif condition == 'below':
+                    signal_result = not above_vwap
+                    signal_msg = 'below' if not above_vwap else 'above'
+                elif condition in ['near', 'any'] or output_type == 'signal':
+                    # Default for scalping: price must be NEAR VWAP
+                    signal_result = near_vwap
+                    signal_msg = f"near (diff={pct_diff*100:.3f}%)" if near_vwap else f"away (diff={pct_diff*100:.3f}%)"
+                else:
+                    signal_result = above_vwap
+                    signal_msg = 'above' if above_vwap else 'below'
+                
                 outputs = {
                     'vwap': vwap_value,
                     'value': vwap_value,
-                    'signal': above_vwap
+                    'signal': signal_result,
+                    'result': signal_result,
+                    'above': above_vwap,
+                    'near': near_vwap,
+                    'pct_diff': pct_diff
                 }
                 
                 if self.debug:
-                    logger.info(f"[EXEC] Node {node_id} (vwap): value={vwap_value:.2f}, above={above_vwap}")
+                    logger.info(f"[EXEC] Node {node_id} (vwap): value={vwap_value:.2f}, price={current_close:.2f}, signal={signal_result} ({signal_msg})")
             else:
-                outputs = {'vwap': None, 'value': None, 'signal': False}
+                outputs = {'vwap': None, 'value': None, 'signal': False, 'result': False, 'above': False, 'near': False}
         
         # ═══════════════════════════════════════════════════════════════════
         # VOLUME SPIKE INDICATOR
@@ -886,51 +951,89 @@ class UnifiedStrategyExecutor:
         # AND NODE - Logical AND of all inputs
         # ═══════════════════════════════════════════════════════════════════
         elif node_type == 'and':
-            # Collect all input values
-            all_values = []
-            for port, val in inputs.items():
-                if val is not None:
-                    all_values.append(bool(val))
-            
-            # Also check specific ports
+            # CRITICAL: Use strict bool conversion to prevent raw indicator values
+            # from being treated as True (e.g., RSI=52 should NOT be True)
             a_val = inputs.get('a')
             b_val = inputs.get('b')
             
-            if a_val is not None and b_val is not None:
-                result = bool(a_val) and bool(b_val)
-            elif all_values:
-                result = all(all_values)
-            else:
-                result = False
+            # Also check for generic 'input' ports if a/b not connected
+            if a_val is None:
+                a_val = inputs.get('input')
+            if b_val is None:
+                # Check for any other input port
+                for port, val in inputs.items():
+                    if port not in ['a', 'input'] and val is not None and b_val is None:
+                        b_val = val
+                        break
             
-            outputs = {'result': result, 'value': result}
+            if a_val is not None and b_val is not None:
+                a_bool = self._to_strict_bool(a_val)
+                b_bool = self._to_strict_bool(b_val)
+                result = a_bool and b_bool
+            else:
+                # Collect all input values
+                all_values = []
+                for port, val in inputs.items():
+                    if val is not None:
+                        all_values.append(self._to_strict_bool(val))
+                result = all(all_values) if all_values else False
+                a_bool = all_values[0] if len(all_values) > 0 else None
+                b_bool = all_values[1] if len(all_values) > 1 else None
+            
+            # Include input values in outputs for debugging in Results Panel
+            outputs = {
+                'result': result, 
+                'value': result,
+                'a': a_val,
+                'b': b_val,
+                'a_bool': a_bool if 'a_bool' in dir() else self._to_strict_bool(a_val) if a_val is not None else None,
+                'b_bool': b_bool if 'b_bool' in dir() else self._to_strict_bool(b_val) if b_val is not None else None
+            }
             
             if self.debug:
-                logger.info(f"[EXEC] Node {node_id} (and): inputs={inputs}, result={result}")
+                logger.info(f"[EXEC] Node {node_id} (and): a={a_val}, b={b_val}, result={result}")
         
         # ═══════════════════════════════════════════════════════════════════
         # OR NODE - Logical OR of all inputs
         # ═══════════════════════════════════════════════════════════════════
         elif node_type == 'or':
-            all_values = []
-            for port, val in inputs.items():
-                if val is not None:
-                    all_values.append(bool(val))
-            
             a_val = inputs.get('a')
             b_val = inputs.get('b')
             
-            if a_val is not None and b_val is not None:
-                result = bool(a_val) or bool(b_val)
-            elif all_values:
-                result = any(all_values)
-            else:
-                result = False
+            # Also check for generic 'input' ports if a/b not connected
+            if a_val is None:
+                a_val = inputs.get('input')
+            if b_val is None:
+                for port, val in inputs.items():
+                    if port not in ['a', 'input'] and val is not None and b_val is None:
+                        b_val = val
+                        break
             
-            outputs = {'result': result, 'value': result}
+            if a_val is not None and b_val is not None:
+                a_bool = self._to_strict_bool(a_val)
+                b_bool = self._to_strict_bool(b_val)
+                result = a_bool or b_bool
+            else:
+                all_values = []
+                for port, val in inputs.items():
+                    if val is not None:
+                        all_values.append(self._to_strict_bool(val))
+                result = any(all_values) if all_values else False
+                a_bool = all_values[0] if len(all_values) > 0 else None
+                b_bool = all_values[1] if len(all_values) > 1 else None
+            
+            # Include input values in outputs for debugging in Results Panel
+            outputs = {
+                'result': result, 
+                'value': result,
+                'a': a_val,
+                'b': b_val,
+                'a_bool': a_bool if 'a_bool' in dir() else self._to_strict_bool(a_val) if a_val is not None else None,
+                'b_bool': b_bool if 'b_bool' in dir() else self._to_strict_bool(b_val) if b_val is not None else None
+            }
             
             if self.debug:
-                logger.info(f"[EXEC] Node {node_id} (or): inputs={inputs}, result={result}")
+                logger.info(f"[EXEC] Node {node_id} (or): a={a_val}, b={b_val}, result={result}")
         
         # ═══════════════════════════════════════════════════════════════════
         # NOT NODE - Logical NOT
@@ -939,7 +1042,7 @@ class UnifiedStrategyExecutor:
             input_val = inputs.get('input') or inputs.get('a') or inputs.get('value')
             
             if input_val is not None:
-                result = not bool(input_val)
+                result = not self._to_strict_bool(input_val)
             else:
                 result = True  # NOT(nothing) = True
             
@@ -952,17 +1055,16 @@ class UnifiedStrategyExecutor:
         # OUTPUT NODE - Final signal output
         # ═══════════════════════════════════════════════════════════════════
         elif node_type == 'output':
-            signal_input = inputs.get('signal') or inputs.get('input') or inputs.get('a') or inputs.get('value')
+            # Get input value - prioritize 'signal' and 'result' (boolean) ports over raw values
+            signal_input = inputs.get('signal', inputs.get('result', inputs.get('input', inputs.get('a', inputs.get('value')))))
             
-            if signal_input is not None:
-                signal_bool = bool(signal_input)
-            else:
-                signal_bool = False
+            # CRITICAL: Use strict bool - raw indicator values should NOT trigger signals
+            signal_bool = self._to_strict_bool(signal_input)
             
             outputs = {'result': signal_bool, 'signal': signal_bool, 'value': signal_bool}
             
             if self.debug:
-                logger.info(f"[EXEC] Node {node_id} (output): input={signal_input}, signal={signal_bool}")
+                logger.info(f"[EXEC] Node {node_id} (output): input={signal_input} (type={type(signal_input).__name__}), signal={signal_bool}")
         
         # ═══════════════════════════════════════════════════════════════════
         # SIGNAL NODE - Trading signal output
@@ -974,24 +1076,27 @@ class UnifiedStrategyExecutor:
             # Get the input condition - check specific ports in priority order
             # CRITICAL: Must distinguish between False (explicit) and None (not connected)
             signal_input = None
-            for port in ['signal', 'input', 'a', 'value', 'result']:
+            for port in ['signal', 'result', 'input', 'a', 'value']:
                 if port in inputs:
                     signal_input = inputs[port]
                     break
             
             # If no known ports, check if we have ANY input
             if signal_input is None and inputs:
-                # Look for any truthy value in inputs
+                # Look for any value in inputs
                 for key, val in inputs.items():
                     signal_input = val
                     break
             
-            # Determine if signal should fire
+            # CRITICAL: Use strict bool - raw indicator values should NOT fire signals
             if signal_input is not None:
-                signal_fires = bool(signal_input)
+                signal_fires = self._to_strict_bool(signal_input)
             else:
-                # No input connected means this is a terminal node that always fires
-                signal_fires = True
+                # No input connected - FAIL SAFE: don't fire signals without explicit condition
+                # This prevents false signals when users forget to connect the condition
+                signal_fires = False
+                if self.debug:
+                    logger.warning(f"[EXEC] Node {node_id} (signal): NO INPUT CONNECTED - signal will NOT fire")
             
             outputs = {
                 'result': signal_fires,
@@ -1007,7 +1112,7 @@ class UnifiedStrategyExecutor:
                 self.signal_context['signal_fires'] = True
             
             if self.debug:
-                logger.info(f"[EXEC] Node {node_id} (signal): input={signal_input}, fires={signal_fires}, type={signal_type}")
+                logger.info(f"[EXEC] Node {node_id} (signal): input={signal_input} (type={type(signal_input).__name__}), fires={signal_fires}, type={signal_type}")
         
         # ═══════════════════════════════════════════════════════════════════
         # ATR INDICATOR
@@ -1062,6 +1167,54 @@ class UnifiedStrategyExecutor:
                 outputs = {'k': None, 'd': None, 'value': None, 'oversold': False, 'overbought': False, 'signal': False}
         
         # ═══════════════════════════════════════════════════════════════════
+        # SUPPORT/RESISTANCE INDICATOR
+        # ═══════════════════════════════════════════════════════════════════
+        elif node_type == 'support_resistance':
+            lookback = int(params.get('lookback', params.get('period', 20)))
+            output_type = params.get('output', 'support').lower()
+            
+            # Calculate support and resistance from price history
+            if close_history and len(close_history) >= lookback and high_history and low_history:
+                recent_highs = high_history[-lookback:]
+                recent_lows = low_history[-lookback:]
+                recent_closes = close_history[-lookback:]
+                
+                # Basic S/R: highest high and lowest low in lookback
+                resistance = max(recent_highs) if recent_highs else None
+                support = min(recent_lows) if recent_lows else None
+                
+                # Calculate pivot points
+                h = recent_highs[-1] if recent_highs else 0
+                l = recent_lows[-1] if recent_lows else 0
+                c = recent_closes[-1] if recent_closes else 0
+                pivot = (h + l + c) / 3 if (h and l and c) else None
+                
+                # Price position relative to S/R
+                current_close = close_history[-1] if close_history else 0
+                near_support = abs(current_close - support) / support < 0.01 if support else False
+                near_resistance = abs(current_close - resistance) / resistance < 0.01 if resistance else False
+                above_pivot = current_close > pivot if pivot else False
+                
+                outputs = {
+                    'support': support,
+                    'resistance': resistance,
+                    'pivot': pivot,
+                    'value': support if output_type == 'support' else resistance,
+                    'near_support': near_support,
+                    'near_resistance': near_resistance,
+                    'above_pivot': above_pivot,
+                    'signal': True  # Data provider, always passes
+                }
+                
+                if self.debug:
+                    logger.info(f"[EXEC] Node {node_id} (support_resistance): S=${support:.2f}, R=${resistance:.2f}, Pivot=${pivot:.2f}")
+            else:
+                outputs = {
+                    'support': None, 'resistance': None, 'pivot': None, 'value': None,
+                    'near_support': False, 'near_resistance': False, 'above_pivot': False, 'signal': True
+                }
+        
+        # ═══════════════════════════════════════════════════════════════════
         # NOTE NODE - Skip (visual only)
         # ═══════════════════════════════════════════════════════════════════
         elif node_type == 'note':
@@ -1086,7 +1239,9 @@ class UnifiedStrategyExecutor:
         for node_id, node in self.nodes.items():
             if node['type'] == 'signal':
                 outputs = self.node_outputs.get(node_id, {})
-                result = outputs.get('result') or outputs.get('signal') or outputs.get('value')
+                result = outputs.get('result')
+                if self.debug:
+                    logger.info(f"[OUTPUT] Found signal node {node_id}: outputs={outputs}, result={result}")
                 if result is not None:
                     return result
         
@@ -1094,17 +1249,29 @@ class UnifiedStrategyExecutor:
         for node_id, node in self.nodes.items():
             if node['type'] == 'output':
                 outputs = self.node_outputs.get(node_id, {})
-                return outputs.get('result') or outputs.get('signal') or outputs.get('value')
+                result = outputs.get('result')
+                if self.debug:
+                    logger.info(f"[OUTPUT] Found output node {node_id}: outputs={outputs}, result={result}")
+                # Return the result directly - don't use 'or' chaining which hides False values
+                return result
         
         # If no output/signal nodes, check if any terminal node (no outgoing connections) has a truthy result
         terminal_nodes = self._find_terminal_nodes()
+        if self.debug:
+            logger.info(f"[OUTPUT] No output/signal nodes found, checking terminal nodes: {terminal_nodes}")
         for node_id in terminal_nodes:
             outputs = self.node_outputs.get(node_id, {})
-            result = outputs.get('result') or outputs.get('signal') or outputs.get('value')
+            # CRITICAL: Use strict bool to avoid treating numeric values (like RSI=52) as True
+            # Check boolean ports first, then fall back to value with strict conversion
+            result = self._to_strict_bool(outputs.get('result')) or \
+                     self._to_strict_bool(outputs.get('signal')) or \
+                     self._to_strict_bool(outputs.get('value'))
+            if self.debug:
+                logger.info(f"[OUTPUT] Terminal node {node_id}: outputs={outputs}, strict_result={result}")
             if result:
-                return result
+                return True  # Return explicit True, not the numeric value
         
-        return None
+        return False  # Default to False (no signal) instead of None
     
     def _find_terminal_nodes(self) -> List[str]:
         """Find nodes with no outgoing connections (leaf nodes)."""

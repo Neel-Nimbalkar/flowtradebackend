@@ -124,10 +124,307 @@ class ConditionEvaluator:
     @staticmethod
     def check_volume_spike(latest_data: Dict, params: Dict) -> tuple[bool, str]:
         """Check volume spike condition"""
-        vol_spike = latest_data.get('vol_spike', False)
-        if vol_spike:
+        # Try multiple possible keys for volume spike data
+        vol_spike = latest_data.get('vol_spike') or latest_data.get('volume_spike') or latest_data.get('spike')
+        if vol_spike is True or vol_spike == 1:
             return True, "Volume spike detected"
+        
+        # If we have raw volume data, check against multiplier
+        volume = latest_data.get('volume')
+        avg_volume = latest_data.get('avg_volume') or latest_data.get('volume_avg')
+        if volume is not None and avg_volume is not None and avg_volume > 0:
+            multiplier = params.get('multiplier', 1.5)
+            try:
+                multiplier = float(multiplier)
+            except:
+                multiplier = 1.5
+            passed = volume > (avg_volume * multiplier)
+            return passed, f"Volume {volume:.0f} {'>' if passed else '<='} {avg_volume * multiplier:.0f} ({multiplier}x avg)"
+        
         return False, "No volume spike detected"
+
+    @staticmethod
+    def check_atr(latest_data: Dict, params: Dict) -> tuple[bool, str]:
+        """Check ATR condition - ATR is a data provider, always passes if data available"""
+        atr = latest_data.get('atr')
+        if atr is None:
+            return False, "ATR data not available"
+        return True, f"ATR value: {atr:.4f}"
+
+    @staticmethod
+    def check_threshold(latest_data: Dict, params: Dict) -> tuple[bool, str]:
+        """Check if a value is above or below a threshold"""
+        # Get the input value - could be from various sources
+        value = latest_data.get('value') or latest_data.get('input') or latest_data.get('close')
+        if value is None:
+            return False, "Input value not available for threshold check"
+        
+        try:
+            value = float(value)
+        except:
+            return False, f"Cannot convert value to number: {value}"
+        
+        level = params.get('level', 50)
+        try:
+            level = float(level)
+        except:
+            level = 50
+        
+        output = params.get('output', 'signal').lower()
+        
+        if output == 'above':
+            passed = value > level
+            return passed, f"Value {value:.4f} {'>' if passed else '<='} {level:.4f}"
+        elif output == 'below':
+            passed = value < level
+            return passed, f"Value {value:.4f} {'<' if passed else '>='} {level:.4f}"
+        else:  # 'signal' - pass if above
+            passed = value > level
+            return passed, f"Value {value:.4f} {'>' if passed else '<='} threshold {level:.4f}"
+
+    @staticmethod
+    def check_crossover(latest_data: Dict, params: Dict) -> tuple[bool, str]:
+        """Check for crossover between two lines"""
+        # Get current and previous values for both lines
+        a_curr = latest_data.get('a') or latest_data.get('a_current')
+        a_prev = latest_data.get('a_prev') or latest_data.get('a_previous')
+        b_curr = latest_data.get('b') or latest_data.get('b_current')
+        b_prev = latest_data.get('b_prev') or latest_data.get('b_previous')
+        
+        if None in [a_curr, a_prev, b_curr, b_prev]:
+            # Try alternative: EMA/SMA crossover with price
+            ema = latest_data.get('ema')
+            ema_prev = latest_data.get('ema_prev')
+            close = latest_data.get('close')
+            close_prev = latest_data.get('close_prev') or latest_data.get('price_prev')
+            
+            if None not in [ema, ema_prev, close, close_prev]:
+                a_curr, a_prev = close, close_prev
+                b_curr, b_prev = ema, ema_prev
+            else:
+                return False, "Crossover data not available (need current and previous values for both lines)"
+        
+        output = params.get('output', 'cross_up').lower()
+        
+        # Cross up: a was below b, now a is above b
+        cross_up = a_prev <= b_prev and a_curr > b_curr
+        # Cross down: a was above b, now a is below b
+        cross_down = a_prev >= b_prev and a_curr < b_curr
+        
+        if output == 'cross_up':
+            return cross_up, f"Crossover UP {'detected' if cross_up else 'not detected'}"
+        elif output == 'cross_down':
+            return cross_down, f"Crossover DOWN {'detected' if cross_down else 'not detected'}"
+        else:  # 'any'
+            passed = cross_up or cross_down
+            direction = 'UP' if cross_up else ('DOWN' if cross_down else 'none')
+            return passed, f"Crossover {direction} {'detected' if passed else 'not detected'}"
+
+    @staticmethod
+    def check_and_gate(latest_data: Dict, params: Dict) -> tuple[bool, str]:
+        """AND logic gate - both inputs must be true"""
+        a = latest_data.get('a')
+        b = latest_data.get('b')
+        
+        # Convert to boolean
+        def to_bool(val):
+            if val is None:
+                return None
+            if isinstance(val, bool):
+                return val
+            if isinstance(val, (int, float)):
+                return val != 0
+            if isinstance(val, str):
+                return val.lower() in ['true', '1', 'yes', 'passed']
+            return bool(val)
+        
+        a_bool = to_bool(a)
+        b_bool = to_bool(b)
+        
+        if a_bool is None or b_bool is None:
+            return False, f"AND gate missing input(s): a={a}, b={b}"
+        
+        result = a_bool and b_bool
+        return result, f"AND({a_bool}, {b_bool}) = {result}"
+
+    @staticmethod
+    def check_or_gate(latest_data: Dict, params: Dict) -> tuple[bool, str]:
+        """OR logic gate - either input must be true"""
+        a = latest_data.get('a')
+        b = latest_data.get('b')
+        
+        def to_bool(val):
+            if val is None:
+                return None
+            if isinstance(val, bool):
+                return val
+            if isinstance(val, (int, float)):
+                return val != 0
+            if isinstance(val, str):
+                return val.lower() in ['true', '1', 'yes', 'passed']
+            return bool(val)
+        
+        a_bool = to_bool(a)
+        b_bool = to_bool(b)
+        
+        if a_bool is None and b_bool is None:
+            return False, f"OR gate missing all inputs: a={a}, b={b}"
+        
+        # For OR, None inputs are treated as False
+        a_bool = a_bool if a_bool is not None else False
+        b_bool = b_bool if b_bool is not None else False
+        
+        result = a_bool or b_bool
+        return result, f"OR({a_bool}, {b_bool}) = {result}"
+
+    @staticmethod
+    def check_not_gate(latest_data: Dict, params: Dict) -> tuple[bool, str]:
+        """NOT logic gate - inverts the input"""
+        # Use 'in' check to handle False values correctly
+        if 'a' in latest_data:
+            a = latest_data['a']
+        elif 'input' in latest_data:
+            a = latest_data['input']
+        else:
+            a = None
+        
+        def to_bool(val):
+            if val is None:
+                return None
+            if isinstance(val, bool):
+                return val
+            if isinstance(val, (int, float)):
+                return val != 0
+            if isinstance(val, str):
+                return val.lower() in ['true', '1', 'yes', 'passed']
+            return bool(val)
+        
+        a_bool = to_bool(a)
+        
+        if a_bool is None:
+            return False, f"NOT gate missing input: a={a}"
+        
+        result = not a_bool
+        return result, f"NOT({a_bool}) = {result}"
+
+    @staticmethod
+    def check_time_filter(latest_data: Dict, params: Dict) -> tuple[bool, str]:
+        """Check if current time is within trading hours"""
+        from datetime import datetime
+        import pytz
+        
+        try:
+            et_tz = pytz.timezone('US/Eastern')
+            now = datetime.now(et_tz)
+            
+            start_hour = int(params.get('start_hour', 9))
+            start_minute = int(params.get('start_minute', 30))
+            end_hour = int(params.get('end_hour', 16))
+            end_minute = int(params.get('end_minute', 0))
+            
+            start_time = now.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
+            end_time = now.replace(hour=end_hour, minute=end_minute, second=0, microsecond=0)
+            
+            in_range = start_time <= now <= end_time
+            
+            # Check exclusion zones
+            exclude_first = int(params.get('exclude_first_mins', 0))
+            exclude_last = int(params.get('exclude_last_mins', 0))
+            
+            if in_range and exclude_first > 0:
+                from datetime import timedelta
+                if now < start_time + timedelta(minutes=exclude_first):
+                    return False, f"Time {now.strftime('%H:%M')} ET in excluded first {exclude_first} mins"
+            
+            if in_range and exclude_last > 0:
+                from datetime import timedelta
+                if now > end_time - timedelta(minutes=exclude_last):
+                    return False, f"Time {now.strftime('%H:%M')} ET in excluded last {exclude_last} mins"
+            
+            return in_range, f"Time {now.strftime('%H:%M')} ET {'within' if in_range else 'outside'} {start_hour}:{start_minute:02d}-{end_hour}:{end_minute:02d}"
+        except Exception as e:
+            return True, f"Time filter error (auto-pass): {e}"
+
+    @staticmethod
+    def check_trend_filter(latest_data: Dict, params: Dict) -> tuple[bool, str]:
+        """Check trend direction based on fast/slow EMA"""
+        fast_ema = latest_data.get('fast_ema') or latest_data.get('ema_fast')
+        slow_ema = latest_data.get('slow_ema') or latest_data.get('ema_slow')
+        
+        # Try to get from generic ema/sma if specific not available
+        if fast_ema is None:
+            fast_ema = latest_data.get('ema') or latest_data.get('sma')
+        if slow_ema is None:
+            slow_ema = latest_data.get('sma') or latest_data.get('ema')
+        
+        if fast_ema is None or slow_ema is None:
+            return True, "Trend filter: EMA data not available (auto-pass)"
+        
+        output = params.get('output', 'signal').lower()
+        
+        is_bullish = fast_ema > slow_ema
+        is_bearish = fast_ema < slow_ema
+        
+        if output == 'bullish':
+            return is_bullish, f"Trend {'bullish' if is_bullish else 'not bullish'} (fast {fast_ema:.2f} vs slow {slow_ema:.2f})"
+        elif output == 'bearish':
+            return is_bearish, f"Trend {'bearish' if is_bearish else 'not bearish'} (fast {fast_ema:.2f} vs slow {slow_ema:.2f})"
+        elif output == 'neutral':
+            is_neutral = abs(fast_ema - slow_ema) / slow_ema < 0.001  # Within 0.1%
+            return is_neutral, f"Trend {'neutral' if is_neutral else 'not neutral'}"
+        else:  # 'signal'
+            return is_bullish, f"Trend signal: {'BULLISH' if is_bullish else 'BEARISH'} (fast {fast_ema:.2f} vs slow {slow_ema:.2f})"
+
+    @staticmethod
+    def check_volume_filter(latest_data: Dict, params: Dict) -> tuple[bool, str]:
+        """Check if volume meets relative threshold"""
+        volume = latest_data.get('volume')
+        avg_volume = latest_data.get('avg_volume') or latest_data.get('volume_avg')
+        
+        if volume is None or avg_volume is None or avg_volume == 0:
+            return True, "Volume filter: data not available (auto-pass)"
+        
+        threshold = params.get('threshold', 1.0)
+        try:
+            threshold = float(threshold)
+        except:
+            threshold = 1.0
+        
+        rel_volume = volume / avg_volume
+        passed = rel_volume >= threshold
+        
+        return passed, f"Rel. volume {rel_volume:.2f}x {'>=' if passed else '<'} {threshold}x threshold"
+
+    @staticmethod
+    def check_price_levels(latest_data: Dict, params: Dict) -> tuple[bool, str]:
+        """Price levels is a data provider, always passes if data available"""
+        high = latest_data.get('high')
+        low = latest_data.get('low')
+        close = latest_data.get('close')
+        
+        if None in [high, low, close]:
+            return False, "Price level data not available"
+        
+        output = params.get('output', 'high')
+        return True, f"Price levels: H={high:.2f}, L={low:.2f}, C={close:.2f}"
+
+    @staticmethod
+    def check_support_resistance(latest_data: Dict, params: Dict) -> tuple[bool, str]:
+        """Support/Resistance is a data provider"""
+        support = latest_data.get('support')
+        resistance = latest_data.get('resistance')
+        close = latest_data.get('close')
+        
+        if support is None and resistance is None:
+            return True, "Support/Resistance: data not calculated (auto-pass)"
+        
+        output = params.get('output', 'support')
+        if output == 'support' and support:
+            return True, f"Support level: ${support:.2f}"
+        elif output == 'resistance' and resistance:
+            return True, f"Resistance level: ${resistance:.2f}"
+        else:
+            return True, f"S/R levels: S=${support}, R=${resistance}"
 
     @staticmethod
     def check_price_above(latest_data: Dict, params: Dict) -> tuple[bool, str]:
@@ -370,8 +667,8 @@ class WorkflowEngine:
             
             # Skip non-condition blocks (config, input, output, signal, etc.)
             # These are configuration or terminal blocks that don't need condition evaluation
-            skip_types = ['symbol', 'timeframe', 'lookback', 'input', 'output', 'signal', 
-                         'ai_agent', 'alpaca_config', 'config', 'start', 'end', 'entry', 'exit']
+            skip_types = ['symbol', 'timeframe', 'lookback', 'output', 'signal', 
+                         'alpaca_config', 'config', 'start', 'end', 'entry', 'exit', 'note']
             if block_type in skip_types:
                 results.append(BlockResult(
                     block_id=block_id,
@@ -418,17 +715,6 @@ class WorkflowEngine:
                 execution_time_ms=block_time
             ))
             
-            status = BlockStatus.PASSED if passed else BlockStatus.FAILED
-            
-            results.append(BlockResult(
-                block_id=block_id,
-                block_type=block_type,
-                status=status,
-                message=message,
-                data={'condition_met': passed},
-                execution_time_ms=block_time
-            ))
-            
             # Stop on failure
             if not passed:
                 # Mark remaining blocks as skipped
@@ -466,25 +752,53 @@ class WorkflowEngine:
         """Route to appropriate condition checker"""
         
         evaluators = {
+            # Indicators
             'rsi': self.evaluator.check_rsi,
             'ema': self.evaluator.check_ema,
             'sma': self.evaluator.check_ema,  # Similar logic
             'macd': self.evaluator.check_macd,
-            'volspike': self.evaluator.check_volume_spike,
             'bollinger': self.evaluator.check_bollinger,
             'trendline': self.evaluator.check_trendline,
             'stochastic': self.evaluator.check_stochastic,
-            'price_above': self.evaluator.check_price_above,
-            'price_below': self.evaluator.check_price_below,
             'vwap': self.evaluator.check_vwap,
             'obv': self.evaluator.check_obv,
+            'atr': self.evaluator.check_atr,
+            
+            # Volume
+            'volspike': self.evaluator.check_volume_spike,
+            'volume_spike': self.evaluator.check_volume_spike,
+            'vol_spike': self.evaluator.check_volume_spike,
+            
+            # Price conditions
+            'price_above': self.evaluator.check_price_above,
+            'price_below': self.evaluator.check_price_below,
+            'price_levels': self.evaluator.check_price_levels,
+            'support_resistance': self.evaluator.check_support_resistance,
+            
+            # Logic gates
+            'and': self.evaluator.check_and_gate,
+            'or': self.evaluator.check_or_gate,
+            'not': self.evaluator.check_not_gate,
             'compare': self.evaluator.check_compare,
+            'threshold': self.evaluator.check_threshold,
+            'crossover': self.evaluator.check_crossover,
+            
+            # Filters
+            'time_filter': self.evaluator.check_time_filter,
+            'trend_filter': self.evaluator.check_trend_filter,
+            'volume_filter': self.evaluator.check_volume_filter,
         }
         
         evaluator_func = evaluators.get(block_type)
         if evaluator_func:
             return evaluator_func(latest_data, params)
-        else:
-            # Unknown block types are treated as passed (they may be config/terminal blocks)
-            # This allows workflows to include custom blocks without breaking
-            return True, f"Block type '{block_type}' has no condition (auto-pass)"
+        
+        # Data source blocks that should auto-pass (they provide data, not conditions)
+        data_source_types = ['input', 'price_history', 'volume_history', 'alpaca_config', 
+                            'output', 'note', 'ai_agent']
+        if block_type in data_source_types:
+            return True, f"Data source block '{block_type}' (auto-pass)"
+        
+        # Unknown block types are treated as passed (they may be config/terminal blocks)
+        # This allows workflows to include custom blocks without breaking
+        return True, f"Block type '{block_type}' has no condition (auto-pass)"
