@@ -1,0 +1,64 @@
+{
+  "simple_rsi_strategy": {
+    "description": "RSI oversold detection - BUY when RSI < 30",
+    "nodes": [
+      {"id": 1, "type": "rsi", "params": {"period": 14, "oversold": 30, "overbought": 70}},
+      {"id": 2, "type": "signal", "params": {"type": "BUY"}}
+    ],
+    "connections": [
+      {"source": "1", "target": "2", "sourceHandle": "result", "targetHandle": "input"}
+    ]
+  },
+  "ema_crossover_strategy": {
+    "description": "EMA(9) crosses above EMA(21) - bullish signal",
+    "nodes": [
+      {"id": 1, "type": "ema", "params": {"period": 9}},
+      {"id": 2, "type": "ema", "params": {"period": 21}},
+      {"id": 3, "type": "compare", "params": {"operator": ">"}},
+      {"id": 4, "type": "signal", "params": {"type": "BUY"}}
+    ],
+    "connections": [
+      {"source": "1", "target": "3", "sourceHandle": "ema_value", "targetHandle": "a"},
+      {"source": "2", "target": "3", "sourceHandle": "ema_value", "targetHandle": "b"},
+      {"source": "3", "target": "4", "sourceHandle": "result", "targetHandle": "input"}
+    ]
+  },
+  "multi_indicator_and": {
+    "description": "RSI oversold AND MACD bullish - stronger confirmation",
+    "nodes": [
+      {"id": 1, "type": "rsi", "params": {"period": 14, "oversold": 30, "overbought": 70}},
+      {"id": 2, "type": "macd", "params": {"fast": 12, "slow": 26, "signal": 9}},
+      {"id": 3, "type": "and", "params": {}},
+      {"id": 4, "type": "signal", "params": {"type": "BUY"}}
+    ],
+    "connections": [
+      {"source": "1", "target": "3", "sourceHandle": "result", "targetHandle": "a"},
+      {"source": "2", "target": "3", "sourceHandle": "result", "targetHandle": "b"},
+      {"source": "3", "target": "4", "sourceHandle": "result", "targetHandle": "input"}
+    ]
+  },
+  "multi_indicator_or": {
+    "description": "RSI oversold OR MACD bullish - any signal fires",
+    "nodes": [
+      {"id": 1, "type": "rsi", "params": {"period": 14, "oversold": 30, "overbought": 70}},
+      {"id": 2, "type": "macd", "params": {"fast": 12, "slow": 26, "signal": 9}},
+      {"id": 3, "type": "or", "params": {}},
+      {"id": 4, "type": "signal", "params": {"type": "BUY"}}
+    ],
+    "connections": [
+      {"source": "1", "target": "3", "sourceHandle": "result", "targetHandle": "a"},
+      {"source": "2", "target": "3", "sourceHandle": "result", "targetHandle": "b"},
+      {"source": "3", "target": "4", "sourceHandle": "result", "targetHandle": "input"}
+    ]
+  },
+  "bollinger_mean_reversion": {
+    "description": "Price below lower Bollinger Band - BUY",
+    "nodes": [
+      {"id": 1, "type": "bollinger", "params": {"period": 20, "std_dev": 2}},
+      {"id": 2, "type": "signal", "params": {"type": "BUY"}}
+    ],
+    "connections": [
+      {"source": "1", "target": "2", "sourceHandle": "result", "targetHandle": "input"}
+    ]
+  }
+}

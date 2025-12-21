@@ -275,6 +275,72 @@ class ConditionEvaluator:
             return True, f"OBV {obv:.0f} (no specific condition)"
         return False, f"Unmatched OBV condition: {cond}"
 
+    @staticmethod
+    def check_compare(latest_data: Dict, params: Dict) -> tuple[bool, str]:
+        """Check comparison between two values with operator"""
+        # Get operator and what fields to compare
+        operator = params.get('operator', '>')
+        
+        # Try to get comparison values from params first (field names to look up)
+        field_a = params.get('field_a') or params.get('a_field') or params.get('input_field')
+        field_b = params.get('field_b') or params.get('b_field')
+        
+        # Get values - either from latest_data by field name, or directly from params
+        if field_a:
+            a_val = latest_data.get(field_a)
+        else:
+            # Try common field names
+            a_val = latest_data.get('a') or latest_data.get('input') or latest_data.get('value') or latest_data.get('close')
+        
+        if field_b:
+            b_val = latest_data.get(field_b)
+        else:
+            # Try latest_data first, then params
+            b_val = latest_data.get('b')
+            if b_val is None:
+                b_val = params.get('value') or params.get('threshold') or params.get('b')
+                # If still none, try other common fields
+                if b_val is None:
+                    b_val = latest_data.get('ema') or latest_data.get('sma')
+        
+        # Helper to extract scalar from potential list/array
+        def to_scalar(val):
+            if val is None:
+                return None
+            if isinstance(val, (list, tuple)):
+                return val[-1] if len(val) > 0 else None
+            return val
+        
+        a_val = to_scalar(a_val)
+        b_val = to_scalar(b_val)
+        
+        if a_val is None or b_val is None:
+            return False, f"Compare data not available (a={a_val}, b={b_val})"
+        
+        try:
+            a_num = float(a_val) if not isinstance(a_val, bool) else (1.0 if a_val else 0.0)
+            b_num = float(b_val) if not isinstance(b_val, bool) else (1.0 if b_val else 0.0)
+            
+            if operator == '>':
+                result = a_num > b_num
+            elif operator == '>=':
+                result = a_num >= b_num
+            elif operator == '<':
+                result = a_num < b_num
+            elif operator == '<=':
+                result = a_num <= b_num
+            elif operator == '==':
+                result = abs(a_num - b_num) < 0.0001
+            elif operator == '!=':
+                result = abs(a_num - b_num) >= 0.0001
+            else:
+                return False, f"Unknown operator: {operator}"
+            
+            return result, f"{a_num:.4f} {operator} {b_num:.4f} = {result}"
+            
+        except (ValueError, TypeError) as e:
+            return False, f"Compare error: {e}"
+
 class WorkflowEngine:
     """Sequential workflow execution engine"""
     
@@ -412,6 +478,7 @@ class WorkflowEngine:
             'price_below': self.evaluator.check_price_below,
             'vwap': self.evaluator.check_vwap,
             'obv': self.evaluator.check_obv,
+            'compare': self.evaluator.check_compare,
         }
         
         evaluator_func = evaluators.get(block_type)
