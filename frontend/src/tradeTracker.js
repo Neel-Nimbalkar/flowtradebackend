@@ -95,9 +95,10 @@ function saveTrade(trade) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(trades));
     console.log(`[TradeTracker] Saved trade: ${trade.direction} ${trade.symbol} @ ${trade.exitPrice}, P&L: $${trade.netPnL.toFixed(2)}`);
     
-    // Dispatch event for analytics page to refresh
+    // Dispatch events for dashboard/analytics to refresh
     try {
       window.dispatchEvent(new Event('flowgrid:trades-updated'));
+      window.dispatchEvent(new CustomEvent('flowgrid:trade-completed', { detail: trade }));
     } catch (e) {}
   } catch (e) {
     console.warn('[TradeTracker] Failed to save trade', e);

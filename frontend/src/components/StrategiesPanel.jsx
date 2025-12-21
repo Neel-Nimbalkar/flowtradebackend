@@ -145,7 +145,7 @@ const StrategiesPanel = ({ onEdit }) => {
     <div className="strategies-list">
       {strategies.length === 0 ? (
         <div className="empty-strategies">
-          <div className="empty-strategies-icon">📊</div>
+          <div className="empty-strategies-icon icon-chart"></div>
           <p>No strategies saved yet</p>
           <p style={{ fontSize: 12, marginTop: 8, opacity: 0.7 }}>
             Create strategies in the Strategy Builder

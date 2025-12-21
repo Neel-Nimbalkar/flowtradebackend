@@ -12,6 +12,7 @@ import PastDataViewer from './components/StrategyResults/PastDataViewer';
 import BacktestModal from './components/BacktestModal';
 import Icon from './components/Icon';
 import { trackTrade, getCurrentPosition } from './tradeTracker';
+import { loadTemplate } from './strategyTemplates';
 
 const WorkflowBuilder = ({ onNavigate }) => {
     // Zoom and pan state
@@ -951,6 +952,60 @@ const WorkflowBuilder = ({ onNavigate }) => {
     e.preventDefault();
     const blockType = e.dataTransfer.getData('blockType');
     if (!blockType) return;
+    
+    // Check if this is a template drop
+    if (blockType.startsWith('template-')) {
+      const template = loadTemplate(blockType);
+      if (template) {
+        // Clear existing nodes and load template
+        const canvas = canvasRef.current;
+        const rect = canvas.getBoundingClientRect();
+        const dropX = e.clientX - rect.left;
+        const dropY = e.clientY - rect.top;
+        
+        // Offset template nodes based on drop position
+        const offsetX = dropX - 80; // First node is typically at x=80
+        const offsetY = dropY - 120; // First node is typically at y=120
+        
+        const adjustedNodes = template.nodes.map(node => ({
+          ...node,
+          x: node.x + offsetX,
+          y: node.y + offsetY,
+          def: blockDefs[node.type] || { name: node.title || node.type, icon: '◼', inputs: [], outputs: [] }
+        }));
+        
+        // Update nextNodeId to be higher than any template node id
+        const maxId = Math.max(...template.nodes.map(n => n.id));
+        nextNodeId.current = Math.max(nextNodeId.current, maxId + 1);
+        
+        // If canvas is empty, replace; otherwise, add to existing
+        if (nodes.length === 0) {
+          setNodes(adjustedNodes);
+          setConnections(template.connections);
+        } else {
+          // Add template nodes with new IDs to avoid conflicts
+          const idOffset = nextNodeId.current;
+          const remappedNodes = template.nodes.map(node => ({
+            ...node,
+            id: node.id + idOffset,
+            x: node.x + offsetX,
+            y: node.y + offsetY,
+            def: blockDefs[node.type] || { name: node.title || node.type, icon: '◼', inputs: [], outputs: [] }
+          }));
+          const remappedConnections = template.connections.map(conn => ({
+            ...conn,
+            id: `${conn.id}_${idOffset}`,
+            from: { ...conn.from, nodeId: conn.from.nodeId + idOffset },
+            to: { ...conn.to, nodeId: conn.to.nodeId + idOffset }
+          }));
+          nextNodeId.current = idOffset + maxId + 1;
+          setNodes(prev => [...prev, ...remappedNodes]);
+          setConnections(prev => [...prev, ...remappedConnections]);
+        }
+        return;
+      }
+    }
+    
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -972,6 +1027,11 @@ const WorkflowBuilder = ({ onNavigate }) => {
 
   const saveNodeSettings = (updatedNode) => {
     setNodes(prev => prev.map(n => n.id === updatedNode.id ? { ...n, ...updatedNode } : n));
+  };
+
+  // Update node config directly (used for inline text editing in note nodes)
+  const updateNodeConfig = (nodeId, newConfig) => {
+    setNodes(prev => prev.map(n => n.id === nodeId ? { ...n, config: newConfig } : n));
   };
 
   const handleDragOver = (e) => { e.preventDefault(); };
@@ -1163,7 +1223,7 @@ const WorkflowBuilder = ({ onNavigate }) => {
           </svg>
           <div className={`canvas${panning ? ' panning' : ''}`} id="canvas" ref={canvasRef} onDrop={handleDrop} onDragOver={handleDragOver} onMouseDown={onCanvasMouseDown} style={{ transform: `scale(${canvasScale}) translate(${canvasOffset.x}px,${canvasOffset.y}px)` }}>
             {nodes.map(node => (
-              <Node key={node.id} node={node} onUpdatePosition={updateNodePosition} onDelete={deleteNode} onStartConnection={startConnection} onEndConnection={endConnection} onOpenSettings={openNodeSettings} />
+              <Node key={node.id} node={node} onUpdatePosition={updateNodePosition} onDelete={deleteNode} onStartConnection={startConnection} onEndConnection={endConnection} onOpenSettings={openNodeSettings} onUpdateConfig={updateNodeConfig} />
             ))}
           </div>
 

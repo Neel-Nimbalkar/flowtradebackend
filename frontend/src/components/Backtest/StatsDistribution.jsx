@@ -141,7 +141,7 @@ const StatsDistribution = ({ trades }) => {
       
       // Softer colors without glow
       ctx.fillStyle = isPositive 
-        ? (isHovered ? '#34d399' : 'rgba(16, 185, 129, 0.8)') 
+        ? (isHovered ? '#60a5fa' : 'rgba(59, 130, 246, 0.8)') 
         : (isHovered ? '#f87171' : 'rgba(239, 68, 68, 0.8)');
       
       // Rounded top corners
@@ -328,7 +328,7 @@ const StatsDistribution = ({ trades }) => {
       ctx.beginPath();
       ctx.arc(x, y, isHovered ? 7 : 5, 0, Math.PI * 2);
       ctx.fillStyle = isWin 
-        ? (isHovered ? '#34d399' : 'rgba(38, 166, 154, 0.8)') 
+        ? (isHovered ? '#60a5fa' : 'rgba(59, 130, 246, 0.8)') 
         : (isHovered ? '#f87171' : 'rgba(239, 83, 80, 0.8)');
       ctx.fill();
     });
@@ -415,7 +415,7 @@ const StatsDistribution = ({ trades }) => {
       const isPositive = data.profit >= 0;
       const y = isPositive ? zeroY - barHeight : zeroY;
 
-      ctx.fillStyle = isPositive ? 'rgba(38, 166, 154, 0.8)' : 'rgba(239, 83, 80, 0.8)';
+      ctx.fillStyle = isPositive ? 'rgba(59, 130, 246, 0.8)' : 'rgba(239, 83, 80, 0.8)';
       
       const radius = 3;
       ctx.beginPath();

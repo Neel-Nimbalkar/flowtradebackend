@@ -158,7 +158,7 @@ const PriceChart = ({ historicalData, signals, trades }) => {
         const volHeight = height - margin.bottom + volumeHeight - volY;
         const isUp = bar.close >= bar.open;
         
-        ctx.fillStyle = isUp ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)';
+        ctx.fillStyle = isUp ? 'rgba(59, 130, 246, 0.3)' : 'rgba(239, 68, 68, 0.3)';
         ctx.fillRect(x - barWidth / 2, volY, barWidth, volHeight);
       });
     }
@@ -173,7 +173,7 @@ const PriceChart = ({ historicalData, signals, trades }) => {
       const yClose = yScale(bar.close);
 
       const isUp = bar.close >= bar.open;
-      const color = isUp ? '#10b981' : '#ef4444';
+      const color = isUp ? '#3b82f6' : '#ef4444';
 
       // Wick
       ctx.strokeStyle = color;
@@ -214,7 +214,7 @@ const PriceChart = ({ historicalData, signals, trades }) => {
         const isBuy = signalType === 'BUY';
 
         // Draw marker without glow
-        ctx.fillStyle = isBuy ? '#10b981' : '#ef4444';
+        ctx.fillStyle = isBuy ? '#3b82f6' : '#ef4444';
         
         ctx.beginPath();
         if (isBuy) {
@@ -275,7 +275,7 @@ const PriceChart = ({ historicalData, signals, trades }) => {
     const lastPrice = prices[prices.length - 1];
     const lastY = yScale(lastPrice.close);
     ctx.textAlign = 'left';
-    ctx.fillStyle = lastPrice.close >= prices[0].close ? '#10b981' : '#ef4444';
+    ctx.fillStyle = lastPrice.close >= prices[0].close ? '#3b82f6' : '#ef4444';
     ctx.font = 'bold 12px sans-serif';
     ctx.fillText(`$${lastPrice.close.toFixed(2)}`, width - margin.right + 8, lastY + 4);
   };
@@ -369,7 +369,7 @@ const PriceChart = ({ historicalData, signals, trades }) => {
 
       ctx.beginPath();
       ctx.arc(x, y, dotSize, 0, Math.PI * 2);
-      ctx.fillStyle = point.isWin ? '#26a69a' : '#ef5350';
+      ctx.fillStyle = point.isWin ? '#3b82f6' : '#ef5350';
       ctx.fill();
     });
 
@@ -396,7 +396,7 @@ const PriceChart = ({ historicalData, signals, trades }) => {
       const last = equityPoints[equityPoints.length - 1];
       const lastY = yScale(last.equity);
       ctx.textAlign = 'left';
-      ctx.fillStyle = last.equity >= 0 ? '#26a69a' : '#ef5350';
+      ctx.fillStyle = last.equity >= 0 ? '#3b82f6' : '#ef5350';
       ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, sans-serif';
       ctx.fillText(`$${last.equity.toFixed(2)}`, width - margin.right + 8, lastY + 3);
     }

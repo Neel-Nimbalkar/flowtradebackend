@@ -4,9 +4,17 @@ import Icon from './Icon';
 import categoryMeta from '../categoryMeta';
 import blockCategoryMap from '../blockCategoryMap';
 
-const Node = ({ node, onUpdatePosition, onDelete, onStartConnection, onEndConnection, onOpenSettings }) => {
+const Node = ({ node, onUpdatePosition, onDelete, onStartConnection, onEndConnection, onOpenSettings, onUpdateConfig }) => {
   const elRef = useRef(null);
   const [dragging, setDragging] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [noteText, setNoteText] = useState(node.config?.content || '');
+  const textAreaRef = useRef(null);
+
+  // Sync note text with node config
+  useEffect(() => {
+    setNoteText(node.config?.content || '');
+  }, [node.config?.content]);
 
   useEffect(() => {
     const el = elRef.current;
@@ -14,6 +22,14 @@ const Node = ({ node, onUpdatePosition, onDelete, onStartConnection, onEndConnec
     el.style.left = `${node.x}px`;
     el.style.top = `${node.y}px`;
   }, [node.x, node.y]);
+
+  // Auto-focus textarea when editing starts
+  useEffect(() => {
+    if (isEditing && textAreaRef.current) {
+      textAreaRef.current.focus();
+      textAreaRef.current.select();
+    }
+  }, [isEditing]);
 
   useEffect(() => {
     let moveHandler = null;
@@ -93,7 +109,84 @@ const Node = ({ node, onUpdatePosition, onDelete, onStartConnection, onEndConnec
     setDragging(true);
   };
 
+  // Handle text box click to start editing
+  const handleTextBoxClick = (e) => {
+    e.stopPropagation();
+    if (!isEditing) {
+      setIsEditing(true);
+    }
+  };
+
+  // Handle text change
+  const handleTextChange = (e) => {
+    setNoteText(e.target.value);
+  };
+
+  // Handle blur to save and exit editing
+  const handleTextBlur = () => {
+    setIsEditing(false);
+    if (onUpdateConfig && noteText !== (node.config?.content || '')) {
+      onUpdateConfig(node.id, { ...node.config, content: noteText });
+    }
+  };
+
+  // Handle keyboard shortcuts in textarea
+  const handleTextKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      setNoteText(node.config?.content || '');
+      setIsEditing(false);
+    }
+    // Stop propagation to prevent canvas shortcuts while editing
+    e.stopPropagation();
+  };
+
   const execClass = node.execStatus === 'executing' ? 'executing' : node.execStatus === 'passed' ? 'node-passed' : node.execStatus === 'failed' ? 'node-failed' : node.execStatus === 'skipped' ? 'node-skipped' : '';
+
+  // Check if this is a text note node
+  const isTextBox = node.type === 'note' || node.def?.isTextBox;
+
+  // Render text box node differently
+  if (isTextBox) {
+    return (
+      <div 
+        className={`node text-note-node${node.selected ? ' selected' : ''}${dragging ? ' dragging' : ''}${isEditing ? ' editing' : ''}`} 
+        id={`node-${node.id}`} 
+        ref={elRef} 
+        style={{ left: node.x, top: node.y, position: 'absolute', userSelect: dragging ? 'none' : 'auto' }}
+      >
+        <div className="text-note-header" onPointerDown={onHeaderPointerDown} style={{ cursor: 'grab', userSelect: 'none' }}>
+          <div className="node-icon color-note">
+            <Icon name="note" size={14} />
+          </div>
+          <span className="text-note-label">Note</span>
+          <button
+            type="button"
+            className="node-delete"
+            onMouseDown={(ev) => { ev.stopPropagation(); ev.preventDefault(); }}
+            onClick={(ev) => { ev.stopPropagation(); onDelete(node.id); }}
+          >×</button>
+        </div>
+        <div className="text-note-content" onClick={handleTextBoxClick}>
+          {isEditing ? (
+            <textarea
+              ref={textAreaRef}
+              className="text-note-textarea"
+              value={noteText}
+              onChange={handleTextChange}
+              onBlur={handleTextBlur}
+              onKeyDown={handleTextKeyDown}
+              placeholder="Click to add note..."
+              rows={3}
+            />
+          ) : (
+            <div className="text-note-display">
+              {noteText || <span className="text-note-placeholder">Click to add note...</span>}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`node${node.selected ? ' selected' : ''}${execClass ? ' ' + execClass : ''}${dragging ? ' dragging' : ''}`} id={`node-${node.id}`} ref={elRef} style={{ left: node.x, top: node.y, position: 'absolute', userSelect: dragging ? 'none' : 'auto' }}>

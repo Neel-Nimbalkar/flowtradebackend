@@ -5,6 +5,7 @@ import BacktestPage from './pages/BacktestPage'
 import Dashboard from './pages/Dashboard'
 import Analytics from './pages/AnalyticsPage'
 import Account from './pages/Account'
+import Settings from './pages/Settings'
 import BackButton from './components/BackButton'
 import './workflow_builder.css'
 
@@ -48,6 +49,7 @@ const App = () => {
       {route === 'backtest' && <BacktestPage onNavigate={navigate} />}
       {route === 'analytics' && <Analytics onNavigate={navigate} />}
       {route === 'account' && <Account onNavigate={navigate} />}
+      {route === 'settings' && <Settings onNavigate={navigate} />}
       {route === 'billing' && <div style={{ padding: 24 }}>Billing / Subscription (placeholder)</div>}
       {route === 'help' && <div style={{ padding: 24 }}>Help / Documentation (placeholder)</div>}
     </React.StrictMode>

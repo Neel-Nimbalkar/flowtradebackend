@@ -25,7 +25,7 @@ const IndicatorChart = ({ indicatorData = {} }) => {
     if (!isFinite(min)) { min = 0; max = 1; }
     const range = max - min || 1;
 
-    const colors = ['#60a5fa', '#f59e0b', '#34d399', '#fb7185', '#c084fc'];
+    const colors = ['#60a5fa', '#f59e0b', '#3b82f6', '#fb7185', '#c084fc'];
     keys.forEach((k, ki) => {
       const series = indicatorData[k] || [];
       ctx.beginPath(); ctx.strokeStyle = colors[ki % colors.length]; ctx.lineWidth = 1.2;

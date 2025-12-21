@@ -104,9 +104,9 @@ const EquityCurveChart = ({ data, trades }) => {
     const startEquity = data[0].equity;
     const endEquity = data[data.length - 1].equity;
     const isProfit = endEquity >= startEquity;
-    const lineColor = isProfit ? '#10b981' : '#ef4444';
-    const gradientStart = isProfit ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)';
-    const gradientEnd = isProfit ? 'rgba(16, 185, 129, 0.02)' : 'rgba(239, 68, 68, 0.02)';
+    const lineColor = isProfit ? '#3b82f6' : '#ef4444';
+    const gradientStart = isProfit ? 'rgba(59, 130, 246, 0.3)' : 'rgba(239, 68, 68, 0.3)';
+    const gradientEnd = isProfit ? 'rgba(59, 130, 246, 0.02)' : 'rgba(239, 68, 68, 0.02)';
 
     const xScale = (time) => margin.left + ((time - minTime) / (maxTime - minTime)) * chartWidth;
     const yScale = (equity) => height - margin.bottom - ((equity - minEquity) / (maxEquity - minEquity)) * chartHeight;
@@ -217,12 +217,12 @@ const EquityCurveChart = ({ data, trades }) => {
     const peakX = xScale(peakPoint.time);
     const peakY = yScale(peakPoint.equity);
     
-    ctx.fillStyle = '#10b981';
+    ctx.fillStyle = '#3b82f6';
     ctx.beginPath();
     ctx.arc(peakX, peakY, 5, 0, Math.PI * 2);
     ctx.fill();
     
-    ctx.fillStyle = '#10b981';
+    ctx.fillStyle = '#3b82f6';
     ctx.font = '11px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('Peak', peakX, peakY - 10);

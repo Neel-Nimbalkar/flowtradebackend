@@ -49,7 +49,7 @@ const AdvancedMetrics = ({ results }) => {
               <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(42, 46, 57, 0.5)" strokeWidth="8" />
               <circle 
                 cx="50" cy="50" r="45" fill="none" 
-                stroke={scoreInfo.score >= 6 ? '#10b981' : scoreInfo.score >= 4 ? '#f59e0b' : '#ef4444'} 
+                stroke={scoreInfo.score >= 6 ? '#3b82f6' : scoreInfo.score >= 4 ? '#f59e0b' : '#ef4444'} 
                 strokeWidth="8"
                 strokeDasharray={`${(scoreInfo.score / scoreInfo.total) * 283} 283`}
                 strokeLinecap="round"
@@ -86,11 +86,11 @@ const AdvancedMetrics = ({ results }) => {
             <div className="metric-icon sharpe">SR</div>
             <div className="metric-content">
               <div className="metric-label">Sharpe Ratio</div>
-              <div className="metric-value" style={{ color: advancedStats.sharpeRatio > 1 ? '#10b981' : advancedStats.sharpeRatio > 0 ? '#f59e0b' : '#ef4444' }}>
+              <div className="metric-value" style={{ color: advancedStats.sharpeRatio > 1 ? '#3b82f6' : advancedStats.sharpeRatio > 0 ? '#f59e0b' : '#ef4444' }}>
                 {formatRatio(advancedStats.sharpeRatio)}
               </div>
               <div className="metric-bar">
-                <div className="metric-bar-fill" style={{ width: `${Math.min(100, Math.max(0, advancedStats.sharpeRatio * 33))}%`, background: advancedStats.sharpeRatio > 1 ? '#10b981' : '#f59e0b' }}></div>
+                <div className="metric-bar-fill" style={{ width: `${Math.min(100, Math.max(0, advancedStats.sharpeRatio * 33))}%`, background: advancedStats.sharpeRatio > 1 ? '#3b82f6' : '#f59e0b' }}></div>
               </div>
               <div className="metric-hint">{advancedStats.sharpeRatio > 2 ? 'Excellent' : advancedStats.sharpeRatio > 1 ? 'Good' : 'Needs Improvement'}</div>
             </div>
@@ -99,11 +99,11 @@ const AdvancedMetrics = ({ results }) => {
             <div className="metric-icon sortino">SO</div>
             <div className="metric-content">
               <div className="metric-label">Sortino Ratio</div>
-              <div className="metric-value" style={{ color: advancedStats.sortinoRatio > 1 ? '#10b981' : advancedStats.sortinoRatio > 0 ? '#f59e0b' : '#ef4444' }}>
+              <div className="metric-value" style={{ color: advancedStats.sortinoRatio > 1 ? '#3b82f6' : advancedStats.sortinoRatio > 0 ? '#f59e0b' : '#ef4444' }}>
                 {formatRatio(advancedStats.sortinoRatio)}
               </div>
               <div className="metric-bar">
-                <div className="metric-bar-fill" style={{ width: `${Math.min(100, Math.max(0, advancedStats.sortinoRatio * 33))}%`, background: advancedStats.sortinoRatio > 1 ? '#10b981' : '#f59e0b' }}></div>
+                <div className="metric-bar-fill" style={{ width: `${Math.min(100, Math.max(0, advancedStats.sortinoRatio * 33))}%`, background: advancedStats.sortinoRatio > 1 ? '#3b82f6' : '#f59e0b' }}></div>
               </div>
               <div className="metric-hint">Downside risk adjusted</div>
             </div>
@@ -112,11 +112,11 @@ const AdvancedMetrics = ({ results }) => {
             <div className="metric-icon calmar">CR</div>
             <div className="metric-content">
               <div className="metric-label">Calmar Ratio</div>
-              <div className="metric-value" style={{ color: advancedStats.calmarRatio > 1 ? '#10b981' : advancedStats.calmarRatio > 0 ? '#f59e0b' : '#ef4444' }}>
+              <div className="metric-value" style={{ color: advancedStats.calmarRatio > 1 ? '#3b82f6' : advancedStats.calmarRatio > 0 ? '#f59e0b' : '#ef4444' }}>
                 {formatRatio(advancedStats.calmarRatio)}
               </div>
               <div className="metric-bar">
-                <div className="metric-bar-fill" style={{ width: `${Math.min(100, Math.max(0, advancedStats.calmarRatio * 33))}%`, background: advancedStats.calmarRatio > 1 ? '#10b981' : '#f59e0b' }}></div>
+                <div className="metric-bar-fill" style={{ width: `${Math.min(100, Math.max(0, advancedStats.calmarRatio * 33))}%`, background: advancedStats.calmarRatio > 1 ? '#3b82f6' : '#f59e0b' }}></div>
               </div>
               <div className="metric-hint">Return / Max Drawdown</div>
             </div>
@@ -132,28 +132,28 @@ const AdvancedMetrics = ({ results }) => {
         <div className="metrics-grid-4">
           <div className="metric-card-compact">
             <div className="metric-label">Average R-Multiple</div>
-            <div className="metric-value" style={{ color: advancedStats.avgRMultiple > 1 ? '#10b981' : advancedStats.avgRMultiple > 0 ? '#f59e0b' : '#ef4444' }}>
+            <div className="metric-value" style={{ color: advancedStats.avgRMultiple > 1 ? '#3b82f6' : advancedStats.avgRMultiple > 0 ? '#f59e0b' : '#ef4444' }}>
               {formatRatio(advancedStats.avgRMultiple)}R
             </div>
             <div className="metric-sub">Risk-reward efficiency</div>
           </div>
           <div className="metric-card-compact">
             <div className="metric-label">Win/Loss Ratio</div>
-            <div className="metric-value" style={{ color: advancedStats.winLossRatio > 1 ? '#10b981' : '#ef4444' }}>
+            <div className="metric-value" style={{ color: advancedStats.winLossRatio > 1 ? '#3b82f6' : '#ef4444' }}>
               {formatRatio(advancedStats.winLossRatio)}
             </div>
             <div className="metric-sub">Avg win / avg loss</div>
           </div>
           <div className="metric-card-compact">
             <div className="metric-label">Recovery Factor</div>
-            <div className="metric-value" style={{ color: advancedStats.recoveryFactor > 2 ? '#10b981' : advancedStats.recoveryFactor > 1 ? '#f59e0b' : '#ef4444' }}>
+            <div className="metric-value" style={{ color: advancedStats.recoveryFactor > 2 ? '#3b82f6' : advancedStats.recoveryFactor > 1 ? '#f59e0b' : '#ef4444' }}>
               {formatRatio(advancedStats.recoveryFactor)}
             </div>
             <div className="metric-sub">Net profit / max DD</div>
           </div>
           <div className="metric-card-compact">
             <div className="metric-label">Payoff Ratio</div>
-            <div className="metric-value" style={{ color: advancedStats.payoffRatio > 1.5 ? '#10b981' : advancedStats.payoffRatio > 1 ? '#f59e0b' : '#ef4444' }}>
+            <div className="metric-value" style={{ color: advancedStats.payoffRatio > 1.5 ? '#3b82f6' : advancedStats.payoffRatio > 1 ? '#f59e0b' : '#ef4444' }}>
               {formatRatio(advancedStats.payoffRatio)}
             </div>
             <div className="metric-sub">Target &gt; 1.5</div>
@@ -214,7 +214,7 @@ const AdvancedMetrics = ({ results }) => {
             <span className="duration-value">{formatDuration(advancedStats.avgWinDuration)}</span>
           </div>
           <div className="duration-vs">
-            <div className="duration-efficiency" style={{ color: advancedStats.durationEfficiency > 1 ? '#10b981' : '#ef4444' }}>
+            <div className="duration-efficiency" style={{ color: advancedStats.durationEfficiency > 1 ? '#3b82f6' : '#ef4444' }}>
               {formatNumber(advancedStats.durationEfficiency)}x
             </div>
             <span className="duration-efficiency-label">Efficiency</span>
@@ -274,7 +274,7 @@ const AdvancedMetrics = ({ results }) => {
                 </div>
                 <div className="dir-metric">
                   <span className="dir-label">Net P&L</span>
-                  <span className="dir-value" style={{ color: advancedStats.longTrades.netProfit >= 0 ? '#10b981' : '#ef4444' }}>
+                  <span className="dir-value" style={{ color: advancedStats.longTrades.netProfit >= 0 ? '#3b82f6' : '#ef4444' }}>
                     {formatCurrency(advancedStats.longTrades.netProfit)}
                   </span>
                 </div>
@@ -299,7 +299,7 @@ const AdvancedMetrics = ({ results }) => {
                 </div>
                 <div className="dir-metric">
                   <span className="dir-label">Net P&L</span>
-                  <span className="dir-value" style={{ color: advancedStats.shortTrades.netProfit >= 0 ? '#10b981' : '#ef4444' }}>
+                  <span className="dir-value" style={{ color: advancedStats.shortTrades.netProfit >= 0 ? '#3b82f6' : '#ef4444' }}>
                     {formatCurrency(advancedStats.shortTrades.netProfit)}
                   </span>
                 </div>
@@ -341,7 +341,7 @@ const AdvancedMetrics = ({ results }) => {
               <span className="mae-mfe-icon">⚖️</span>
               <span>Ratio</span>
             </div>
-            <div className="mae-mfe-value" style={{ color: advancedStats.maeMfeRatio < 1 ? '#10b981' : '#ef4444' }}>
+            <div className="mae-mfe-value" style={{ color: advancedStats.maeMfeRatio < 1 ? '#3b82f6' : '#ef4444' }}>
               {formatRatio(advancedStats.maeMfeRatio)}
             </div>
             <div className="mae-mfe-label">{advancedStats.maeMfeRatio < 1 ? 'Good (Lower is better)' : 'Needs work'}</div>
@@ -351,7 +351,7 @@ const AdvancedMetrics = ({ results }) => {
               <span className="mae-mfe-icon">🎯</span>
               <span>Exit Efficiency</span>
             </div>
-            <div className="mae-mfe-value" style={{ color: advancedStats.exitEfficiency > 50 ? '#10b981' : '#f59e0b' }}>
+            <div className="mae-mfe-value" style={{ color: advancedStats.exitEfficiency > 50 ? '#3b82f6' : '#f59e0b' }}>
               {formatPercent(advancedStats.exitEfficiency)}
             </div>
             <div className="mae-mfe-label">Profit capture rate</div>
@@ -464,8 +464,8 @@ function calculateAdvancedMetrics(trades, startingCapital) {
     { label: 'Loss (-5% to -2%)', count: 0, color: '#ef4444' },
     { label: 'Small Loss (-2% to 0%)', count: 0, color: '#f87171' },
     { label: 'Small Win (0% to 2%)', count: 0, color: '#86efac' },
-    { label: 'Win (2% to 5%)', count: 0, color: '#10b981' },
-    { label: 'Big Win (> 5%)', count: 0, color: '#059669' }
+    { label: 'Win (2% to 5%)', count: 0, color: '#3b82f6' },
+    { label: 'Big Win (> 5%)', count: 0, color: '#2563eb' }
   ];
 
   trades.forEach(t => {

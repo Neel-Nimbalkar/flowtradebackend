@@ -331,6 +331,7 @@ function getAlpacaCredentials() {
 /**
  * Prepare workflow payload from strategy nodes/connections
  * CRITICAL: Must match WorkflowBuilder.preparePayload format exactly
+ * UPDATED: Now includes connections for graph-based execution
  */
 function preparePayload(strategy) {
   const nodes = strategy.nodes || [];
@@ -378,11 +379,15 @@ function preparePayload(strategy) {
   // Get Alpaca credentials
   const { alpacaKeyId, alpacaSecretKey } = getAlpacaCredentials();
   
+  // Include connections for graph-based execution (UnifiedStrategyExecutor)
+  console.log(`[StrategyRunner] Preparing payload: ${workflow_blocks.length} nodes, ${connections.length} connections`);
+  
   return {
     symbol,
     timeframe,
     days,
     workflow: workflow_blocks,
+    connections: connections,  // ✅ Include connections for graph-based execution
     priceType: 'current',
     alpacaKeyId,
     alpacaSecretKey

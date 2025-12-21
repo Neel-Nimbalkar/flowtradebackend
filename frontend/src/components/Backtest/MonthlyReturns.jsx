@@ -15,9 +15,9 @@ const MonthlyReturns = ({ results }) => {
   const formatCurrency = (val) => val >= 0 ? `+$${val.toFixed(2)}` : `-$${Math.abs(val).toFixed(2)}`;
 
   const getColor = (value) => {
-    if (value > 5) return '#059669';
-    if (value > 2) return '#10b981';
-    if (value > 0) return '#6ee7b7';
+    if (value > 5) return '#2563eb';
+    if (value > 2) return '#3b82f6';
+    if (value > 0) return '#93c5fd';
     if (value > -2) return '#fca5a5';
     if (value > -5) return '#ef4444';
     return '#dc2626';
@@ -64,7 +64,7 @@ const MonthlyReturns = ({ results }) => {
                     <span className="summary-label">Total Return:</span>
                     <span className="summary-value" style={{ 
                       color: monthlyData.dailyData[selectedMonth.key].reduce((sum, d) => sum + d.returnPct, 0) > 0 
-                        ? '#10b981' : '#ef4444' 
+                        ? '#3b82f6' : '#ef4444' 
                     }}>
                       {formatPercent(monthlyData.dailyData[selectedMonth.key].reduce((sum, d) => sum + d.returnPct, 0))}
                     </span>
@@ -75,7 +75,7 @@ const MonthlyReturns = ({ results }) => {
                   </div>
                   <div className="daily-summary-card">
                     <span className="summary-label">Win Days:</span>
-                    <span className="summary-value" style={{ color: '#10b981' }}>
+                    <span className="summary-value" style={{ color: '#3b82f6' }}>
                       {monthlyData.dailyData[selectedMonth.key].filter(d => d.returnPct > 0).length}
                     </span>
                   </div>
@@ -103,7 +103,7 @@ const MonthlyReturns = ({ results }) => {
                           <span className="date-num">{day.date}</span>
                         </div>
                         <div className="daily-col-trades">{day.trades}</div>
-                        <div className="daily-col-pnl" style={{ color: day.profit > 0 ? '#10b981' : '#ef4444' }}>
+                        <div className="daily-col-pnl" style={{ color: day.profit > 0 ? '#3b82f6' : '#ef4444' }}>
                           {formatCurrency(day.profit)}
                         </div>
                         <div className="daily-col-return">
@@ -112,10 +112,10 @@ const MonthlyReturns = ({ results }) => {
                               className="return-bar" 
                               style={{ 
                                 width: `${Math.min(Math.abs(day.returnPct) * 10, 100)}%`,
-                                backgroundColor: day.returnPct > 0 ? '#10b981' : '#ef4444'
+                                backgroundColor: day.returnPct > 0 ? '#3b82f6' : '#ef4444'
                               }}
                             />
-                            <span className="return-value" style={{ color: day.returnPct > 0 ? '#10b981' : '#ef4444' }}>
+                            <span className="return-value" style={{ color: day.returnPct > 0 ? '#3b82f6' : '#ef4444' }}>
                               {formatPercent(day.returnPct)}
                             </span>
                           </div>
@@ -194,7 +194,7 @@ const MonthlyReturns = ({ results }) => {
       <div className="returns-summary">
         <div className="summary-stat">
           <span className="stat-label">Best Month:</span>
-          <span className="stat-value" style={{ color: '#10b981' }}>
+          <span className="stat-value" style={{ color: '#3b82f6' }}>
             {formatPercent(monthlyData.bestMonth.value)} ({monthlyData.bestMonth.label})
           </span>
         </div>
@@ -206,7 +206,7 @@ const MonthlyReturns = ({ results }) => {
         </div>
         <div className="summary-stat">
           <span className="stat-label">Avg Monthly Return:</span>
-          <span className="stat-value" style={{ color: monthlyData.avgMonthly > 0 ? '#10b981' : '#ef4444' }}>
+          <span className="stat-value" style={{ color: monthlyData.avgMonthly > 0 ? '#3b82f6' : '#ef4444' }}>
             {formatPercent(monthlyData.avgMonthly)}
           </span>
         </div>

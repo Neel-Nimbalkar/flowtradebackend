@@ -47,6 +47,14 @@ const blockDefs = {
       { key: 'output', label: 'Output', type: 'select', options: ['value','signal'], value: 'value' }
     ]
   },
+  sma: {
+    name: 'SMA', icon: 'bolt', color: 'color-indicator', inputs: ['prices'], outputs: ['sma'],
+    config: [
+      { key: 'period', label: 'Period', type: 'number', value: 20 },
+      { key: 'source', label: 'Source', type: 'select', options: ['current','close','open','high','low','hl2','hlc3','ohlc4'], value: 'close' },
+      { key: 'output', label: 'Output', type: 'select', options: ['value','signal'], value: 'value' }
+    ]
+  },
   macd: {
     name: 'MACD', icon: 'bolt', color: 'color-indicator', inputs: ['prices'], outputs: ['macd'],
     config: [
@@ -98,6 +106,54 @@ const blockDefs = {
     name: 'Volume Spike', icon: 'chart-up', color: 'color-volume', inputs: ['volumes'], outputs: ['spike'],
     config: [ { key: 'period', label: 'Period', type: 'number', value: 20 }, { key: 'multiplier', label: 'Multiplier', type: 'number', value: 1.5 } ]
   },
+  // Price Action & Levels
+  price_levels: {
+    name: 'Price Levels', icon: 'chart-up', color: 'color-indicator', inputs: ['prices'], outputs: ['high','low','open','close'],
+    desc: 'Get high/low of day, open, close levels',
+    config: [
+      { key: 'lookback', label: 'Lookback Bars', type: 'number', value: 1 },
+      { key: 'output', label: 'Output', type: 'select', options: ['high','low','open','close','range'], value: 'high' }
+    ]
+  },
+  support_resistance: {
+    name: 'Support/Resistance', icon: 'chart', color: 'color-indicator', inputs: ['prices'], outputs: ['support','resistance'],
+    desc: 'Calculate dynamic support and resistance levels',
+    config: [
+      { key: 'period', label: 'Period', type: 'number', value: 20 },
+      { key: 'strength', label: 'Strength', type: 'number', value: 2 },
+      { key: 'output', label: 'Output', type: 'select', options: ['support','resistance','both'], value: 'support' }
+    ]
+  },
+  // Filters
+  time_filter: {
+    name: 'Time Filter', icon: 'clock', color: 'color-logic', inputs: ['signal'], outputs: ['filtered'],
+    desc: 'Filter signals by market hours',
+    config: [
+      { key: 'start_hour', label: 'Start Hour (ET)', type: 'number', value: 9 },
+      { key: 'start_minute', label: 'Start Minute', type: 'number', value: 30 },
+      { key: 'end_hour', label: 'End Hour (ET)', type: 'number', value: 16 },
+      { key: 'end_minute', label: 'End Minute', type: 'number', value: 0 },
+      { key: 'exclude_first_mins', label: 'Exclude First N Mins', type: 'number', value: 0 },
+      { key: 'exclude_last_mins', label: 'Exclude Last N Mins', type: 'number', value: 0 }
+    ]
+  },
+  trend_filter: {
+    name: 'Trend Filter', icon: 'trending-up', color: 'color-logic', inputs: ['prices'], outputs: ['trend'],
+    desc: 'Filter by overall trend direction',
+    config: [
+      { key: 'fast_period', label: 'Fast EMA', type: 'number', value: 20 },
+      { key: 'slow_period', label: 'Slow EMA', type: 'number', value: 50 },
+      { key: 'output', label: 'Output', type: 'select', options: ['bullish','bearish','neutral','signal'], value: 'signal' }
+    ]
+  },
+  volume_filter: {
+    name: 'Volume Filter', icon: 'chart-up', color: 'color-volume', inputs: ['volumes'], outputs: ['filtered'],
+    desc: 'Filter by relative volume threshold',
+    config: [
+      { key: 'period', label: 'Avg Period', type: 'number', value: 20 },
+      { key: 'threshold', label: 'Min Rel. Volume', type: 'number', value: 1.0 }
+    ]
+  },
   // Logic
   and: {
     name: 'AND Gate', icon: 'plus', color: 'color-logic', inputs: ['a','b'], outputs: ['result'],
@@ -115,6 +171,21 @@ const blockDefs = {
     name: 'Compare', icon: 'search', color: 'color-logic', inputs: ['a','b'], outputs: ['result'],
     config: [ { key: 'operator', label: 'Operator', type: 'select', options: ['>','<','=','>=','<='], value: '>' } ]
   },
+  crossover: {
+    name: 'Crossover', icon: 'git-merge', color: 'color-logic', inputs: ['a','b'], outputs: ['cross_up','cross_down'],
+    desc: 'Detect when line A crosses line B',
+    config: [
+      { key: 'output', label: 'Output', type: 'select', options: ['cross_up','cross_down','any'], value: 'cross_up' }
+    ]
+  },
+  threshold: {
+    name: 'Threshold', icon: 'target', color: 'color-logic', inputs: ['value'], outputs: ['above','below'],
+    desc: 'Check if value is above or below threshold',
+    config: [
+      { key: 'level', label: 'Level', type: 'number', value: 50 },
+      { key: 'output', label: 'Output', type: 'select', options: ['above','below','signal'], value: 'signal' }
+    ]
+  },
   // AI & Output
   ai_agent: {
     name: 'AI Agent', icon: 'ai', color: 'color-output', inputs: ['analyse'], outputs: ['signal'],
@@ -127,6 +198,7 @@ const blockDefs = {
   // Utility
   note: {
     name: 'Text Note', icon: 'note', color: 'color-note', inputs: [], outputs: [],
+    isTextBox: true,
     config: [ { key: 'content', label: 'Note', type: 'textarea', value: '' } ]
   }
 };

@@ -1,6 +1,15 @@
 import React from 'react';
 
 const categoryMeta = {
+  'Strategies': {
+    desc: 'Pre-built intraday trading strategies',
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+        <path d="M3 17l6-6 4 4L21 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M17 7h4v4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    )
+  },
   Templates: {
     desc: 'Starter strategy presets',
     icon: (
@@ -37,6 +46,14 @@ const categoryMeta = {
         <path d="M12 3v6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
         <path d="M12 9c0 3-4 3-4 6v3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
         <path d="M12 9c0 3 4 3 4 6v3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    )
+  },
+  'Filters': {
+    desc: 'Filter signals by time, trend, volume',
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+        <polygon points="22,3 2,3 10,12.46 10,19 14,21 14,12.46" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     )
   },

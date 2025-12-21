@@ -1,1 +1,38 @@
-﻿{}
+{
+  "momentom": {
+    "position": "LONG",
+    "last_signal": "BUY",
+    "open_trade": {
+      "entry_price": 680.88,
+      "entry_ts": "2025-12-20T16:01:03.434Z",
+      "side": "LONG",
+      "meta": {
+        "source": "StrategyRunner"
+      }
+    }
+  },
+  "workflow-2025-12-21T02-08-40-245Z": {
+    "position": "LONG",
+    "last_signal": "BUY",
+    "open_trade": {
+      "entry_price": 680.88,
+      "entry_ts": "2025-12-21T02:08:45.814Z",
+      "side": "LONG",
+      "meta": {
+        "source": "StrategyRunner"
+      }
+    }
+  },
+  "workflow-2025-12-21T04-05-46-204Z": {
+    "position": "LONG",
+    "last_signal": "BUY",
+    "open_trade": {
+      "entry_price": 680.88,
+      "entry_ts": "2025-12-21T04:05:54.644Z",
+      "side": "LONG",
+      "meta": {
+        "source": "StrategyRunner"
+      }
+    }
+  }
+}

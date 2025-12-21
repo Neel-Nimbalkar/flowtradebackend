@@ -77,7 +77,7 @@ const LegacyMonitorTab = ({ data = null }) => {
               <div style={{ fontSize: 13 }}>Asset price</div>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
-              <div style={{ width: 12, height: 12, background: '#22c55e', borderRadius: 6 }} />
+              <div style={{ width: 12, height: 12, background: '#3b82f6', borderRadius: 6 }} />
               <div style={{ fontSize: 13 }}>BUY marker</div>
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>

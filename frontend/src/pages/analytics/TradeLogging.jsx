@@ -314,7 +314,7 @@ const TradeTable = ({ trades, onSelectTrade, strategies }) => {
   if (!trades || trades.length === 0) {
     return (
       <div className="trade-table-empty">
-        <div className="empty-icon">📊</div>
+        <div className="empty-icon icon-chart"></div>
         <div className="empty-title">No trades yet</div>
         <div className="empty-message">
           Enable a strategy and wait for alternating BUY/SELL signals to generate trades.
@@ -546,7 +546,7 @@ const TradeLogging = () => {
   if (error) {
     return (
       <div className="trade-logging-error">
-        <div className="error-icon">⚠️</div>
+        <div className="error-icon icon-alert"></div>
         <div>{error}</div>
         <button onClick={fetchTrades}>Retry</button>
       </div>

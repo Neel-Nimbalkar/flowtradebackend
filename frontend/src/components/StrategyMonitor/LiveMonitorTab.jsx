@@ -13,7 +13,7 @@ const LiveMonitorTab = ({ data = null, nodeBuffers = {} }) => {
   const [series, setSeries] = useState(() => []);
   const lastTsRef = useRef(null);
   // Build overlays from nodeBuffers. Each overlay: { id, name, series: [{t, v}], stroke }
-  const overlayPalette = ['#ff8a00', '#22c55e', '#ffd36b', '#a78bfa', '#fb7185', '#60a5fa'];
+  const overlayPalette = ['#ff8a00', '#3b82f6', '#ffd36b', '#a78bfa', '#fb7185', '#60a5fa'];
   const overlays = Object.entries(nodeBuffers || {}).map(([id, info], idx) => ({ id, name: info.name, series: info.buf || [], stroke: overlayPalette[idx % overlayPalette.length] }));
 
   // Append latest datapoint when data updates. If backend provides a full history

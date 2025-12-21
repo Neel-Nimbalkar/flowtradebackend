@@ -6,7 +6,7 @@ const SignalSummary = ({ latestSignal = null, latestData = {} }) => {
   const price = latestSignal ? (latestSignal.price || latestData.price || '--') : (latestData.price ? `$${Number(latestData.price).toFixed(2)}` : '--');
   const confidence = latestSignal && typeof latestSignal.confidence !== 'undefined' ? (Number(latestSignal.confidence) * 100).toFixed(1) + '%' : (latestData.confidence ? (Number(latestData.confidence) * 100).toFixed(1) + '%' : '--');
 
-  const color = (label || '').toString().toLowerCase().includes('buy') ? '#10b981' : (label || '').toString().toLowerCase().includes('sell') ? '#ef4444' : '#9ca3af';
+  const color = (label || '').toString().toLowerCase().includes('buy') ? '#3b82f6' : (label || '').toString().toLowerCase().includes('sell') ? '#ef4444' : '#9ca3af';
 
   return (
     <div className="sr-signal-summary">

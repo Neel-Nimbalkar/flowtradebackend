@@ -146,7 +146,7 @@ const FlowGradeCard = ({ gradeData, onShowBreakdown, loading }) => {
     return (
       <div className="flow-grade-card">
         <div className="empty-state-container" style={{ padding: '24px' }}>
-          <div className="empty-state-icon">📊</div>
+          <div className="empty-state-icon icon-chart"></div>
           <div className="empty-state-title">Flow Grade</div>
           <div className="empty-state-message">
             {gradeData?.guidance || 'Complete trades to see your performance grade'}
@@ -343,8 +343,8 @@ const EquityChart = ({ data, loading, chartMode, onModeChange }) => {
       const isPositive = values[values.length - 1] >= values[0];
       
       if (isPositive) {
-        gradient.addColorStop(0, 'rgba(34, 197, 94, 0.3)');
-        gradient.addColorStop(1, 'rgba(34, 197, 94, 0.0)');
+        gradient.addColorStop(0, 'rgba(59, 130, 246, 0.3)');
+        gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
       } else {
         gradient.addColorStop(0, 'rgba(239, 68, 68, 0.3)');
         gradient.addColorStop(1, 'rgba(239, 68, 68, 0.0)');
@@ -364,7 +364,7 @@ const EquityChart = ({ data, loading, chartMode, onModeChange }) => {
     }
     
     const isPositive = values[values.length - 1] >= values[0];
-    ctx.strokeStyle = '#10B981';
+    ctx.strokeStyle = '#3b82f6';
     ctx.lineWidth = 2;
     ctx.stroke();
     
@@ -415,7 +415,7 @@ const EquityChart = ({ data, loading, chartMode, onModeChange }) => {
       
       {!hasData ? (
         <div className="empty-state-container">
-          <div className="empty-state-icon">📈</div>
+          <div className="empty-state-icon icon-trending-up"></div>
           <div className="empty-state-title">No Equity Data</div>
           <div className="empty-state-message">
             {data?.guidance || 'Execute trades to see your equity curve progression'}
@@ -453,7 +453,7 @@ const RecentActivityPanel = ({ activity, loading }) => {
       
       {isEmpty ? (
         <div className="empty-state-container" style={{ padding: '24px' }}>
-          <div className="empty-state-icon">⚡</div>
+          <div className="empty-state-icon icon-activity"></div>
           <div className="empty-state-message">
             Signals and trades will appear here in real-time
           </div>
@@ -462,7 +462,7 @@ const RecentActivityPanel = ({ activity, loading }) => {
         <div className="activity-list">
           {activity.map((item, idx) => (
             <div key={item.id || idx} className="activity-item">
-              <div className="activity-icon">{item.icon || '📊'}</div>
+              <div className="activity-icon">{item.icon || '◆'}</div>
               <div className="activity-details">
                 <div className="activity-title">
                   {item.type === 'entry' ? 'Opened' : 'Closed'} {item.symbol} ({item.strategy_name})
@@ -567,7 +567,7 @@ const HeatmapPanel = ({ data, loading }) => {
           <div className="chart-panel-title">P&L by Time</div>
         </div>
         <div className="empty-state-container">
-          <div className="empty-state-icon">🗓️</div>
+          <div className="empty-state-icon icon-calendar"></div>
           <div className="empty-state-message">
             {data?.guidance || 'Trade data needed for time analysis'}
           </div>
@@ -582,7 +582,7 @@ const HeatmapPanel = ({ data, loading }) => {
   const getColor = (value) => {
     const intensity = Math.min(Math.abs(value) / maxAbs, 1);
     if (value > 0) {
-      return `rgba(34, 197, 94, ${0.2 + intensity * 0.6})`;
+      return `rgba(59, 130, 246, ${0.2 + intensity * 0.6})`;
     } else if (value < 0) {
       return `rgba(239, 68, 68, ${0.2 + intensity * 0.6})`;
     }
@@ -640,7 +640,7 @@ const DistributionPanel = ({ data, title, loading }) => {
           <div className="chart-panel-title">{title}</div>
         </div>
         <div className="empty-state-container">
-          <div className="empty-state-icon">📊</div>
+          <div className="empty-state-icon icon-chart"></div>
           <div className="empty-state-message">
             {data?.guidance || 'More trades needed for distribution analysis'}
           </div>
@@ -699,7 +699,7 @@ const AttributionPanel = ({ data, loading }) => {
           <div className="chart-panel-title">Strategy Attribution</div>
         </div>
         <div className="empty-state-container">
-          <div className="empty-state-icon">🎯</div>
+          <div className="empty-state-icon icon-target"></div>
           <div className="empty-state-message">
             {data?.guidance || 'Trade data from multiple strategies needed'}
           </div>
@@ -797,7 +797,7 @@ const MonteCarloPanel = ({ data, loading, isPremium }) => {
           
           {showPremiumGate && (
             <div className="premium-overlay">
-              <div className="premium-lock-icon">🔒</div>
+              <div className="premium-lock-icon icon-lock"></div>
               <div className="premium-title">Premium Feature</div>
               <div className="premium-description">
                 Unlock full Monte Carlo analysis with path visualization and advanced probability metrics
@@ -1300,7 +1300,7 @@ const Analytics = ({ onNavigate }) => {
                 <div className="chart-panel-title">Trade Duration</div>
               </div>
               <div className="empty-state-container">
-                <div className="empty-state-icon">⏱️</div>
+                <div className="empty-state-icon icon-clock"></div>
                 <div className="empty-state-message">Duration analysis coming soon</div>
               </div>
             </div>
@@ -1309,7 +1309,7 @@ const Analytics = ({ onNavigate }) => {
                 <div className="chart-panel-title">Trade Scatter Plot</div>
               </div>
               <div className="empty-state-container">
-                <div className="empty-state-icon">🎯</div>
+                <div className="empty-state-icon icon-target"></div>
                 <div className="empty-state-message">Entry Price vs P&L scatter plot coming soon</div>
               </div>
             </div>
@@ -1412,7 +1412,7 @@ const Analytics = ({ onNavigate }) => {
                 <div className="chart-panel-title">Drawdown Timeline</div>
               </div>
               <div className="empty-state-container">
-                <div className="empty-state-icon">📉</div>
+                <div className="empty-state-icon icon-trending-down"></div>
                 <div className="empty-state-message">Drawdown visualization coming soon</div>
               </div>
             </div>
@@ -1431,7 +1431,7 @@ const Analytics = ({ onNavigate }) => {
                 <div className="chart-panel-title">Intraday Performance</div>
               </div>
               <div className="empty-state-container">
-                <div className="empty-state-icon">📊</div>
+                <div className="empty-state-icon icon-chart"></div>
                 <div className="empty-state-message">Intraday P&L curve coming soon</div>
               </div>
             </div>
@@ -1478,7 +1478,7 @@ const Analytics = ({ onNavigate }) => {
               </div>
             )}
             <button className="refresh-btn" onClick={fetchData} disabled={loading}>
-              🔄 Refresh
+              Refresh
             </button>
           </div>
         </div>

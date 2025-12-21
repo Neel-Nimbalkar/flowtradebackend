@@ -125,8 +125,8 @@ const PerformanceChart = ({ timeframe = '1M' }) => {
     const gradient = ctx.createLinearGradient(0, padding.top, 0, height - padding.bottom);
     const isPositive = endValue >= startValue;
     if (isPositive) {
-      gradient.addColorStop(0, 'rgba(34, 197, 94, 0.3)');
-      gradient.addColorStop(1, 'rgba(34, 197, 94, 0)');
+      gradient.addColorStop(0, 'rgba(59, 130, 246, 0.3)');
+      gradient.addColorStop(1, 'rgba(59, 130, 246, 0)');
     } else {
       gradient.addColorStop(0, 'rgba(239, 68, 68, 0.3)');
       gradient.addColorStop(1, 'rgba(239, 68, 68, 0)');
@@ -149,7 +149,7 @@ const PerformanceChart = ({ timeframe = '1M' }) => {
     data.forEach((d, i) => {
       ctx.lineTo(xScale(i), yScale(d.value));
     });
-    ctx.strokeStyle = isPositive ? '#22c55e' : '#ef4444';
+    ctx.strokeStyle = isPositive ? '#3b82f6' : '#ef4444';
     ctx.lineWidth = 2;
     ctx.stroke();
     
@@ -171,7 +171,7 @@ const PerformanceChart = ({ timeframe = '1M' }) => {
       // Point
       ctx.beginPath();
       ctx.arc(x, y, 6, 0, Math.PI * 2);
-      ctx.fillStyle = isPositive ? '#22c55e' : '#ef4444';
+      ctx.fillStyle = isPositive ? '#3b82f6' : '#ef4444';
       ctx.fill();
       ctx.strokeStyle = '#fff';
       ctx.lineWidth = 2;

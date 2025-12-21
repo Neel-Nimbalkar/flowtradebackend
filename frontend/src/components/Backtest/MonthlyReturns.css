@@ -45,7 +45,7 @@
 .gradient-bar {
   width: 120px;
   height: 20px;
-  background: linear-gradient(to right, #dc2626, #ef4444, #fca5a5, #6ee7b7, #10b981, #059669);
+  background: linear-gradient(to right, #dc2626, #ef4444, #fca5a5, #93c5fd, #3b82f6, #2563eb);
   border-radius: 4px;
 }
 

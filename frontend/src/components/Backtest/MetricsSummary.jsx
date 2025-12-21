@@ -44,9 +44,9 @@ const MetricsSummary = ({ results }) => {
     if (riskReward > 2) score += 10;
     if (metrics?.netProfit > 0) score += 10;
     
-    if (score >= 90) return { grade: 'A+', color: '#10b981' };
-    if (score >= 80) return { grade: 'A', color: '#10b981' };
-    if (score >= 70) return { grade: 'B+', color: '#22c55e' };
+    if (score >= 90) return { grade: 'A+', color: '#3b82f6' };
+    if (score >= 80) return { grade: 'A', color: '#3b82f6' };
+    if (score >= 70) return { grade: 'B+', color: '#60a5fa' };
     if (score >= 60) return { grade: 'B', color: '#84cc16' };
     if (score >= 50) return { grade: 'C+', color: '#f59e0b' };
     if (score >= 40) return { grade: 'C', color: '#f97316' };
@@ -109,7 +109,7 @@ const MetricsSummary = ({ results }) => {
           </div>
 
           <div className="kpi-card">
-            <div className="kpi-icon" style={{ color: metrics?.winRate >= 50 ? '#10b981' : '#f59e0b' }}>
+            <div className="kpi-icon" style={{ color: metrics?.winRate >= 50 ? '#3b82f6' : '#f59e0b' }}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
                 <polyline points="22,4 12,14.01 9,11.01" />
@@ -117,7 +117,7 @@ const MetricsSummary = ({ results }) => {
             </div>
             <div className="kpi-content">
               <span className="kpi-label">Win Rate</span>
-              <span className="kpi-value" style={{ color: metrics?.winRate >= 50 ? '#10b981' : '#f59e0b' }}>
+              <span className="kpi-value" style={{ color: metrics?.winRate >= 50 ? '#3b82f6' : '#f59e0b' }}>
                 {formatPercent(metrics?.winRate)}
               </span>
               <span className="kpi-sub">{wins.length}W / {losses.length}L</span>
@@ -125,7 +125,7 @@ const MetricsSummary = ({ results }) => {
           </div>
 
           <div className="kpi-card">
-            <div className="kpi-icon" style={{ color: profitFactor >= 1 ? '#10b981' : '#ef4444' }}>
+            <div className="kpi-icon" style={{ color: profitFactor >= 1 ? '#3b82f6' : '#ef4444' }}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M3 3v18h18" />
                 <path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3" />
@@ -133,7 +133,7 @@ const MetricsSummary = ({ results }) => {
             </div>
             <div className="kpi-content">
               <span className="kpi-label">Profit Factor</span>
-              <span className="kpi-value" style={{ color: profitFactor >= 1 ? '#10b981' : '#ef4444' }}>
+              <span className="kpi-value" style={{ color: profitFactor >= 1 ? '#3b82f6' : '#ef4444' }}>
                 {profitFactor === Infinity ? '∞' : formatNumber(profitFactor)}
               </span>
               <span className="kpi-sub">Gross: {formatCurrency(grossProfit)}</span>
@@ -153,11 +153,11 @@ const MetricsSummary = ({ results }) => {
                 {riskReward >= 2 ? 'Excellent' : riskReward >= 1 ? 'Good' : 'Poor'}
               </span>
             </div>
-            <div className="metric-main" style={{ color: riskReward >= 1 ? '#10b981' : '#ef4444' }}>
+            <div className="metric-main" style={{ color: riskReward >= 1 ? '#3b82f6' : '#ef4444' }}>
               {riskReward === Infinity ? '∞' : `${formatNumber(riskReward)}:1`}
             </div>
             <div className="metric-details">
-              <span>Avg Win: <b style={{ color: '#10b981' }}>{formatCurrency(avgWin)}</b></span>
+              <span>Avg Win: <b style={{ color: '#3b82f6' }}>{formatCurrency(avgWin)}</b></span>
               <span>Avg Loss: <b style={{ color: '#ef4444' }}>{formatCurrency(avgLoss)}</b></span>
             </div>
           </div>
@@ -169,7 +169,7 @@ const MetricsSummary = ({ results }) => {
                 {metrics?.sharpeRatio >= 2 ? 'Excellent' : metrics?.sharpeRatio >= 1 ? 'Good' : 'Low'}
               </span>
             </div>
-            <div className="metric-main" style={{ color: metrics?.sharpeRatio >= 1 ? '#10b981' : '#f59e0b' }}>
+            <div className="metric-main" style={{ color: metrics?.sharpeRatio >= 1 ? '#3b82f6' : '#f59e0b' }}>
               {formatNumber(metrics?.sharpeRatio)}
             </div>
             <div className="metric-details">
@@ -184,7 +184,7 @@ const MetricsSummary = ({ results }) => {
                 {expectancy >= 0 ? 'Positive' : 'Negative'}
               </span>
             </div>
-            <div className="metric-main" style={{ color: expectancy >= 0 ? '#10b981' : '#ef4444' }}>
+            <div className="metric-main" style={{ color: expectancy >= 0 ? '#3b82f6' : '#ef4444' }}>
               {formatCurrency(expectancy)}
             </div>
             <div className="metric-details">
@@ -279,13 +279,13 @@ const MetricsSummary = ({ results }) => {
         </div>
         <div className="quick-stat">
           <span className="quick-label">Current Capital</span>
-          <span className="quick-value" style={{ color: (metrics?.currentCapital || config?.startingCapital) >= config?.startingCapital ? '#10b981' : '#ef4444' }}>
+          <span className="quick-value" style={{ color: (metrics?.currentCapital || config?.startingCapital) >= config?.startingCapital ? '#3b82f6' : '#ef4444' }}>
             {formatCurrency(metrics?.currentCapital || config?.startingCapital)}
           </span>
         </div>
         <div className="quick-stat">
           <span className="quick-label">Open P&L</span>
-          <span className="quick-value" style={{ color: (metrics?.openPnL || 0) >= 0 ? '#10b981' : '#ef4444' }}>
+          <span className="quick-value" style={{ color: (metrics?.openPnL || 0) >= 0 ? '#3b82f6' : '#ef4444' }}>
             {formatCurrency(metrics?.openPnL || 0)}
           </span>
         </div>

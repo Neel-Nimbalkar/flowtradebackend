@@ -13,7 +13,11 @@
 5. [Architecture](#architecture)
 6. [Quick Start](#quick-start)
 7. [API Reference](#api-reference)
+cd backendapi
+python -m api.backend
 
+cd frontend
+npm run dev
 ---
 
 ## 🎯 System Overview

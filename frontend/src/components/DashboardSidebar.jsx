@@ -178,7 +178,7 @@ const DashboardSidebar = ({ onNavigate = () => {}, hideHome = false, activeRoute
           <button
             key={item.key}
             className={`sidebar-nav-item ${item.key === activeRoute ? 'active' : ''}`}
-            onClick={() => onNavigate(item.key === 'settings' ? 'account' : item.key)}
+            onClick={() => onNavigate(item.key === 'settings' ? 'settings' : item.key)}
             title={item.tooltip}
             onMouseEnter={() => setShowTooltip(item.key)}
             onMouseLeave={() => setShowTooltip(null)}

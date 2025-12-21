@@ -105,8 +105,8 @@
 }
 
 .kpi-card.primary.profit {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), transparent);
-  border-color: rgba(16, 185, 129, 0.3);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), transparent);
+  border-color: rgba(59, 130, 246, 0.3);
 }
 
 .kpi-card.primary.loss {
@@ -118,11 +118,11 @@
   width: 44px;
   height: 44px;
   border-radius: 10px;
-  background: rgba(16, 185, 129, 0.1);
+  background: rgba(59, 130, 246, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #10b981;
+  color: #3b82f6;
   flex-shrink: 0;
 }
 
@@ -164,7 +164,7 @@
   font-weight: 600;
 }
 
-.kpi-change.up { color: #10b981; }
+.kpi-change.up { color: #3b82f6; }
 .kpi-change.down { color: #ef4444; }
 
 .kpi-sub {
@@ -228,8 +228,8 @@
 }
 
 .metric-badge.good {
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
 }
 
 .metric-badge.bad {
@@ -290,7 +290,7 @@
 }
 
 .stats-column.winners {
-  border-left: 3px solid #10b981;
+  border-left: 3px solid #3b82f6;
 }
 
 .stats-column.losers {
@@ -319,8 +319,8 @@
 }
 
 .stats-icon.win {
-  background: rgba(16, 185, 129, 0.2);
-  color: #10b981;
+  background: rgba(59, 130, 246, 0.2);
+  color: #3b82f6;
 }
 
 .stats-icon.loss {
@@ -334,7 +334,7 @@
   margin-bottom: 16px;
 }
 
-.stats-column.winners .stats-number { color: #10b981; }
+.stats-column.winners .stats-number { color: #3b82f6; }
 .stats-column.losers .stats-number { color: #ef4444; }
 
 .stats-breakdown {
@@ -353,7 +353,7 @@
   color: var(--text-muted, #9aa6c6);
 }
 
-.stats-breakdown .stat-row .win { color: #10b981; font-weight: 600; }
+.stats-breakdown .stat-row .win { color: #3b82f6; font-weight: 600; }
 .stats-breakdown .stat-row .loss { color: #ef4444; font-weight: 600; }
 
 .stats-divider {

@@ -3,12 +3,13 @@ import blockDefs from '../blockDefs';
 import Icon from './Icon';
 import categoryMeta from '../categoryMeta';
 import blockCategoryMap from '../blockCategoryMap';
+import { getTemplateList } from '../strategyTemplates';
+
+// Get pre-made strategy templates
+const templateItems = getTemplateList();
 
 const blocks = [
-    { category: 'Templates', items: [
-    { type: 'template-golden-cross', name: 'Golden Cross', desc: '50/200 SMA crossover', icon: 'puzzle' },
-    { type: 'template-rsi-volume', name: 'RSI + Volume Spike', desc: 'Oversold with volume confirmation', icon: 'puzzle' }
-  ]},
+  { category: 'Strategies', items: templateItems },
   { category: 'Configuration', items: [
     { ...blockDefs.input, type: 'input' },
     { ...blockDefs.price_history, type: 'price_history' },
@@ -16,6 +17,7 @@ const blocks = [
   ] },
   { category: 'Indicators', items: [
     { ...blockDefs.rsi, type: 'rsi' },
+    { ...blockDefs.sma, type: 'sma' },
     { ...blockDefs.ema, type: 'ema' },
     { ...blockDefs.macd, type: 'macd' },
     { ...blockDefs.atr, type: 'atr' },
@@ -23,18 +25,26 @@ const blocks = [
     { ...blockDefs.bollinger, type: 'bollinger' },
     { ...blockDefs.stochastic, type: 'stochastic' },
     { ...blockDefs.vwap, type: 'vwap' },
-    { ...blockDefs.volume_spike, type: 'volume_spike' }
+    { ...blockDefs.volume_spike, type: 'volume_spike' },
+    { ...blockDefs.price_levels, type: 'price_levels' },
+    { ...blockDefs.support_resistance, type: 'support_resistance' }
   ] },
   { category: 'Logic', items: [
     { ...blockDefs.and, type: 'and' },
     { ...blockDefs.or, type: 'or' },
     { ...blockDefs.not, type: 'not' },
-    { ...blockDefs.compare, type: 'compare' }
+    { ...blockDefs.compare, type: 'compare' },
+    { ...blockDefs.crossover, type: 'crossover' },
+    { ...blockDefs.threshold, type: 'threshold' }
+  ] },
+  { category: 'Filters', items: [
+    { ...blockDefs.time_filter, type: 'time_filter' },
+    { ...blockDefs.trend_filter, type: 'trend_filter' },
+    { ...blockDefs.volume_filter, type: 'volume_filter' }
   ] },
   { category: 'AI & Output', items: [
     { ...blockDefs.ai_agent, type: 'ai_agent' },
-    { ...blockDefs.output, type: 'output' },
-    { ...blockDefs.signal, type: 'signal' }
+    { ...blockDefs.output, type: 'output' }
   ] },
   { category: 'Utility', items: [ { ...blockDefs.note, type: 'note' } ] }
 ];

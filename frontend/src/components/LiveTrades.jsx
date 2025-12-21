@@ -234,8 +234,8 @@ const LiveTrades = () => {
                       borderRadius: 4,
                       fontSize: 11,
                       fontWeight: 600,
-                      background: trade.direction === 'LONG' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                      color: trade.direction === 'LONG' ? '#22c55e' : '#ef4444'
+                      background: trade.direction === 'LONG' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                      color: trade.direction === 'LONG' ? '#3b82f6' : '#ef4444'
                     }}>
                       {trade.direction}
                     </span>
@@ -257,7 +257,7 @@ const LiveTrades = () => {
                     textAlign: 'right',
                     fontFamily: 'monospace',
                     fontWeight: 600,
-                    color: trade.netPnL >= 0 ? '#22c55e' : '#ef4444'
+                    color: trade.netPnL >= 0 ? '#3b82f6' : '#ef4444'
                   }}>
                     {trade.netPnL >= 0 ? '+' : ''}${trade.netPnL.toFixed(2)}
                     <div style={{ fontSize: 11, color: '#6b7280', fontWeight: 400 }}>
@@ -297,7 +297,7 @@ const LiveTrades = () => {
           color: #e5e7eb;
         }
         .stat-value.positive {
-          color: #22c55e;
+          color: #3b82f6;
         }
         .stat-value.negative {
           color: #ef4444;

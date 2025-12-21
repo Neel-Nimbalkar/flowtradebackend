@@ -335,7 +335,7 @@ const BacktestModal = ({ open, onClose }) => {
           <div style={{ width:420, padding:12, background:'#071025', borderRadius:8, border:'1px solid #1f2937' }}>
             <div style={{ color:'#9ca3af', fontSize:12, marginBottom:8 }}>Equity Curve</div>
             {result && result.equityCurve && result.equityCurve.length ? (
-              <LineChart data={result.equityCurve.map(p=>({ t: p.t, v: p.v }))} height={200} stroke="#22c55e" showXAxis={true} highlightNew={true} />
+              <LineChart data={result.equityCurve.map(p=>({ t: p.t, v: p.v }))} height={200} stroke="#3b82f6" showXAxis={true} highlightNew={true} />
             ) : (
               <div style={{ height:200, display:'flex', alignItems:'center', justifyContent:'center', color:'#6b7280' }}>No equity data yet</div>
             )}

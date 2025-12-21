@@ -88,7 +88,7 @@
 }
 
 .check-item.pass {
-  color: #10b981;
+  color: #3b82f6;
 }
 
 .check-item.fail {
@@ -173,8 +173,8 @@
 }
 
 .metric-icon.sharpe {
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
 }
 
 .metric-icon.sortino {
@@ -268,7 +268,7 @@
 }
 
 .streak-card.win {
-  border-left: 3px solid #10b981;
+  border-left: 3px solid #3b82f6;
 }
 
 .streak-card.loss {
@@ -310,7 +310,7 @@
   font-weight: 700;
 }
 
-.streak-card.win .streak-main .streak-value { color: #10b981; }
+.streak-card.win .streak-main .streak-value { color: #3b82f6; }
 .streak-card.loss .streak-main .streak-value { color: #ef4444; }
 
 .streak-secondary .streak-value {
@@ -348,7 +348,7 @@
   font-weight: 700;
 }
 
-.duration-item.win .duration-value { color: #10b981; }
+.duration-item.win .duration-value { color: #3b82f6; }
 .duration-item.loss .duration-value { color: #ef4444; }
 
 .duration-vs {
@@ -447,7 +447,7 @@
 }
 
 .direction-card-enhanced.long {
-  border-left: 3px solid #10b981;
+  border-left: 3px solid #3b82f6;
 }
 
 .direction-card-enhanced.short {
@@ -466,8 +466,8 @@
 }
 
 .direction-card-enhanced.long .direction-icon {
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
 }
 
 .direction-card-enhanced.short .direction-icon {
@@ -559,7 +559,7 @@
 }
 
 .mae-mfe-card.mae .mae-mfe-value { color: #ef4444; }
-.mae-mfe-card.mfe .mae-mfe-value { color: #10b981; }
+.mae-mfe-card.mfe .mae-mfe-value { color: #3b82f6; }
 
 .mae-mfe-label {
   font-size: 11px;

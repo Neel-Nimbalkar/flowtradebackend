@@ -94,10 +94,10 @@
 .signal-list { display:flex; flex-direction:column; gap:8px; }
 .signal-item { display:flex; justify-content:space-between; align-items:center; padding:8px; border-radius:6px; background: rgba(255,255,255,0.01); }
 .signal-left { display:flex; gap:10px; align-items:center; }
-.signal-pill { padding:6px 8px; border-radius:6px; font-weight:700; }
-.signal-pill.buy { background: linear-gradient(90deg,#063, #085); color: #b7ffdf; }
-.signal-pill.sell { background: linear-gradient(90deg,#640d00,#8a2a0b); color: #ffd5c7; }
-.signal-pill.hold { background: linear-gradient(90deg,#333940,#23272b); color: #c5c7cc; }
+.signal-pill { padding:5px 8px; border-radius:4px; font-weight:600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+.signal-pill.buy { background: transparent; color: #3b82f6; border: 1px solid #3b82f6; }
+.signal-pill.sell { background: transparent; color: #ef4444; border: 1px solid #ef4444; }
+.signal-pill.hold { background: transparent; color: #8b95a6; border: 1px solid rgba(139, 149, 166, 0.5); }
 .signal-meta { display:flex; flex-direction:column; }
 .signal-price { font-weight:700; }
 .signal-reason { color:#8b95a6; }

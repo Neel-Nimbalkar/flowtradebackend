@@ -121,7 +121,7 @@ const DayCell = ({ date, dayData, maxAbsPct, onClick, isCurrentMonth }) => {
   let bgColor = 'transparent';
   if (hasTrades) {
     if (netPct > 0) {
-      bgColor = `rgba(34, 197, 94, ${intensity})`; // green
+      bgColor = `rgba(59, 130, 246, ${intensity})`; // blue
     } else if (netPct < 0) {
       bgColor = `rgba(239, 68, 68, ${intensity})`; // red
     } else {
@@ -570,7 +570,7 @@ const TradeCalendar = () => {
   if (error) {
     return (
       <div className="trade-calendar-error">
-        <div className="error-icon">⚠️</div>
+        <div className="error-icon icon-alert"></div>
         <div>{error}</div>
         <button onClick={fetchTrades}>Retry</button>
       </div>

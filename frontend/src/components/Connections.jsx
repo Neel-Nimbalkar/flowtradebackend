@@ -13,10 +13,17 @@ const Connections = ({ svgRef, connections = [], connecting = null, selectedId =
       if (!svg) return [];
 
       const svgRect = svg.getBoundingClientRect();
+      // Adjust for canvas scale - getBoundingClientRect returns screen coords,
+      // but SVG is scaled, so we need to convert to SVG coordinate space
+      const scale = canvasScale || 1;
       const makePoint = (el) => {
         if (!el) return null;
         const r = el.getBoundingClientRect();
-        return { x: r.left + r.width / 2 - svgRect.left, y: r.top + r.height / 2 - svgRect.top };
+        // Convert screen coordinates to SVG space by dividing by scale
+        return { 
+          x: (r.left + r.width / 2 - svgRect.left) / scale, 
+          y: (r.top + r.height / 2 - svgRect.top) / scale 
+        };
       };
 
       const results = [];
@@ -38,7 +45,11 @@ const Connections = ({ svgRef, connections = [], connecting = null, selectedId =
         const p1 = makePoint(fromEl);
         const svgRect2 = svg.getBoundingClientRect();
         if (p1 && typeof connecting.x === 'number' && typeof connecting.y === 'number') {
-          const p2 = { x: connecting.x - svgRect2.left, y: connecting.y - svgRect2.top };
+          // Also convert mouse position to SVG space
+          const p2 = { 
+            x: (connecting.x - svgRect2.left) / scale, 
+            y: (connecting.y - svgRect2.top) / scale 
+          };
           const dx = Math.max(40, Math.abs(p2.x - p1.x) * 0.5);
           const d = `M ${p1.x} ${p1.y} C ${p1.x + dx} ${p1.y} ${p2.x - dx} ${p2.y} ${p2.x} ${p2.y}`;
           const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };

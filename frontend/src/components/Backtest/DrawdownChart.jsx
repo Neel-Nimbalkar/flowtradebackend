@@ -130,8 +130,8 @@ const DrawdownChart = ({ data, trades }) => {
     // Color based on severity
     let lineColor, gradientStart;
     if (maxDD < 5) {
-      lineColor = '#10b981';
-      gradientStart = 'rgba(16, 185, 129, 0.4)';
+      lineColor = '#3b82f6';
+      gradientStart = 'rgba(59, 130, 246, 0.4)';
     } else if (maxDD < 15) {
       lineColor = '#f59e0b';
       gradientStart = 'rgba(245, 158, 11, 0.4)';
@@ -159,7 +159,7 @@ const DrawdownChart = ({ data, trades }) => {
 
     // Draw risk zones
     const zones = [
-      { threshold: 5, color: 'rgba(16, 185, 129, 0.05)', label: 'Low Risk' },
+      { threshold: 5, color: 'rgba(59, 130, 246, 0.05)', label: 'Low Risk' },
       { threshold: 15, color: 'rgba(245, 158, 11, 0.05)', label: 'Medium Risk' },
       { threshold: 100, color: 'rgba(239, 68, 68, 0.05)', label: 'High Risk' }
     ];
@@ -287,7 +287,7 @@ const DrawdownChart = ({ data, trades }) => {
     const currentDD = drawdowns[drawdowns.length - 1];
     const currentY = yScale(currentDD);
     ctx.textAlign = 'left';
-    ctx.fillStyle = currentDD > 0 ? lineColor : '#10b981';
+    ctx.fillStyle = currentDD > 0 ? lineColor : '#3b82f6';
     ctx.font = 'bold 12px sans-serif';
     ctx.fillText(`-${currentDD.toFixed(1)}%`, width - margin.right + 8, currentY + 4);
   };

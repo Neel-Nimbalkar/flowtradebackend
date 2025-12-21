@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import DashboardSidebar from '../components/DashboardSidebar';
+import MiniTradeLog from '../components/dashboard/MiniTradeLog';
 import './Dashboard.css';
 import { 
   toggleStrategy as runnerToggle, 
@@ -86,7 +87,7 @@ const SparklineChart = ({ data, positive = true, width = 80, height = 40 }) => {
   }).join(' ');
   
   const isPositive = values[values.length - 1] >= values[0];
-  const color = isPositive ? '#10b981' : '#ef4444';
+  const color = isPositive ? '#3b82f6' : '#ef4444';
   
   // Create area path
   const areaPath = `M 0,${height} L ${points.split(' ').map((p, i) => {
@@ -358,8 +359,8 @@ const EquityChart = ({ equityCurve, cumulativePnl, timeframe, showDrawdown = tru
     const isPositive = values[values.length - 1] >= values[0];
     
     if (isPositive) {
-      gradient.addColorStop(0, 'rgba(34, 197, 94, 0.3)');
-      gradient.addColorStop(1, 'rgba(34, 197, 94, 0)');
+      gradient.addColorStop(0, 'rgba(59, 130, 246, 0.3)');
+      gradient.addColorStop(1, 'rgba(59, 130, 246, 0)');
     } else {
       gradient.addColorStop(0, 'rgba(239, 68, 68, 0.3)');
       gradient.addColorStop(1, 'rgba(239, 68, 68, 0)');
@@ -380,7 +381,7 @@ const EquityChart = ({ equityCurve, cumulativePnl, timeframe, showDrawdown = tru
     ctx.fill();
     
     // Draw line
-    ctx.strokeStyle = '#10B981';
+    ctx.strokeStyle = '#3B82F6';
     ctx.lineWidth = 2;
     ctx.beginPath();
     
@@ -401,7 +402,7 @@ const EquityChart = ({ equityCurve, cumulativePnl, timeframe, showDrawdown = tru
       const x = padding.left + (hoveredPoint / (values.length - 1)) * chartWidth;
       const y = padding.top + ((maxVal - values[hoveredPoint]) / range) * chartHeight;
       
-      ctx.fillStyle = '#10B981';
+      ctx.fillStyle = '#3B82F6';
       ctx.beginPath();
       ctx.arc(x, y, 5, 0, Math.PI * 2);
       ctx.fill();
@@ -531,9 +532,6 @@ const StrategyControlPanel = ({ strategies, onToggle, onEdit, onDelete, loading,
                 {isRunning && (
                   <span className="live-indicator">LIVE</span>
                 )}
-                <span className={`metric-status ${strategy.enabled ? 'included' : 'excluded'}`}>
-                  {strategy.enabled ? '✓ In metrics' : '○ Excluded'}
-                </span>
               </div>
               <div className="strategy-stats">
                 <span className={`stat-pnl ${strategy.net_pnl >= 0 ? 'positive' : 'negative'}`}>
@@ -552,7 +550,6 @@ const StrategyControlPanel = ({ strategies, onToggle, onEdit, onDelete, loading,
                 disabled={isToggling}
                 title="Edit strategy"
               >
-                ✏️
               </button>
               <button 
                 className="strategy-delete-btn" 
@@ -563,7 +560,6 @@ const StrategyControlPanel = ({ strategies, onToggle, onEdit, onDelete, loading,
                 disabled={isToggling || strategy.enabled}
                 title={strategy.enabled ? "Stop strategy before deleting" : "Delete strategy"}
               >
-                🗑️
               </button>
             </div>
           </div>
@@ -669,10 +665,10 @@ const RiskQualityPanel = ({ riskData }) => {
 
 const TimePerformancePanel = ({ dataByDay, dataByHour }) => {
   const [view, setView] = useState('day'); // 'day' | 'hour'
+  const canvasRef = useRef(null);
   
   const data = view === 'day' ? dataByDay : dataByHour;
   const hasData = (data || []).some(d => d.pnl !== 0);
-  const maxAbs = Math.max(...(data || []).map(d => Math.abs(d.pnl)), 1);
   
   // Default skeleton labels for empty state
   const defaultDayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
@@ -683,25 +679,131 @@ const TimePerformancePanel = ({ dataByDay, dataByHour }) => {
   
   const displayData = hasData ? data : skeletonData;
   
+  // Draw bar chart on canvas
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !displayData || displayData.length === 0) return;
+    
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    
+    const width = rect.width;
+    const height = rect.height;
+    const padding = { top: 15, bottom: 25, left: 10, right: 10 };
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
+    
+    ctx.clearRect(0, 0, width, height);
+    
+    // Calculate max absolute value for scaling
+    const maxAbs = Math.max(...displayData.map(d => Math.abs(d.pnl)), 0.01);
+    
+    // Center line Y position (middle of chart area)
+    const centerY = padding.top + chartHeight / 2;
+    
+    // Draw center line (zero line)
+    ctx.strokeStyle = 'rgba(156, 163, 175, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(padding.left, centerY);
+    ctx.lineTo(width - padding.right, centerY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    
+    // Bar settings
+    const barCount = displayData.length;
+    const gap = 8;
+    const totalGaps = (barCount - 1) * gap;
+    const barWidth = Math.min(32, (chartWidth - totalGaps) / barCount);
+    const totalBarsWidth = barCount * barWidth + totalGaps;
+    const startX = padding.left + (chartWidth - totalBarsWidth) / 2;
+    
+    // Draw bars
+    displayData.forEach((item, i) => {
+      const x = startX + i * (barWidth + gap);
+      const barHeight = (Math.abs(item.pnl) / maxAbs) * (chartHeight / 2 - 5);
+      
+      // Determine bar position and color
+      const isPositive = item.pnl >= 0;
+      const y = isPositive ? centerY - barHeight : centerY;
+      
+      // Draw bar with rounded corners
+      const radius = 2;
+      ctx.beginPath();
+      
+      if (hasData && item.pnl !== 0) {
+        ctx.fillStyle = isPositive ? '#3b82f6' : '#ef4444';
+        
+        if (isPositive) {
+          // Rounded top corners for positive bars
+          ctx.moveTo(x + radius, y);
+          ctx.lineTo(x + barWidth - radius, y);
+          ctx.quadraticCurveTo(x + barWidth, y, x + barWidth, y + radius);
+          ctx.lineTo(x + barWidth, centerY);
+          ctx.lineTo(x, centerY);
+          ctx.lineTo(x, y + radius);
+          ctx.quadraticCurveTo(x, y, x + radius, y);
+        } else {
+          // Rounded bottom corners for negative bars
+          ctx.moveTo(x, centerY);
+          ctx.lineTo(x + barWidth, centerY);
+          ctx.lineTo(x + barWidth, y + barHeight - radius);
+          ctx.quadraticCurveTo(x + barWidth, y + barHeight, x + barWidth - radius, y + barHeight);
+          ctx.lineTo(x + radius, y + barHeight);
+          ctx.quadraticCurveTo(x, y + barHeight, x, y + barHeight - radius);
+          ctx.lineTo(x, centerY);
+        }
+      } else {
+        // Skeleton bar (small gray placeholder)
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+        const skeletonHeight = chartHeight / 6;
+        const skY = centerY - skeletonHeight / 2;
+        ctx.moveTo(x + radius, skY);
+        ctx.lineTo(x + barWidth - radius, skY);
+        ctx.quadraticCurveTo(x + barWidth, skY, x + barWidth, skY + radius);
+        ctx.lineTo(x + barWidth, skY + skeletonHeight - radius);
+        ctx.quadraticCurveTo(x + barWidth, skY + skeletonHeight, x + barWidth - radius, skY + skeletonHeight);
+        ctx.lineTo(x + radius, skY + skeletonHeight);
+        ctx.quadraticCurveTo(x, skY + skeletonHeight, x, skY + skeletonHeight - radius);
+        ctx.lineTo(x, skY + radius);
+        ctx.quadraticCurveTo(x, skY, x + radius, skY);
+      }
+      
+      ctx.closePath();
+      ctx.fill();
+      
+      // Draw label
+      ctx.fillStyle = hasData ? '#9ca3af' : '#4b5563';
+      ctx.font = '10px -apple-system, BlinkMacSystemFont, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(item.label, x + barWidth / 2, height - 8);
+    });
+    
+    // Draw Y-axis labels (only if there's data)
+    if (hasData) {
+      ctx.fillStyle = '#6b7280';
+      ctx.font = '9px -apple-system, BlinkMacSystemFont, sans-serif';
+      ctx.textAlign = 'right';
+      
+      // Top label (max positive)
+      ctx.fillText(`+${maxAbs.toFixed(0)}`, padding.left + chartWidth + 5, padding.top + 10);
+      
+      // Bottom label (max negative)
+      ctx.fillText(`-${maxAbs.toFixed(0)}`, padding.left + chartWidth + 5, height - padding.bottom - 5);
+    }
+    
+  }, [displayData, hasData, view]);
+  
   return (
     <div className="time-performance-panel">
-      <div className={`time-chart ${!hasData ? 'skeleton' : ''}`}>
-        {(displayData || []).map((item, i) => (
-          <div key={i} className="time-bar-container">
-            <div className="time-bar-wrapper">
-              {hasData ? (
-                <div
-                  className={`time-bar ${item.pnl >= 0 ? 'positive' : 'negative'}`}
-                  style={{ height: `${(Math.abs(item.pnl) / maxAbs) * 80}%` }}
-                  title={`${item.label}: ${formatCurrency(item.pnl, true)}`}
-                />
-              ) : (
-                <div className="time-bar skeleton-bar" style={{ height: '30%' }} />
-              )}
-            </div>
-            <div className={`time-label ${!hasData ? 'dimmed' : ''}`}>{item.label}</div>
-          </div>
-        ))}
+      <div className={`time-chart-canvas-container ${!hasData ? 'skeleton' : ''}`}>
+        <canvas ref={canvasRef} className="time-chart-canvas" />
         {!hasData && (
           <div className="time-empty-overlay">
             <span>Performance by time will appear after trades close</span>
@@ -734,13 +836,13 @@ const TimePerformancePanel = ({ dataByDay, dataByHour }) => {
 
 // Activity type configurations
 const ACTIVITY_ICONS = {
-  signal: '📊',
-  trade_open: '📈',
-  trade_close: '📉',
-  strategy_start: '▶️',
-  strategy_stop: '⏹️',
-  strategy_edit: '✏️',
-  default: '•'
+  signal: '◆',
+  trade_open: '↗',
+  trade_close: '↘',
+  strategy_start: '▸',
+  strategy_stop: '■',
+  strategy_edit: '○',
+  default: '·'
 };
 
 const RecentTradesPanel = ({ trades, activityLog, onTradeClick }) => {
@@ -813,22 +915,25 @@ const RecentTradesPanel = ({ trades, activityLog, onTradeClick }) => {
             ? new Date(item.exitTime).toLocaleTimeString()
             : '';
         
+        const direction = (item.direction || (item.type === 'entry' ? 'BUY' : 'SELL')).toLowerCase();
+        const isBuy = direction === 'buy' || direction === 'long';
+        
         return (
           <div
             key={item.id || i}
-            className={`trade-row ${isLiveSignal ? 'live-signal' : ''}`}
+            className={`trade-row ${isLiveSignal ? `live-signal ${isBuy ? 'buy' : 'sell'}` : ''}`}
             onClick={() => onTradeClick?.(item)}
           >
-            <span className={`trade-direction ${(item.direction || '').toLowerCase()}`}>
+            <span className={`trade-direction ${direction}`}>
               {item.direction || (item.type === 'entry' ? 'BUY' : 'SELL')}
-              {isLiveSignal && <span className="signal-badge">LIVE</span>}
+              {isLiveSignal && <span className={`signal-badge ${isBuy ? 'buy' : 'sell'}`}>LIVE</span>}
             </span>
             <div className="trade-info">
               <span className="trade-symbol">{item.symbol}</span>
               <span className="trade-strategy">{item.strategy_name}</span>
               {timeStr && <span className="trade-time">{timeStr}</span>}
             </div>
-            <span className={`trade-pnl ${(item.pnl || 0) >= 0 ? 'positive' : 'negative'}`}>
+            <span className={`trade-pnl ${isLiveSignal ? 'live-price' : ((item.pnl || 0) >= 0 ? 'positive' : 'negative')}`}>
               {item.pnl !== undefined && item.pnl !== null 
                 ? formatCurrency(item.pnl, true) 
                 : (item.price ? `@${item.price.toFixed(2)}` : '--')}
@@ -854,6 +959,7 @@ const Dashboard = ({ onNavigate }) => {
   const [enabledStrategies, setEnabledStrategies] = useState({});
   const [togglingStrategy, setTogglingStrategy] = useState(null); // Track which strategy is currently toggling
   const [activityLog, setActivityLog] = useState([]); // Track strategy events for Recent Activity
+  const [displayName, setDisplayName] = useState(() => localStorage.getItem('flowgrid_display_name') || '');
   
   // Edit Dashboard Mode State
   const [editMode, setEditMode] = useState(false);
@@ -861,6 +967,17 @@ const Dashboard = ({ onNavigate }) => {
   const [hiddenPanels, setHiddenPanels] = useState([]);
   const [draggedPanel, setDraggedPanel] = useState(null);
   const [dragOverPanel, setDragOverPanel] = useState(null);
+  
+  // Listen for settings changes (display name)
+  useEffect(() => {
+    const handleSettingsUpdate = (e) => {
+      if (e.detail?.displayName !== undefined) {
+        setDisplayName(e.detail.displayName);
+      }
+    };
+    window.addEventListener('flowgrid:settings-updated', handleSettingsUpdate);
+    return () => window.removeEventListener('flowgrid:settings-updated', handleSettingsUpdate);
+  }, []);
   
   // Load saved layout from localStorage
   useEffect(() => {
@@ -1392,7 +1509,7 @@ const Dashboard = ({ onNavigate }) => {
         {/* Header */}
         <div className="dashboard-header">
           <div className="header-left">
-            <h1>Dashboard</h1>
+            <h1>{displayName ? `Welcome back, ${displayName}` : 'Dashboard'}</h1>
             {lastUpdate && (
               <span className="last-update">
                 Last updated: {lastUpdate.toLocaleTimeString()}
@@ -1402,7 +1519,7 @@ const Dashboard = ({ onNavigate }) => {
           <div className="header-right">
             {runningCount > 0 && (
               <span className="running-badge" title={`${runningCount} strategies running`}>
-                🟢 {runningCount}/{MAX_STRATEGIES} Running
+                <span className="running-dot"></span> {runningCount}/{MAX_STRATEGIES} Running
               </span>
             )}
             <button
@@ -1410,14 +1527,14 @@ const Dashboard = ({ onNavigate }) => {
               onClick={() => setEditMode(!editMode)}
               title="Customize dashboard layout"
             >
-              {editMode ? '✕ Cancel' : '⚙️ Edit Dashboard'}
+              {editMode ? '× Cancel' : 'Edit Dashboard'}
             </button>
             <button
               className="refresh-btn"
               onClick={() => fetchDashboardData()}
               disabled={loading}
             >
-              {loading ? '⏳' : '🔄'} Refresh
+              Refresh
             </button>
           </div>
         </div>
@@ -1425,10 +1542,10 @@ const Dashboard = ({ onNavigate }) => {
         {/* Edit Mode Toolbar */}
         {editMode && (
           <div className="edit-mode-toolbar">
-            <span>🎨 Drag panels to reorder • Click ✕ to hide panels</span>
+            <span>Drag panels to reorder • Click × to hide panels</span>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
               <button className="edit-toolbar-save" onClick={saveLayout}>
-                💾 Save Layout
+                Save Layout
               </button>
               <button className="edit-toolbar-reset" onClick={resetLayout}>
                 ↺ Reset
@@ -1443,7 +1560,7 @@ const Dashboard = ({ onNavigate }) => {
         {/* Error Banner */}
         {error && (
           <div className="error-banner">
-            ⚠️ {error} - Displaying local/demo data
+            {error} - Displaying local/demo data
           </div>
         )}
         
@@ -1518,7 +1635,6 @@ const Dashboard = ({ onNavigate }) => {
               )}
               <div className="panel-header">
                 <span className="panel-title">
-                  <span className="panel-icon">📈</span>
                   Account Performance
                 </span>
                 <div className="timeframe-tabs">
@@ -1567,7 +1683,6 @@ const Dashboard = ({ onNavigate }) => {
               )}
               <div className="panel-header">
                 <span className="panel-title">
-                  <span className="panel-icon icon-strategies"></span>
                   My Strategies
                 </span>
               </div>
@@ -1607,7 +1722,6 @@ const Dashboard = ({ onNavigate }) => {
               )}
               <div className="panel-header">
                 <span className="panel-title">
-                  <span className="panel-icon icon-target"></span>
                   Risk & Trade Quality
                 </span>
               </div>
@@ -1639,7 +1753,6 @@ const Dashboard = ({ onNavigate }) => {
               )}
               <div className="panel-header">
                 <span className="panel-title">
-                  <span className="panel-icon icon-time"></span>
                   Time-Based P&L
                 </span>
               </div>
@@ -1674,15 +1787,11 @@ const Dashboard = ({ onNavigate }) => {
               )}
               <div className="panel-header">
                 <span className="panel-title">
-                  <span className="panel-icon icon-list"></span>
                   Current Signals
-                  {liveSignals.length > 0 && (
-                    <span className="live-indicator" title="Live signals active">🔴</span>
-                  )}
                 </span>
                 {liveSignals.length > 0 && (
                   <button className="clear-signals-btn" onClick={handleClearSignals} title="Clear all signals">
-                    🗑️ Clear
+                    Clear
                   </button>
                 )}
               </div>
@@ -1692,6 +1801,38 @@ const Dashboard = ({ onNavigate }) => {
                   activityLog={activityLog}
                   onTradeClick={handleTradeClick}
                 />
+              </div>
+            </div>
+          )}
+          
+          {/* Trade Log Panel */}
+          {!hiddenPanels.includes('tradelog') && (
+            <div 
+              className={`panel tradelog-panel ${draggedPanel === 'tradelog' ? 'dragging' : ''} ${dragOverPanel === 'tradelog' ? 'drag-over' : ''}`}
+              draggable={editMode}
+              onDragStart={(e) => handleDragStart(e, 'tradelog')}
+              onDragOver={(e) => handleDragOver(e, 'tradelog')}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, 'tradelog')}
+              onDragEnd={handleDragEnd}
+            >
+              {editMode && <span className="panel-drag-handle">⋮⋮</span>}
+              {editMode && (
+                <button 
+                  className="panel-delete-btn" 
+                  onClick={() => togglePanelVisibility('tradelog')}
+                  title="Hide panel"
+                >
+                  ✕
+                </button>
+              )}
+              <div className="panel-header">
+                <span className="panel-title">
+                  Recent Trades
+                </span>
+              </div>
+              <div className="panel-content">
+                <MiniTradeLog />
               </div>
             </div>
           )}
