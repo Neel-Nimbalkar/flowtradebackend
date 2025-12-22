@@ -1,0 +1,2270 @@
+/* ========================================
+   Dashboard Styles - FlowGrid Trading
+   Premium Trading Terminal Design
+   ======================================== */
+
+/* Import fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  /* Background layers - Clear luminance hierarchy */
+  --bg: #111318;              /* App background - medium dark */
+  --bg-deep: #0a0c10;         /* Sidebar - darkest */
+  --bg-tertiary: #161a21;     /* Inner sections */
+  --card-bg: #1a1e27;         /* Primary panels - lighter than app */
+  --secondary-bg: #1e222c;    /* Hover states */
+  --bg-elevated: #232833;     /* Empty states, inputs */
+  
+  /* Text hierarchy - Better contrast */
+  --text-primary: #f1f3f5;    /* Brightest for values */
+  --text-secondary: #b4bcc8;  /* Labels */
+  --text-tertiary: #8892a2;   /* Metadata */
+  --text-dimmed: #5c6678;     /* Inactive */
+  --text-muted: #434d5e;      /* Subtle hints */
+  
+  /* Borders - Visible but subtle */
+  --border: rgba(255, 255, 255, 0.07);
+  --border-subtle: rgba(255, 255, 255, 0.04);
+  --border-default: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.1);
+  
+  /* Accent - Muted blue */
+  --accent: #5b8def;
+  --accent-hover: #7ba3f3;
+  --accent-glow: rgba(91, 141, 239, 0.1);
+  
+  /* Performance colors */
+  --positive: #3b82f6;
+  --positive-bright: #60a5fa;
+  --positive-glow: rgba(59, 130, 246, 0.12);
+  --negative: #ef4444;
+  --negative-bright: #f87171;
+  --negative-glow: rgba(239, 68, 68, 0.12);
+  --warning: #f59e0b;
+  --warning-glow: rgba(245, 158, 11, 0.12);
+  --neutral: #6b7280;         /* For zero/inactive states */
+  
+  /* Typography */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Roboto Mono', 'Courier New', monospace;
+  
+  /* Shadows - Subtle depth */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.15);
+  --shadow-lg: none;
+  --shadow-xl: none;
+  --shadow-glow: none;
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.12);
+  --shadow-card-hover: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* Keyframe Animations - Minimal */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ========================================
+   Page Layout - Desktop First, No Scroll
+   ======================================== */
+
+.dashboard-page {
+  display: flex;
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-feature-settings: 'tnum' 1;
+}
+
+.dashboard-main {
+  flex: 1;
+  margin-left: 64px;
+  padding: 16px 20px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--bg);
+}
+
+/* Custom scrollbar for dashboard */
+.dashboard-main::-webkit-scrollbar {
+  width: 8px;
+}
+
+.dashboard-main::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.dashboard-main::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.3);
+  border-radius: 4px;
+}
+
+.dashboard-main::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.5);
+}
+
+/* ========================================
+   Welcome Message
+   ======================================== */
+
+.dashboard-welcome {
+  padding: 12px 20px;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1));
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 10px;
+  animation: welcomeFadeIn 0.5s ease;
+}
+
+@keyframes welcomeFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.welcome-text {
+  font-size: 16px;
+  font-weight: 500;
+  color: #e2e8f0;
+  letter-spacing: -0.01em;
+}
+
+/* ========================================
+   Header - Command Center Style
+   ======================================== */
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.header-left {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+
+.dashboard-header h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0;
+}
+
+.last-update {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  padding: 0;
+  background: none;
+  border-radius: 0;
+  border: none;
+}
+
+.header-right {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.running-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.running-badge .running-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--accent);
+  border-radius: 50%;
+  animation: statusPulse 2s ease-in-out infinite;
+}
+
+.running-badge::before {
+  display: none;
+}
+
+.refresh-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: transparent;
+  color: var(--text-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  background: var(--bg-elevated);
+  border-color: var(--border-strong);
+  color: var(--text-secondary);
+}
+
+.refresh-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ========================================
+   Error Banner
+   ======================================== */
+
+.error-banner {
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  background: rgba(239, 68, 68, 0.1);
+  border: none;
+  border-left: 3px solid var(--negative);
+  border-radius: 8px;
+  color: var(--negative-bright);
+  font-size: 13px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.1);
+}
+
+.error-banner::before {
+  content: '';
+  width: 18px;
+  height: 18px;
+  background: var(--negative);
+  clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+  flex-shrink: 0;
+}
+
+/* ========================================
+   Metrics Row - KPI Cards
+   ======================================== */
+
+.metrics-row {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+  background: transparent;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.metric-card {
+  background: var(--card-bg);
+  border-radius: 6px;
+  padding: 14px 16px;
+  border: none;
+  transition: background 0.15s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.metric-card:nth-child(1) { }
+.metric-card:nth-child(2) { }
+.metric-card:nth-child(3) { }
+.metric-card:nth-child(4) { }
+.metric-card:nth-child(5) { }
+.metric-card:nth-child(6) { }
+
+/* Status indicator - top border accent */
+.metric-card::before {
+  display: none;
+}
+
+.metric-card:hover {
+  background: var(--secondary-bg);
+}
+
+.metric-card.empty-state {
+  background: var(--bg-elevated);
+}
+
+.metric-card.empty-state::before {
+  display: none;
+}
+
+.metric-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 6px;
+}
+
+.metric-info-icon {
+  font-size: 10px;
+  opacity: 0.5;
+  cursor: help;
+  position: relative;
+  transition: opacity 0.2s;
+}
+
+.metric-info-icon:hover {
+  opacity: 1;
+}
+
+/* Tooltip Styles */
+.tooltip-trigger {
+  position: relative;
+  cursor: help;
+}
+
+.tooltip-trigger .tooltip-content {
+  visibility: hidden;
+  opacity: 0;
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: nowrap;
+  z-index: 100;
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+  pointer-events: none;
+}
+
+.tooltip-trigger .tooltip-content::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--bg-tertiary);
+}
+
+.tooltip-trigger:hover .tooltip-content {
+  visibility: visible;
+  opacity: 1;
+}
+
+.metric-value {
+  font-size: 22px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.metric-value.dimmed {
+  color: var(--text-dimmed);
+  font-weight: 500;
+}
+
+.metric-value.positive {
+  color: var(--positive);
+}
+
+.metric-value.negative {
+  color: var(--negative);
+}
+
+.metric-subvalue {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-tertiary);
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-subvalue.positive {
+  color: var(--positive);
+}
+
+.metric-subvalue.negative {
+  color: var(--negative);
+}
+
+.metric-empty-hint {
+  font-size: 9px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* ========================================
+   Dashboard Grid Layout
+   ======================================== */
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  grid-template-rows: 1fr auto;
+  gap: 16px;
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
+/* Panel placement */
+.performance-panel {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.strategies-panel {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+/* Three-panel bottom row */
+.dashboard-grid {
+  grid-template-columns: 2fr 1fr;
+  grid-template-rows: minmax(280px, 1fr) minmax(180px, 220px);
+  grid-template-areas:
+    "performance strategies"
+    "bottom bottom";
+}
+
+.performance-panel { grid-area: performance; }
+.strategies-panel { grid-area: strategies; max-height: 100%; }
+
+/* Bottom panels grid within */
+.risk-panel {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+/* Adjust grid to accommodate 3 top panels and 3 bottom panels */
+.dashboard-grid {
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  grid-template-areas:
+    "performance time trades"
+    "strategies risk tradelog";
+}
+
+.risk-panel { grid-area: risk; }
+.time-panel { grid-area: time; }
+.trades-panel { grid-area: trades; }
+.tradelog-panel { grid-area: tradelog; }
+
+/* ========================================
+   Panel Base Styles - Professional Cards
+   ======================================== */
+
+.panel {
+  background: var(--card-bg);
+  border-radius: 6px;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  position: relative;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: none;
+  background: rgba(255, 255, 255, 0.01);
+  flex-shrink: 0;
+}
+
+.panel-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.panel-icon {
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  background: transparent;
+  border-radius: 0;
+  color: var(--text-muted);
+}
+
+.panel-icon.icon-chart::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  background: var(--accent);
+  clip-path: polygon(0% 100%, 25% 70%, 50% 85%, 75% 40%, 100% 55%, 100% 100%);
+}
+
+.empty-icon.icon-chart::before {
+  width: 24px;
+  height: 24px;
+}
+
+.empty-icon.icon-strategies::before {
+  width: 24px;
+  height: 24px;
+}
+
+.empty-icon.icon-list::before {
+  width: 20px;
+  height: 16px;
+}
+
+.panel-icon.icon-strategies::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  background: var(--accent);
+  clip-path: polygon(0% 0%, 100% 0%, 100% 70%, 80% 70%, 80% 100%, 20% 100%, 20% 70%, 0% 70%);
+}
+
+.panel-icon.icon-target::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  position: relative;
+}
+
+.panel-icon.icon-time::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  position: relative;
+}
+
+.panel-icon.icon-time::after {
+  content: '';
+  position: absolute;
+  width: 1px;
+  height: 5px;
+  background: var(--accent);
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.panel-icon.icon-list::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  background: linear-gradient(var(--accent) 2px, transparent 2px, transparent 4px, var(--accent) 4px, var(--accent) 6px, transparent 6px, transparent 8px, var(--accent) 8px);
+}
+
+/* Additional Icon Classes for Empty States */
+.empty-state-icon.icon-chart::before,
+.empty-icon.icon-chart::before {
+  content: '';
+  display: block;
+  width: 20px;
+  height: 20px;
+  background: var(--text-muted);
+  clip-path: polygon(0% 100%, 25% 70%, 50% 85%, 75% 40%, 100% 55%, 100% 100%);
+}
+
+.empty-state-icon.icon-trending-up::before {
+  content: '';
+  display: block;
+  width: 20px;
+  height: 20px;
+  background: var(--text-muted);
+  clip-path: polygon(0% 70%, 30% 40%, 60% 60%, 100% 20%, 100% 35%, 60% 75%, 30% 55%, 0% 85%);
+}
+
+.empty-state-icon.icon-trending-down::before {
+  content: '';
+  display: block;
+  width: 20px;
+  height: 20px;
+  background: var(--text-muted);
+  clip-path: polygon(0% 30%, 30% 60%, 60% 40%, 100% 80%, 100% 65%, 60% 25%, 30% 45%, 0% 15%);
+}
+
+.empty-state-icon.icon-activity::before {
+  content: '';
+  display: block;
+  width: 20px;
+  height: 20px;
+  background: var(--text-muted);
+  clip-path: polygon(0% 50%, 20% 50%, 30% 20%, 40% 80%, 50% 30%, 60% 70%, 70% 50%, 100% 50%, 100% 55%, 70% 55%, 60% 75%, 50% 35%, 40% 85%, 30% 25%, 20% 55%, 0% 55%);
+}
+
+.empty-state-icon.icon-calendar::before {
+  content: '';
+  display: block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--text-muted);
+  border-radius: 3px;
+  position: relative;
+}
+
+.empty-state-icon.icon-target::before {
+  content: '';
+  display: block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--text-muted);
+  border-radius: 50%;
+}
+
+.empty-state-icon.icon-clock::before {
+  content: '';
+  display: block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--text-muted);
+  border-radius: 50%;
+}
+
+.empty-state-icon.icon-lock::before,
+.premium-lock-icon.icon-lock::before {
+  content: '';
+  display: block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--text-muted);
+  border-radius: 3px 3px 0 0;
+  margin-bottom: -2px;
+}
+
+.empty-state-icon.icon-alert::before,
+.error-icon.icon-alert::before {
+  content: '!';
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--negative);
+  border-radius: 50%;
+  color: var(--negative);
+  font-weight: 700;
+  font-size: 12px;
+}
+
+/* Make icon containers flex centered */
+.empty-state-icon,
+.empty-icon,
+.error-icon,
+.premium-lock-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 12px;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  border: none;
+}
+
+.panel-content {
+  flex: 1;
+  padding: 12px 14px;
+  overflow: visible;
+  min-height: 0;
+}
+
+.panel-loading {
+  text-align: center;
+  padding: 20px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* ========================================
+   Timeframe Tabs - Pill Toggle Group
+   ======================================== */
+
+.timeframe-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  border: none;
+}
+
+.timeframe-tab {
+  padding: 4px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s ease;
+  border-bottom: 2px solid transparent;
+}
+
+.timeframe-tab:hover {
+  color: var(--text-secondary);
+  background: transparent;
+}
+
+.timeframe-tab.active {
+  color: var(--text-primary);
+  background: transparent;
+  border-bottom-color: var(--accent);
+}
+
+/* ========================================
+   Equity Chart - Professional Terminal
+   ======================================== */
+
+.equity-chart-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+}
+
+/* Subtle grid overlay */
+.equity-chart-container::before {
+  display: none;
+}
+
+.chart-toggles {
+  display: flex;
+  gap: 0;
+  margin-bottom: 12px;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  border: none;
+  width: fit-content;
+  position: relative;
+  z-index: 1;
+}
+
+.chart-toggle {
+  padding: 4px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s ease;
+  border-bottom: 2px solid transparent;
+}
+
+.chart-toggle:hover {
+  color: var(--text-secondary);
+  background: transparent;
+}
+
+.chart-toggle.active {
+  color: var(--text-primary);
+  background: transparent;
+  border-bottom-color: var(--accent);
+}
+
+.equity-canvas {
+  flex: 1;
+  width: 100%;
+  min-height: 150px;
+  position: relative;
+  z-index: 1;
+}
+
+/* Chart Empty State - Professional */
+.chart-empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  min-height: 200px;
+  background: var(--bg-elevated);
+  border-radius: 6px;
+  z-index: 1;
+}
+
+.chart-placeholder {
+  width: 100%;
+  height: 100px;
+  position: relative;
+}
+
+.chart-placeholder .placeholder-line {
+  width: 100%;
+  height: 100%;
+  opacity: 0.3;
+}
+
+.chart-empty-message {
+  text-align: center;
+  padding: 20px;
+}
+
+.chart-empty-message .empty-icon {
+  width: 44px;
+  height: 44px;
+  margin-bottom: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  border: none;
+}
+
+.chart-empty-message p {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.chart-empty-message .empty-hint {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-dimmed);
+}
+
+/* ========================================
+   Strategy Control Panel - Premium Cards
+   ======================================== */
+
+.strategy-control-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.strategy-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--card-bg);
+  border-radius: 0;
+  border: none;
+  transition: background 0.1s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Live scan animation */
+.strategy-row.running::before {
+  display: none;
+}
+
+.strategy-row:hover {
+  background: var(--secondary-bg);
+}
+
+.strategy-row.disabled {
+  opacity: 0.5;
+}
+
+.strategy-row.running {
+  background: var(--card-bg);
+  border-left: 2px solid var(--positive);
+}
+
+.strategy-row.toggling {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.strategy-toggle-switch.disabled {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.toggle-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 12px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+.loading-spinner {
+  display: inline-block;
+  animation: pulse-opacity 1s ease-in-out infinite;
+}
+
+@keyframes pulse-opacity {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.live-indicator {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 3px 8px;
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--accent);
+  border: none;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* Metric status label in strategy row */
+.metric-status {
+  margin-left: 8px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.metric-status.included {
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--positive);
+  border: none;
+}
+
+.metric-status.excluded {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+  border: none;
+}
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.strategy-toggle-switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.strategy-toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.strategy-toggle-switch .toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  transition: 0.2s ease;
+  border-radius: 10px;
+}
+
+.strategy-toggle-switch .toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 2px;
+  bottom: 2px;
+  background-color: var(--text-muted);
+  transition: 0.2s ease;
+  border-radius: 50%;
+}
+
+.strategy-toggle-switch input:checked + .toggle-slider {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.strategy-toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(16px);
+  background-color: #fff;
+}
+
+.strategy-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.strategy-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.strategy-stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.stat-pnl.positive {
+  color: var(--accent);
+}
+
+.stat-pnl.negative {
+  color: var(--negative);
+}
+
+.stat-divider {
+  opacity: 0.2;
+}
+
+.strategy-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.strategy-edit-btn,
+.strategy-delete-btn {
+  padding: 4px 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.1s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 26px;
+}
+
+.strategy-edit-btn::before {
+  content: 'edit';
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.strategy-edit-btn:hover {
+  background: var(--bg-elevated);
+  border-color: var(--border-strong);
+  color: var(--text-secondary);
+}
+
+.strategy-delete-btn {
+  color: var(--text-muted);
+}
+
+.strategy-delete-btn::before {
+  content: '';
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  background: currentColor;
+  clip-path: polygon(
+    10% 20%, 10% 15%, 40% 15%, 40% 5%, 60% 5%, 60% 15%, 90% 15%, 90% 20%,
+    85% 20%, 85% 95%, 15% 95%, 15% 20%,
+    35% 30%, 35% 85%, 40% 85%, 40% 30%,
+    60% 30%, 60% 85%, 65% 85%, 65% 30%
+  );
+}
+
+.strategy-delete-btn:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--negative);
+}
+
+.strategy-delete-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.clear-signals-btn {
+  padding: 5px 12px;
+  background: rgba(239, 68, 68, 0.12);
+  border: none;
+  border-radius: 6px;
+  color: var(--negative);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.clear-signals-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.show-more-btn {
+  padding: 10px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.show-more-btn:hover {
+  color: var(--accent);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.empty-strategies {
+  text-align: center;
+  padding: 28px 16px;
+  color: var(--text-tertiary);
+  background: var(--bg-elevated);
+  border-radius: 6px;
+}
+
+.empty-icon {
+  width: 44px;
+  height: 44px;
+  margin-bottom: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.empty-strategies p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+
+.empty-hint {
+  margin-top: 8px !important;
+  font-size: 11px !important;
+  color: var(--text-dimmed);
+}
+
+/* ========================================
+   Risk & Trade Quality Panel - Premium
+   ======================================== */
+
+.risk-quality-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+}
+
+.risk-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.risk-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.risk-label {
+  width: 70px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.risk-label.tooltip-trigger .tooltip-content {
+  left: 0;
+  transform: translateX(0);
+  white-space: normal;
+  max-width: 220px;
+}
+
+.risk-label.tooltip-trigger .tooltip-content::after {
+  left: 30px;
+}
+
+.risk-bar-container {
+  flex: 1;
+  height: 4px;
+  background: var(--bg-elevated);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.risk-bar {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.4s ease;
+  position: relative;
+}
+
+.risk-bar::after {
+  display: none;
+}
+
+.risk-bar.positive {
+  background: var(--positive);
+}
+
+.risk-bar.negative {
+  background: var(--negative);
+}
+
+.risk-bar.empty {
+  background: var(--bg-elevated);
+  min-width: 2px;
+}
+
+.risk-bar.empty::after {
+  display: none;
+}
+
+.risk-empty-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 12px;
+  font-style: normal;
+}
+
+.risk-value {
+  width: 75px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.risk-value.dimmed {
+  color: var(--text-muted);
+}
+
+.risk-value.positive {
+  color: var(--positive);
+}
+
+.risk-value.negative {
+  color: var(--negative);
+}
+
+.risk-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.risk-stat {
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  padding: 12px;
+  text-align: center;
+  position: relative;
+  border: 1px solid var(--border);
+  transition: border-color 0.15s ease;
+}
+
+.risk-stat:hover {
+  border-color: var(--border-strong);
+}
+
+.risk-stat.tooltip-trigger .tooltip-content {
+  bottom: calc(100% + 6px);
+  white-space: normal;
+  max-width: 200px;
+}
+
+.risk-stat-label {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 500;
+}
+
+.risk-stat-value {
+  font-size: 14px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  margin-top: 4px;
+  display: block;
+}
+
+.risk-stat-value.positive {
+  color: var(--positive);
+}
+
+.risk-stat-value.negative {
+  color: var(--negative);
+}
+
+.risk-stat-value.dimmed {
+  color: var(--text-muted);
+}
+
+/* ========================================
+   Time-Based Performance Panel - Premium
+   ======================================== */
+
+.time-performance-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.time-chart-canvas-container {
+  flex: 1;
+  position: relative;
+  background: var(--bg-elevated);
+  border-radius: 6px;
+  min-height: 120px;
+}
+
+.time-chart-canvas-container.skeleton {
+  opacity: 0.5;
+}
+
+.time-chart-canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+.time-empty-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  z-index: 2;
+  border-radius: 6px;
+}
+
+.time-empty-overlay span {
+  font-size: 12px;
+  color: var(--text-dimmed);
+  text-align: center;
+  padding: 10px 20px;
+}
+
+/* Legacy styles - keep for backwards compatibility */
+.time-chart {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  gap: 6px;
+  padding: 12px 4px;
+  min-height: 80px;
+  position: relative;
+  background: var(--bg-elevated);
+  border-radius: 6px;
+}
+
+.time-chart.skeleton {
+  opacity: 0.5;
+}
+
+.time-bar-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  height: 100%;
+}
+
+.time-bar-wrapper {
+  flex: 1;
+  width: 100%;
+  max-width: 40px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.time-bar {
+  width: 100%;
+  border-radius: 2px;
+  transition: height 0.3s ease;
+  cursor: pointer;
+  position: relative;
+  min-height: 2px;
+}
+
+.time-bar::after {
+  display: none;
+}
+
+.time-bar.positive {
+  background: var(--positive);
+}
+
+.time-bar.negative {
+  background: var(--negative);
+}
+
+.time-bar:hover {
+  opacity: 0.8;
+}
+
+.time-bar.skeleton-bar {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 4px 4px 0 0;
+}
+
+.time-bar.skeleton-bar::after {
+  display: none;
+}
+
+.time-label {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.time-label.dimmed {
+  color: var(--text-muted);
+}
+
+.time-tabs {
+  display: flex;
+  gap: 0;
+  justify-content: flex-end;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  margin-top: auto;
+}
+
+.time-tab {
+  padding: 4px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.1s ease;
+}
+
+.time-tab:hover {
+  color: var(--text-secondary);
+  background: transparent;
+}
+
+.time-tab.active {
+  color: var(--text-primary);
+  background: transparent;
+}
+
+/* ========================================
+   Recent Trades Panel - Premium
+   ======================================== */
+
+.recent-trades-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recent-trades-panel.empty-panel {
+  justify-content: center;
+  align-items: center;
+  min-height: 120px;
+}
+
+/* Activity Row Styles (for events like strategy start/stop) */
+.activity-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--bg-elevated);
+  border-radius: 6px;
+  border-left: 2px solid rgba(59, 130, 246, 0.3);
+  transition: background 0.15s ease;
+}
+
+.activity-row:hover {
+  background: var(--bg-tertiary);
+}
+
+.activity-row.event-strategy_start {
+  border-left-color: var(--positive);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.activity-row.event-strategy_stop {
+  border-left-color: var(--negative);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.activity-row.event-strategy_edit {
+  border-left-color: var(--accent);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.activity-icon {
+  font-size: 16px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.activity-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.activity-message {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activity-strategy {
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+
+.activity-time {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.trade-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--card-bg);
+  border-radius: 0;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.trade-row:hover {
+  background: var(--secondary-bg);
+}
+
+.trade-row.live-signal.buy {
+  border-left: 2px solid var(--positive);
+  background: var(--card-bg);
+}
+
+.trade-row.live-signal.sell {
+  border-left: 2px solid var(--negative);
+  background: var(--card-bg);
+}
+
+.signal-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 8px;
+  font-weight: 700;
+  vertical-align: middle;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.signal-badge.buy {
+  background: var(--positive);
+  color: #000;
+}
+
+.signal-badge.sell {
+  background: var(--negative);
+  color: #fff;
+}
+
+.trade-direction {
+  padding: 2px 6px;
+  border-radius: 2px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  min-width: 36px;
+  text-align: center;
+}
+
+.trade-direction.long,
+.trade-direction.buy {
+  background: transparent;
+  color: var(--positive);
+  border: 1px solid var(--positive);
+}
+
+.trade-direction.short,
+.trade-direction.sell {
+  background: transparent;
+  color: var(--negative);
+  border: 1px solid var(--negative);
+}
+
+.trade-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.trade-symbol {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+.trade-strategy {
+  font-size: 9px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trade-time {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.live-indicator {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  font-size: 10px;
+  color: var(--accent);
+}
+
+.trade-pnl {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.trade-pnl.positive {
+  color: var(--positive);
+  background: transparent;
+}
+
+.trade-pnl.negative {
+  color: var(--negative);
+  background: transparent;
+}
+
+.trade-pnl.live-price {
+  color: var(--accent);
+  background: transparent;
+}
+
+.no-trades {
+  text-align: center;
+  padding: 24px 16px;
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border-radius: 6px;
+  margin: 8px;
+}
+
+.no-trades .empty-icon {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-size: 18px;
+}
+
+.no-trades p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.no-trades .empty-hint {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ========================================
+   Responsive Adjustments - Premium
+   ======================================== */
+
+@media (max-width: 1400px) {
+  .metrics-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  
+  .dashboard-grid {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto auto;
+    grid-template-areas:
+      "performance strategies"
+      "risk time"
+      "trades trades";
+  }
+  
+  .performance-panel {
+    min-height: 320px;
+  }
+  
+  .strategies-panel {
+    min-height: 280px;
+  }
+  
+  .risk-panel,
+  .time-panel,
+  .trades-panel {
+    min-height: 260px;
+  }
+}
+
+@media (max-width: 1100px) {  
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto auto auto;
+    grid-template-areas:
+      "performance"
+      "strategies"
+      "risk"
+      "time"
+      "trades";
+  }
+  
+  .performance-panel {
+    min-height: 350px;
+  }
+  
+  .strategies-panel {
+    min-height: 280px;
+    max-height: none;
+  }
+  
+  .metric-card {
+    padding: 14px 16px;
+  }
+}
+
+@media (max-width: 800px) {
+  .metrics-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .dashboard-main {
+    padding: 16px;
+    margin-left: 0;
+  }
+  
+  .dashboard-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  
+  .header-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .metric-value {
+    font-size: 22px;
+  }
+}
+
+@media (max-width: 600px) {
+  .metrics-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .dashboard-main {
+    padding: 12px;
+  }
+  
+  .panel {
+    border-radius: 10px;
+  }
+}
+
+/* ========================================
+   Scrollbar Styling - Premium
+   ======================================== */
+
+.panel-content::-webkit-scrollbar {
+  width: 5px;
+}
+
+.panel-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.panel-content::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 3px;
+}
+
+.panel-content::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+/* Global scrollbar for dashboard */
+.dashboard-main::-webkit-scrollbar {
+  width: 8px;
+}
+
+.dashboard-main::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+
+.dashboard-main::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+  border: 2px solid var(--bg);
+}
+
+.dashboard-main::-webkit-scrollbar-thumb:hover {
+  background: var(--border-default);
+}
+
+/* Strategies panel scrollbar */
+.strategy-control-panel::-webkit-scrollbar {
+  width: 4px;
+}
+
+.strategy-control-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ========================================
+   Edit Dashboard Mode - Drag & Drop
+   ======================================== */
+
+.edit-dashboard-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.edit-dashboard-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+}
+
+.edit-dashboard-btn.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+/* Edit mode toolbar */
+.edit-mode-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 10px;
+  margin-bottom: 16px;
+  animation: fadeInUp 0.3s ease-out;
+}
+
+.edit-mode-toolbar span {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.edit-mode-toolbar button {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.edit-toolbar-save {
+  background: var(--positive);
+  color: white;
+}
+
+.edit-toolbar-save:hover {
+  background: var(--positive-bright);
+  transform: translateY(-1px);
+}
+
+.edit-toolbar-reset {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--negative);
+}
+
+.edit-toolbar-reset:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+.edit-toolbar-cancel {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+}
+
+.edit-toolbar-cancel:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Panel edit mode styling */
+.dashboard-grid.edit-mode .panel {
+  cursor: grab;
+  position: relative;
+  border: 2px dashed transparent;
+  transition: all 0.2s ease;
+}
+
+.dashboard-grid.edit-mode .panel:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.2);
+}
+
+.dashboard-grid.edit-mode .panel.dragging {
+  opacity: 0.5;
+  cursor: grabbing;
+  transform: scale(1.02);
+  z-index: 100;
+}
+
+.dashboard-grid.edit-mode .panel.drag-over {
+  border-color: var(--positive);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+/* Delete panel button */
+.panel-delete-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  background: rgba(239, 68, 68, 0.9);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  font-size: 14px;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  transition: all 0.2s ease;
+}
+
+.panel-delete-btn:hover {
+  background: var(--negative);
+  transform: scale(1.1);
+}
+
+.dashboard-grid.edit-mode .panel .panel-delete-btn {
+  display: flex;
+}
+
+/* Drag handle indicator */
+.panel-drag-handle {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 20px;
+  height: 20px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  font-size: 16px;
+  cursor: grab;
+}
+
+.dashboard-grid.edit-mode .panel .panel-drag-handle {
+  display: flex;
+}
+
+/* ========================================
+   Mini Sparkline Charts for Metric Cards
+   ======================================== */
+
+.metric-card-with-chart {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.metric-card-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.metric-sparkline {
+  width: 80px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.metric-sparkline svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Win Rate Ring Chart */
+.metric-ring-chart {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.metric-ring-chart svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.metric-ring-chart .ring-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-width: 5;
+}
+
+.metric-ring-chart .ring-progress {
+  fill: none;
+  stroke-width: 5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s ease;
+}
+
+.metric-ring-chart .ring-progress.positive {
+  stroke: var(--positive);
+}
+
+.metric-ring-chart .ring-progress.negative {
+  stroke: var(--negative);
+}
+
+.ring-center-value {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+
+/* Trade Count Badges */
+.metric-trade-badges {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.trade-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  font-size: 9px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+
+.trade-badge.wins {
+  background: rgba(59, 130, 246, 0.2);
+  color: var(--positive);
+}
+
+.trade-badge.losses {
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--negative);
+}
+
+.trade-badge.neutral {
+  background: rgba(59, 130, 246, 0.2);
+  color: var(--accent);
+}
+
+/* Profit Factor Ring */
+.profit-factor-ring {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: 4px solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.profit-factor-ring.positive {
+  border-color: var(--positive);
+  color: var(--positive);
+}
+
+.profit-factor-ring.negative {
+  border-color: var(--negative);
+  color: var(--negative);
+}
+
+.profit-factor-ring.neutral {
+  border-color: var(--text-tertiary);
+  color: var(--text-tertiary);
+}
+
+.strategy-control-panel::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 2px;
+}
+
+/* Recent trades scrollbar */
+.recent-trades-panel::-webkit-scrollbar {
+  width: 4px;
+}
+
+.recent-trades-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.recent-trades-panel::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 2px;
+}

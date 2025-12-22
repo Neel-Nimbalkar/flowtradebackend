@@ -1636,13 +1636,46 @@ def execute_workflow():
                             bar_data['sma'] = sma_vals[-1]
                     
                     # Evaluate strategy decision for this bar
-                    bar_result = workflow_engine.execute_workflow(workflow_blocks, bar_data)
-                    if bar_result.success and bar_result.final_decision:
-                        decision_lower = bar_result.final_decision.lower()
-                        if 'bullish' in decision_lower or 'long' in decision_lower or 'buy' in decision_lower:
-                            sentiment = 'bullish'
-                        elif 'bearish' in decision_lower or 'short' in decision_lower or 'sell' in decision_lower:
-                            sentiment = 'bearish'
+                    # ✅ FIX: Use unified executor (same as live signals) for proper block ordering
+                    if connections and len(connections) > 0:
+                        # Use unified executor with topological sorting
+                        from workflows.unified_executor import execute_unified_workflow
+                        
+                        # Build market_data with history up to this bar
+                        bar_market_data = {
+                            'close': closes[i],
+                            'open': opens[i],
+                            'high': highs[i],
+                            'low': lows[i],
+                            'volume': volumes[i],
+                            'close_history': closes[:i+1],
+                            'volume_history': volumes[:i+1],
+                            'high_history': highs[:i+1],
+                            'low_history': lows[:i+1]
+                        }
+                        
+                        bar_signal, _ = execute_unified_workflow(
+                            nodes=workflow_blocks,
+                            connections=connections,
+                            market_data=bar_market_data,
+                            debug=False  # Disable debug for performance
+                        )
+                        
+                        if bar_signal:
+                            bar_signal_lower = bar_signal.lower()
+                            if 'buy' in bar_signal_lower or 'long' in bar_signal_lower:
+                                sentiment = 'bullish'
+                            elif 'sell' in bar_signal_lower or 'short' in bar_signal_lower:
+                                sentiment = 'bearish'
+                    else:
+                        # Fallback to old engine if no connections (legacy workflows)
+                        bar_result = workflow_engine.execute_workflow(workflow_blocks, bar_data)
+                        if bar_result.success and bar_result.final_decision:
+                            decision_lower = bar_result.final_decision.lower()
+                            if 'bullish' in decision_lower or 'long' in decision_lower or 'buy' in decision_lower:
+                                sentiment = 'bullish'
+                            elif 'bearish' in decision_lower or 'short' in decision_lower or 'sell' in decision_lower:
+                                sentiment = 'bearish'
                 except Exception as bar_err:
                     print(f"⚠️ Error evaluating bar {i}: {bar_err}")
             
