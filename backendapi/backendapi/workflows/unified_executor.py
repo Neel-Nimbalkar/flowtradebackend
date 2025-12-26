@@ -722,21 +722,37 @@ class UnifiedStrategyExecutor:
                 # Signal logic based on mode
                 if signal_mode == 'price_above':
                     signal_result = above_ema
+                    inferred_direction = 'BUY' if above_ema else None
                 elif signal_mode == 'price_below':
                     signal_result = below_ema
+                    inferred_direction = 'SELL' if below_ema else None
+                elif signal_mode == 'above_or_below':
+                    # Signal on EITHER condition - great for scanning both directions
+                    signal_result = True  # Always signal, direction determines action
+                    inferred_direction = 'BUY' if above_ema else 'SELL'
                 elif signal_mode == 'crossover_up':
                     # Would need previous bar data for true crossover
                     signal_result = above_ema
+                    inferred_direction = 'BUY' if above_ema else None
                 elif signal_mode == 'crossover_down':
                     signal_result = below_ema
+                    inferred_direction = 'SELL' if below_ema else None
                 elif signal_mode == 'value_only':
                     signal_result = False  # No signal, just pass value
+                    inferred_direction = None
                 else:
                     signal_result = above_ema
+                    inferred_direction = 'BUY' if above_ema else None
                 
-                # Invert signal for bearish direction
-                if signal_direction == 'bearish' and signal_mode != 'value_only':
-                    signal_result = not signal_result
+                # Build status message
+                if signal_mode == 'value_only':
+                    status_msg = f"EMA = ${ema_value:.2f} (value pass-through)"
+                elif signal_mode == 'above_or_below':
+                    status_msg = f"EMA = ${ema_value:.2f} - Price {'ABOVE' if above_ema else 'BELOW'} ({inferred_direction})"
+                elif signal_result:
+                    status_msg = f"EMA = ${ema_value:.2f} - SIGNAL (price {'above' if above_ema else 'below'})"
+                else:
+                    status_msg = f"EMA = ${ema_value:.2f} - no signal (price {'above' if above_ema else 'below'})"
                 
                 outputs = {
                     'ema': ema_value,
@@ -744,10 +760,13 @@ class UnifiedStrategyExecutor:
                     'value': ema_value,
                     'output': ema_value,
                     'signal': signal_result,
+                    'condition_met': signal_result,
                     'above': above_ema,
                     'below': below_ema,
                     'signal_mode': signal_mode,
-                    'signal_direction': signal_direction
+                    'signal_direction': signal_direction,
+                    'inferred_direction': inferred_direction,
+                    'status_message': status_msg
                 }
                 
                 # Track EMA relationship to price for signal inference
@@ -759,7 +778,7 @@ class UnifiedStrategyExecutor:
                 if self.debug:
                     logger.info(f"[EXEC] Node {node_id} (ema): period={period}, value={ema_value:.4f}, mode={signal_mode}, signal={signal_result}")
             else:
-                outputs = {'ema': None, 'ema_value': None, 'value': None, 'output': None, 'signal': False, 'above': False, 'below': False}
+                outputs = {'ema': None, 'ema_value': None, 'value': None, 'output': None, 'signal': False, 'condition_met': False, 'above': False, 'below': False}
                 if self.debug:
                     logger.warning(f"[EXEC] Node {node_id} (ema): Not enough data (need {period}, have {len(close_history)})")
         
@@ -779,34 +798,53 @@ class UnifiedStrategyExecutor:
                 # Signal logic based on mode
                 if signal_mode == 'price_above':
                     signal_result = above_sma
+                    inferred_direction = 'BUY' if above_sma else None
                 elif signal_mode == 'price_below':
                     signal_result = below_sma
+                    inferred_direction = 'SELL' if below_sma else None
+                elif signal_mode == 'above_or_below':
+                    # Signal on EITHER condition
+                    signal_result = True
+                    inferred_direction = 'BUY' if above_sma else 'SELL'
                 elif signal_mode == 'crossover_up':
                     signal_result = above_sma
+                    inferred_direction = 'BUY' if above_sma else None
                 elif signal_mode == 'crossover_down':
                     signal_result = below_sma
+                    inferred_direction = 'SELL' if below_sma else None
                 elif signal_mode == 'value_only':
                     signal_result = False
+                    inferred_direction = None
                 else:
                     signal_result = above_sma
+                    inferred_direction = 'BUY' if above_sma else None
                 
-                # Invert for bearish direction
-                if signal_direction == 'bearish' and signal_mode != 'value_only':
-                    signal_result = not signal_result
+                # Build status message
+                if signal_mode == 'value_only':
+                    status_msg = f"SMA = ${sma_value:.2f} (value pass-through)"
+                elif signal_mode == 'above_or_below':
+                    status_msg = f"SMA = ${sma_value:.2f} - Price {'ABOVE' if above_sma else 'BELOW'} ({inferred_direction})"
+                elif signal_result:
+                    status_msg = f"SMA = ${sma_value:.2f} - SIGNAL (price {'above' if above_sma else 'below'})"
+                else:
+                    status_msg = f"SMA = ${sma_value:.2f} - no signal (price {'above' if above_sma else 'below'})"
                 
                 outputs = {
                     'sma': sma_value, 
                     'value': sma_value,
                     'signal': signal_result,
+                    'condition_met': signal_result,
                     'above': above_sma,
                     'below': below_sma,
                     'signal_mode': signal_mode,
-                    'signal_direction': signal_direction
+                    'signal_direction': signal_direction,
+                    'inferred_direction': inferred_direction,
+                    'status_message': status_msg
                 }
                 if self.debug:
                     logger.info(f"[EXEC] Node {node_id} (sma): period={period}, value={sma_value:.4f}, mode={signal_mode}, signal={signal_result}")
             else:
-                outputs = {'sma': None, 'value': None, 'signal': False, 'above': False, 'below': False}
+                outputs = {'sma': None, 'value': None, 'signal': False, 'condition_met': False, 'above': False, 'below': False}
         
         # ═══════════════════════════════════════════════════════════════════
         # RSI INDICATOR
@@ -845,6 +883,10 @@ class UnifiedStrategyExecutor:
                     # Pass value only, no signal
                     signal_result = False
                     inferred_direction = None
+                elif signal_mode == 'oversold_or_overbought':
+                    # Scan for BOTH conditions - great for catching any extreme
+                    signal_result = is_oversold or is_overbought
+                    inferred_direction = 'BUY' if is_oversold else ('SELL' if is_overbought else None)
                 elif signal_mode == 'custom':
                     # Use both oversold and overbought based on direction
                     if signal_direction == 'bullish':
@@ -860,15 +902,35 @@ class UnifiedStrategyExecutor:
                     signal_result = is_oversold or is_overbought
                     inferred_direction = None
                 
+                # Build descriptive status message based on signal mode
+                if signal_mode == 'oversold_buy':
+                    status_msg = f"RSI {rsi_value:.2f} {'< ' + str(oversold) + ' (OVERSOLD - BUY)' if is_oversold else '>= ' + str(oversold) + ' (not oversold - NO SIGNAL)'}"
+                elif signal_mode == 'overbought_sell':
+                    status_msg = f"RSI {rsi_value:.2f} {'> ' + str(overbought) + ' (OVERBOUGHT - SELL)' if is_overbought else '<= ' + str(overbought) + ' (not overbought - NO SIGNAL)'}"
+                elif signal_mode == 'oversold_or_overbought':
+                    if is_oversold:
+                        status_msg = f"RSI {rsi_value:.2f} < {oversold} (OVERSOLD - BUY)"
+                    elif is_overbought:
+                        status_msg = f"RSI {rsi_value:.2f} > {overbought} (OVERBOUGHT - SELL)"
+                    else:
+                        status_msg = f"RSI {rsi_value:.2f} is neutral ({oversold}-{overbought}) - NO SIGNAL"
+                elif signal_mode == 'value_only':
+                    status_msg = f"RSI = {rsi_value:.2f} (value pass-through, no signal)"
+                else:
+                    state = 'oversold' if is_oversold else ('overbought' if is_overbought else 'neutral')
+                    status_msg = f"RSI = {rsi_value:.2f} ({state})"
+                
                 outputs = {
                     'rsi': rsi_value,
                     'value': rsi_value,
                     'oversold': is_oversold,
                     'overbought': is_overbought,
                     'signal': signal_result,
+                    'condition_met': signal_result,  # Key fix: condition_met reflects if signal fired
                     'signal_mode': signal_mode,
                     'signal_direction': signal_direction,
-                    'inferred_direction': inferred_direction
+                    'inferred_direction': inferred_direction,
+                    'status_message': status_msg
                 }
                 
                 # Track for signal inference
@@ -912,6 +974,10 @@ class UnifiedStrategyExecutor:
                 elif signal_mode == 'histogram_negative':
                     signal_result = hist_negative
                     inferred_direction = 'SELL' if hist_negative else None
+                elif signal_mode == 'bullish_or_bearish':
+                    # Signal on EITHER condition - great for scanning both directions
+                    signal_result = True  # Always signal
+                    inferred_direction = 'BUY' if hist_positive else 'SELL'
                 elif signal_mode == 'macd_cross_up':
                     signal_result = macd_above_signal
                     inferred_direction = 'BUY' if macd_above_signal else None
@@ -932,6 +998,16 @@ class UnifiedStrategyExecutor:
                     signal_result = hist_positive
                     inferred_direction = 'BUY' if hist_positive else ('SELL' if hist_negative else None)
                 
+                # Build status message
+                if signal_mode == 'value_only':
+                    status_msg = f"MACD histogram = {hist:.4f} (value pass-through)"
+                elif signal_mode == 'bullish_or_bearish':
+                    status_msg = f"MACD histogram = {hist:.4f} ({'BULLISH' if hist_positive else 'BEARISH'} - {inferred_direction})"
+                elif signal_result:
+                    status_msg = f"MACD histogram = {hist:.4f} - SIGNAL ({'bullish' if hist_positive else 'bearish'})"
+                else:
+                    status_msg = f"MACD histogram = {hist:.4f} - no signal"
+                
                 outputs = {
                     'macd': macd_line,
                     'macd_line': macd_line,
@@ -940,11 +1016,13 @@ class UnifiedStrategyExecutor:
                     'value': hist,
                     'result': signal_result,
                     'signal': signal_result,
+                    'condition_met': signal_result,
                     'bullish': hist_positive,
                     'bearish': hist_negative,
                     'signal_mode': signal_mode,
                     'signal_direction': signal_direction,
-                    'inferred_direction': inferred_direction
+                    'inferred_direction': inferred_direction,
+                    'status_message': status_msg
                 }
                 
                 # Track for signal inference
@@ -991,6 +1069,10 @@ class UnifiedStrategyExecutor:
                 elif signal_mode == 'price_above_upper':
                     signal_result = above_upper
                     inferred_direction = 'SELL' if above_upper else None  # Overbought = sell signal
+                elif signal_mode == 'band_touch_any':
+                    # Signal on EITHER band touch - great for scanning extremes
+                    signal_result = below_lower or above_upper
+                    inferred_direction = 'BUY' if below_lower else ('SELL' if above_upper else None)
                 elif signal_mode == 'price_near_lower':
                     signal_result = near_lower
                     inferred_direction = 'BUY' if near_lower else None
@@ -1007,12 +1089,28 @@ class UnifiedStrategyExecutor:
                     signal_result = below_lower or above_upper
                     inferred_direction = 'BUY' if below_lower else ('SELL' if above_upper else None)
                 
+                # Build status message
+                if signal_mode == 'value_only':
+                    status_msg = f"Bollinger: upper=${bb_data['upper']:.2f}, lower=${bb_data['lower']:.2f} (value pass-through)"
+                elif signal_mode == 'band_touch_any':
+                    if below_lower:
+                        status_msg = f"Bollinger: Price ${current_close:.2f} BELOW lower band ${bb_data['lower']:.2f} (BUY)"
+                    elif above_upper:
+                        status_msg = f"Bollinger: Price ${current_close:.2f} ABOVE upper band ${bb_data['upper']:.2f} (SELL)"
+                    else:
+                        status_msg = f"Bollinger: Price ${current_close:.2f} within bands - no signal"
+                elif signal_result:
+                    status_msg = f"Bollinger: SIGNAL - price {'below lower' if below_lower else 'above upper'}"
+                else:
+                    status_msg = f"Bollinger: Price ${current_close:.2f} within bands ${bb_data['lower']:.2f}-${bb_data['upper']:.2f}"
+                
                 outputs = {
                     'upper': bb_data['upper'],
                     'middle': bb_data['middle'],
                     'lower': bb_data['lower'],
                     'value': bb_data['middle'],
                     'signal': signal_result,
+                    'condition_met': signal_result,
                     'below_lower': below_lower,
                     'above_upper': above_upper,
                     'near_lower': near_lower,
@@ -1020,13 +1118,14 @@ class UnifiedStrategyExecutor:
                     'squeeze': is_squeeze,
                     'signal_mode': signal_mode,
                     'signal_direction': signal_direction,
-                    'inferred_direction': inferred_direction
+                    'inferred_direction': inferred_direction,
+                    'status_message': status_msg
                 }
                 
                 if self.debug:
                     logger.info(f"[EXEC] Node {node_id} (bollinger): upper={bb_data['upper']:.2f}, lower={bb_data['lower']:.2f}, close={current_close:.2f}, mode={signal_mode}, signal={signal_result}")
             else:
-                outputs = {'upper': None, 'middle': None, 'lower': None, 'value': None, 'signal': False}
+                outputs = {'upper': None, 'middle': None, 'lower': None, 'value': None, 'signal': False, 'condition_met': False}
         
         # ═══════════════════════════════════════════════════════════════════
         # VWAP INDICATOR
@@ -1053,6 +1152,10 @@ class UnifiedStrategyExecutor:
                 elif signal_mode == 'price_below':
                     signal_result = below_vwap
                     inferred_direction = 'SELL' if below_vwap else None
+                elif signal_mode == 'above_or_below':
+                    # Signal on EITHER condition
+                    signal_result = True
+                    inferred_direction = 'BUY' if above_vwap else 'SELL'
                 elif signal_mode == 'price_near':
                     signal_result = near_vwap
                     inferred_direction = None  # Near VWAP doesn't indicate direction
@@ -1063,18 +1166,21 @@ class UnifiedStrategyExecutor:
                     signal_result = above_vwap
                     inferred_direction = 'BUY' if above_vwap else 'SELL'
                 
-                # Invert for bearish direction
-                if signal_direction == 'bearish' and signal_mode in ['price_above', 'price_below']:
-                    signal_result = not signal_result
-                    if inferred_direction == 'BUY':
-                        inferred_direction = 'SELL'
-                    elif inferred_direction == 'SELL':
-                        inferred_direction = 'BUY'
+                # Build status message
+                if signal_mode == 'value_only':
+                    status_msg = f"VWAP = ${vwap_value:.2f} (value pass-through)"
+                elif signal_mode == 'above_or_below':
+                    status_msg = f"VWAP = ${vwap_value:.2f} - Price {'ABOVE' if above_vwap else 'BELOW'} ({inferred_direction})"
+                elif signal_result:
+                    status_msg = f"VWAP = ${vwap_value:.2f} - SIGNAL (price {'above' if above_vwap else 'below'})"
+                else:
+                    status_msg = f"VWAP = ${vwap_value:.2f} - no signal (price {'above' if above_vwap else 'below'})"
                 
                 outputs = {
                     'vwap': vwap_value,
                     'value': vwap_value,
                     'signal': signal_result,
+                    'condition_met': signal_result,
                     'result': signal_result,
                     'above': above_vwap,
                     'below': below_vwap,
@@ -1082,13 +1188,14 @@ class UnifiedStrategyExecutor:
                     'pct_diff': pct_diff * 100,  # Return as percentage
                     'signal_mode': signal_mode,
                     'signal_direction': signal_direction,
-                    'inferred_direction': inferred_direction
+                    'inferred_direction': inferred_direction,
+                    'status_message': status_msg
                 }
                 
                 if self.debug:
                     logger.info(f"[EXEC] Node {node_id} (vwap): value={vwap_value:.2f}, price={current_close:.2f}, mode={signal_mode}, signal={signal_result}")
             else:
-                outputs = {'vwap': None, 'value': None, 'signal': False, 'result': False, 'above': False, 'near': False}
+                outputs = {'vwap': None, 'value': None, 'signal': False, 'condition_met': False, 'result': False, 'above': False, 'near': False}
         
         # ═══════════════════════════════════════════════════════════════════
         # VOLUME SPIKE INDICATOR
@@ -1590,6 +1697,10 @@ class UnifiedStrategyExecutor:
                 elif signal_mode == 'overbought_sell':
                     signal_result = is_overbought
                     inferred_direction = 'SELL' if is_overbought else None
+                elif signal_mode == 'oversold_or_overbought':
+                    # Signal on EITHER extreme
+                    signal_result = is_oversold or is_overbought
+                    inferred_direction = 'BUY' if is_oversold else ('SELL' if is_overbought else None)
                 elif signal_mode == 'k_cross_d_up':
                     signal_result = k_above_d
                     inferred_direction = 'BUY' if k_above_d else None
@@ -1603,6 +1714,23 @@ class UnifiedStrategyExecutor:
                     signal_result = is_oversold or is_overbought
                     inferred_direction = 'BUY' if is_oversold else ('SELL' if is_overbought else None)
                 
+                # Build status message
+                if signal_mode == 'value_only':
+                    status_msg = f"Stochastic %K = {k_value:.2f} (value pass-through)"
+                elif signal_mode == 'oversold_or_overbought':
+                    if is_oversold:
+                        status_msg = f"Stochastic %K = {k_value:.2f} < {oversold} (OVERSOLD - BUY)"
+                    elif is_overbought:
+                        status_msg = f"Stochastic %K = {k_value:.2f} > {overbought} (OVERBOUGHT - SELL)"
+                    else:
+                        status_msg = f"Stochastic %K = {k_value:.2f} is neutral ({oversold}-{overbought}) - NO SIGNAL"
+                elif signal_result:
+                    state = 'oversold' if is_oversold else ('overbought' if is_overbought else 'neutral')
+                    status_msg = f"Stochastic %K = {k_value:.2f} - SIGNAL ({state})"
+                else:
+                    state = 'oversold' if is_oversold else ('overbought' if is_overbought else 'neutral')
+                    status_msg = f"Stochastic %K = {k_value:.2f} ({state}) - no signal"
+                
                 outputs = {
                     'k': k_value,
                     'd': d_value,
@@ -1615,15 +1743,17 @@ class UnifiedStrategyExecutor:
                     'k_above_d': k_above_d,
                     'k_below_d': k_below_d,
                     'signal': signal_result,
+                    'condition_met': signal_result,
                     'signal_mode': signal_mode,
                     'signal_direction': signal_direction,
-                    'inferred_direction': inferred_direction
+                    'inferred_direction': inferred_direction,
+                    'status_message': status_msg
                 }
                 
                 if self.debug:
                     logger.info(f"[EXEC] Node {node_id} (stochastic): k={k_value:.2f}, d={d_value:.2f}, mode={signal_mode}, signal={signal_result}")
             else:
-                outputs = {'k': None, 'd': None, 'stoch': None, 'value': None, 'oversold': False, 'overbought': False, 'signal': False}
+                outputs = {'k': None, 'd': None, 'stoch': None, 'value': None, 'oversold': False, 'overbought': False, 'signal': False, 'condition_met': False}
         
         # ═══════════════════════════════════════════════════════════════════
         # SUPPORT/RESISTANCE INDICATOR
@@ -1680,11 +1810,152 @@ class UnifiedStrategyExecutor:
             outputs = {}
         
         # ═══════════════════════════════════════════════════════════════════
-        # UNKNOWN NODE - Pass through
+        # PRICE_HISTORY NODE - Provides price data (alias for input)
+        # ═══════════════════════════════════════════════════════════════════
+        elif node_type == 'price_history':
+            outputs = {
+                'price': current_close,
+                'close': current_close,
+                'prices': close_history,
+                'close_history': close_history,
+                'open': self.market_data.get('open', current_close),
+                'high': self.market_data.get('high', current_close),
+                'low': self.market_data.get('low', current_close),
+                'volume': self.market_data.get('volume', 0),
+                'value': current_close
+            }
+            
+            if self.debug:
+                logger.info(f"[EXEC] Node {node_id} (price_history): price={current_close:.2f}, history_len={len(close_history)}")
+        
+        # ═══════════════════════════════════════════════════════════════════
+        # TIME FILTER NODE - Filter by time of day
+        # ═══════════════════════════════════════════════════════════════════
+        elif node_type == 'time_filter':
+            from datetime import datetime
+            
+            start_hour = int(params.get('startHour', params.get('start_hour', 9)))
+            end_hour = int(params.get('endHour', params.get('end_hour', 16)))
+            timezone_str = params.get('timezone', 'US/Eastern')
+            
+            # Get current time (or use provided timestamp)
+            now = datetime.now()
+            current_hour = now.hour
+            
+            # Check if current time is within trading window
+            in_window = start_hour <= current_hour < end_hour
+            
+            outputs = {
+                'result': in_window,
+                'signal': in_window,
+                'value': in_window,
+                'condition_met': in_window,
+                'current_hour': current_hour,
+                'in_window': in_window
+            }
+            
+            if self.debug:
+                logger.info(f"[EXEC] Node {node_id} (time_filter): hour={current_hour}, window={start_hour}-{end_hour}, in_window={in_window}")
+        
+        # ═══════════════════════════════════════════════════════════════════
+        # TREND FILTER NODE - Filter by trend direction
+        # ═══════════════════════════════════════════════════════════════════
+        elif node_type == 'trend_filter':
+            lookback = int(params.get('lookback', params.get('period', 20)))
+            min_strength = float(params.get('minStrength', params.get('min_strength', 0.0)))
+            trend_type = params.get('trendType', params.get('type', 'any')).lower()
+            
+            # Calculate trend using SMA slope
+            is_uptrend = False
+            is_downtrend = False
+            trend_strength = 0.0
+            
+            if close_history and len(close_history) >= lookback:
+                recent_prices = close_history[-lookback:]
+                # Simple trend detection: compare first half avg to second half avg
+                half = len(recent_prices) // 2
+                first_half_avg = sum(recent_prices[:half]) / half if half > 0 else 0
+                second_half_avg = sum(recent_prices[half:]) / (len(recent_prices) - half) if (len(recent_prices) - half) > 0 else 0
+                
+                if first_half_avg > 0:
+                    trend_strength = (second_half_avg - first_half_avg) / first_half_avg * 100
+                
+                is_uptrend = trend_strength > min_strength
+                is_downtrend = trend_strength < -min_strength
+            
+            # Determine if filter passes
+            if trend_type == 'up':
+                passes = is_uptrend
+            elif trend_type == 'down':
+                passes = is_downtrend
+            else:  # any
+                passes = is_uptrend or is_downtrend
+            
+            outputs = {
+                'result': passes,
+                'signal': passes,
+                'value': passes,
+                'condition_met': passes,
+                'is_uptrend': is_uptrend,
+                'is_downtrend': is_downtrend,
+                'trend_strength': round(trend_strength, 4)
+            }
+            
+            if self.debug:
+                logger.info(f"[EXEC] Node {node_id} (trend_filter): type={trend_type}, uptrend={is_uptrend}, downtrend={is_downtrend}, strength={trend_strength:.2f}%")
+        
+        # ═══════════════════════════════════════════════════════════════════
+        # VOLUME FILTER NODE - Filter by volume conditions
+        # ═══════════════════════════════════════════════════════════════════
+        elif node_type == 'volume_filter':
+            lookback = int(params.get('lookback', params.get('period', 20)))
+            min_ratio = float(params.get('minRatio', params.get('min_ratio', 1.0)))
+            
+            # Calculate average volume and compare to current
+            passes = False
+            volume_ratio = 0.0
+            current_volume = volume_history[-1] if volume_history else 0
+            
+            if volume_history and len(volume_history) >= lookback:
+                avg_volume = sum(volume_history[-lookback:]) / lookback
+                if avg_volume > 0:
+                    volume_ratio = current_volume / avg_volume
+                    passes = volume_ratio >= min_ratio
+            
+            outputs = {
+                'result': passes,
+                'signal': passes,
+                'value': passes,
+                'condition_met': passes,
+                'volume_ratio': round(volume_ratio, 4),
+                'current_volume': current_volume,
+                'passes': passes
+            }
+            
+            if self.debug:
+                logger.info(f"[EXEC] Node {node_id} (volume_filter): ratio={volume_ratio:.2f}, min={min_ratio}, passes={passes}")
+        
+        # ═══════════════════════════════════════════════════════════════════
+        # ALPACA_CREDENTIALS NODE - Pass through (credentials handled by backend)
+        # ═══════════════════════════════════════════════════════════════════
+        elif node_type == 'alpaca_credentials':
+            # This node is for frontend credential management, just pass through
+            outputs = {
+                'result': True,
+                'signal': True,
+                'value': True,
+                'configured': True
+            }
+            
+            if self.debug:
+                logger.info(f"[EXEC] Node {node_id} (alpaca_credentials): pass-through")
+        
+        # ═══════════════════════════════════════════════════════════════════
+        # UNKNOWN NODE - Pass through with warning
         # ═══════════════════════════════════════════════════════════════════
         else:
-            if self.debug:
-                logger.warning(f"[EXEC] Node {node_id}: Unknown type '{node_type}'")
+            # Always log unknown node types so users know their workflow has issues
+            logger.warning(f"[EXEC] Node {node_id}: Unknown type '{node_type}' - passing through inputs")
             # Pass through any inputs
             outputs = inputs.copy() if inputs else {}
         
@@ -1695,16 +1966,16 @@ class UnifiedStrategyExecutor:
     def _get_output_node_value(self) -> Optional[bool]:
         """Get the boolean value from the OUTPUT or SIGNAL node."""
         # First check for explicit signal nodes - find the one that fired
-        fired_signal_node = None
+        has_signal_node = False
         for node_id, node in self.nodes.items():
             if node['type'] == 'signal':
+                has_signal_node = True
                 outputs = self.node_outputs.get(node_id, {})
                 result = outputs.get('result')
                 if self.debug:
                     logger.info(f"[OUTPUT] Found signal node {node_id}: outputs={outputs}, result={result}")
                 # Check if this signal node actually fired (result is True)
                 if result is True:
-                    fired_signal_node = node_id
                     # Store the signal type for direction inference
                     params = node['params']
                     signal_type = params.get('type', params.get('direction', params.get('action', 'BUY')))
@@ -1714,18 +1985,24 @@ class UnifiedStrategyExecutor:
                         logger.info(f"[OUTPUT] Signal node {node_id} FIRED with type={signal_type}")
                     return True  # Signal node fired
         
-        # If no signal nodes fired, check for output nodes
+        # If signal nodes exist but none fired, return False (explicit rejection)
+        if has_signal_node:
+            if self.debug:
+                logger.info(f"[OUTPUT] Signal node(s) exist but none fired - returning False")
+            return False
+        
+        # Check for output nodes - return the FIRST output node's result (whether True or False)
         for node_id, node in self.nodes.items():
             if node['type'] == 'output':
                 outputs = self.node_outputs.get(node_id, {})
                 result = outputs.get('result')
                 if self.debug:
                     logger.info(f"[OUTPUT] Found output node {node_id}: outputs={outputs}, result={result}")
-                # Return the result directly - don't use 'or' chaining which hides False values
-                if result is True:
-                    return result
+                # CRITICAL FIX: Return the result directly, even if False!
+                # This ensures output node False values are respected, not overridden by terminal nodes
+                return result is True  # Explicit bool conversion
         
-        # If no output/signal nodes, check if any terminal node (no outgoing connections) has a truthy result
+        # ONLY if no output/signal nodes exist, check terminal nodes as fallback
         terminal_nodes = self._find_terminal_nodes()
         if self.debug:
             logger.info(f"[OUTPUT] No output/signal nodes found, checking terminal nodes: {terminal_nodes}")

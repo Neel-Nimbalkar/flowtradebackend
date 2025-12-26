@@ -1925,53 +1925,97 @@ def _build_v2_response(symbol: str, timeframe: str, days: int, engine_resp: Dict
                 has_value = any(v is not None for k, v in unified_output.items() if k not in ['signal', 'result'])
                 if has_value:
                     status = 'passed'
-                block_data = {'condition_met': True, 'unified_output': unified_output, **unified_output}
+                
+                # IMPORTANT: Use condition_met from unified_output if available (signal fired)
+                # Otherwise fall back to True (indicator computed successfully)
+                condition_met = unified_output.get('condition_met', unified_output.get('signal', True))
+                block_data = {'condition_met': condition_met, 'unified_output': unified_output, **unified_output}
                 
                 # Generate descriptive message from unified output
+                # Use status_message from unified executor if available (more detailed)
                 if block_type == 'ema':
                     ema_val = unified_output.get('ema', unified_output.get('value'))
                     above = unified_output.get('above', False)
+                    signal_met = unified_output.get('signal', False)
+                    signal_mode = unified_output.get('signal_mode', 'price_above')
                     if ema_val is not None:
-                        message = f"EMA({ema_val:.2f}), Price {'above' if above else 'below'} EMA"
+                        if signal_mode == 'value_only':
+                            message = f"EMA = ${ema_val:.2f} (value pass-through)"
+                        elif signal_met:
+                            message = f"EMA = ${ema_val:.2f} - SIGNAL TRIGGERED (price {'above' if above else 'below'})"
+                        else:
+                            message = f"EMA = ${ema_val:.2f} - no signal (price {'above' if above else 'below'})"
                 elif block_type == 'sma':
                     sma_val = unified_output.get('sma', unified_output.get('value'))
                     above = unified_output.get('above', False)
+                    signal_met = unified_output.get('signal', False)
+                    signal_mode = unified_output.get('signal_mode', 'price_above')
                     if sma_val is not None:
-                        message = f"SMA({sma_val:.2f}), Price {'above' if above else 'below'} SMA"
+                        if signal_mode == 'value_only':
+                            message = f"SMA = ${sma_val:.2f} (value pass-through)"
+                        elif signal_met:
+                            message = f"SMA = ${sma_val:.2f} - SIGNAL TRIGGERED (price {'above' if above else 'below'})"
+                        else:
+                            message = f"SMA = ${sma_val:.2f} - no signal (price {'above' if above else 'below'})"
                 elif block_type == 'rsi':
-                    rsi_val = unified_output.get('rsi', unified_output.get('value'))
-                    oversold = unified_output.get('oversold', False)
-                    overbought = unified_output.get('overbought', False)
-                    if rsi_val is not None:
-                        state = 'oversold' if oversold else ('overbought' if overbought else 'neutral')
-                        message = f"RSI = {rsi_val:.2f} ({state})"
-                elif block_type == 'macd':
-                    hist = unified_output.get('histogram', unified_output.get('value'))
-                    bullish = unified_output.get('bullish', False)
-                    if hist is not None:
-                        message = f"MACD histogram = {hist:.4f} ({'bullish' if bullish else 'bearish'})"
-                elif block_type == 'stochastic':
-                    stoch_val = unified_output.get('stoch', unified_output.get('k', unified_output.get('value')))
-                    oversold = unified_output.get('oversold', False)
-                    overbought = unified_output.get('overbought', False)
-                    if stoch_val is not None:
-                        state = 'oversold' if oversold else ('overbought' if overbought else 'neutral')
-                        message = f"Stochastic = {stoch_val:.2f} ({state})"
-                elif block_type == 'bollinger':
-                    upper = unified_output.get('upper')
-                    lower = unified_output.get('lower')
-                    middle = unified_output.get('middle')
-                    if upper is not None and lower is not None:
-                        message = f"Bollinger: upper={upper:.2f}, lower={lower:.2f}"
-                    elif middle is not None:
-                        message = f"Bollinger middle = {middle:.2f}"
-                elif block_type == 'vwap':
-                    vwap_val = unified_output.get('vwap', unified_output.get('value'))
-                    above = unified_output.get('above', False)
-                    if vwap_val is not None:
-                        message = f"VWAP = ${vwap_val:.2f}, price {'above' if above else 'below'}"
+                    # Use status_message from unified executor (detailed and mode-aware)
+                    status_msg = unified_output.get('status_message')
+                    if status_msg:
+                        message = status_msg
                     else:
-                        message = "VWAP calculation pending"
+                        rsi_val = unified_output.get('rsi', unified_output.get('value'))
+                        oversold = unified_output.get('oversold', False)
+                        overbought = unified_output.get('overbought', False)
+                        if rsi_val is not None:
+                            state = 'oversold' if oversold else ('overbought' if overbought else 'neutral')
+                            message = f"RSI = {rsi_val:.2f} ({state})"
+                elif block_type == 'macd':
+                    # Use status_message from unified executor if available
+                    status_msg = unified_output.get('status_message')
+                    if status_msg:
+                        message = status_msg
+                    else:
+                        hist = unified_output.get('histogram', unified_output.get('value'))
+                        bullish = unified_output.get('bullish', False)
+                        if hist is not None:
+                            message = f"MACD histogram = {hist:.4f} ({'bullish' if bullish else 'bearish'})"
+                elif block_type == 'stochastic':
+                    # Use status_message from unified executor if available
+                    status_msg = unified_output.get('status_message')
+                    if status_msg:
+                        message = status_msg
+                    else:
+                        stoch_val = unified_output.get('stoch', unified_output.get('k', unified_output.get('value')))
+                        oversold = unified_output.get('oversold', False)
+                        overbought = unified_output.get('overbought', False)
+                        if stoch_val is not None:
+                            state = 'oversold' if oversold else ('overbought' if overbought else 'neutral')
+                            message = f"Stochastic = {stoch_val:.2f} ({state})"
+                elif block_type == 'bollinger':
+                    # Use status_message from unified executor if available
+                    status_msg = unified_output.get('status_message')
+                    if status_msg:
+                        message = status_msg
+                    else:
+                        upper = unified_output.get('upper')
+                        lower = unified_output.get('lower')
+                        middle = unified_output.get('middle')
+                        if upper is not None and lower is not None:
+                            message = f"Bollinger: upper={upper:.2f}, lower={lower:.2f}"
+                        elif middle is not None:
+                            message = f"Bollinger middle = {middle:.2f}"
+                elif block_type == 'vwap':
+                    # Use status_message from unified executor if available
+                    status_msg = unified_output.get('status_message')
+                    if status_msg:
+                        message = status_msg
+                    else:
+                        vwap_val = unified_output.get('vwap', unified_output.get('value'))
+                        above = unified_output.get('above', False)
+                        if vwap_val is not None:
+                            message = f"VWAP = ${vwap_val:.2f}, price {'above' if above else 'below'}"
+                        else:
+                            message = "VWAP calculation pending"
                 elif block_type == 'obv':
                     obv_val = unified_output.get('obv', unified_output.get('value'))
                     if obv_val is not None:
