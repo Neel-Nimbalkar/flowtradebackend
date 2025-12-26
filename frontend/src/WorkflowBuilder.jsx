@@ -437,47 +437,59 @@ const WorkflowBuilder = ({ onNavigate }) => {
       // Animate node execution based on unified_debug results
       const nodeOutputs = data.unified_debug?.node_outputs || {};
       const executionOrder = data.unified_debug?.execution_order || [];
+      const blocks = data.blocks || [];
       
-      // If we have execution order from backend, animate nodes in sequence
-      if (executionOrder.length > 0) {
-        for (const nodeId of executionOrder) {
-          const nodeIdStr = String(nodeId);
-          // Mark as executing
-          setNodes(prev => prev.map(n => String(n.id) === nodeIdStr ? { ...n, execStatus: 'executing' } : n));
-          await new Promise(r => setTimeout(r, 150)); // Brief delay for visual effect
-          
-          // Determine result from outputs
-          const outputs = nodeOutputs[nodeIdStr] || {};
-          const hasPassed = outputs.result === true || outputs.signal === true || outputs.condition_met === true;
-          const hasFailed = outputs.result === false || (outputs.signal === false && outputs.rsi === undefined);
-          
-          // Update node status
-          setNodes(prev => prev.map(n => {
-            if (String(n.id) !== nodeIdStr) return n;
-            // For indicator nodes that output values, show passed if they computed successfully
-            if (outputs.rsi !== undefined || outputs.ema !== undefined || outputs.macd !== undefined || 
-                outputs.vwap !== undefined || outputs.stochastic_k !== undefined || outputs.atr !== undefined ||
-                outputs.upper !== undefined || outputs.histogram !== undefined || outputs.obv !== undefined) {
-              return { ...n, execStatus: hasPassed ? 'passed' : (hasFailed ? 'failed' : 'passed') };
-            }
-            // For logic/output nodes, check boolean result
-            if (hasPassed) return { ...n, execStatus: 'passed' };
-            if (hasFailed) return { ...n, execStatus: 'failed' };
-            return { ...n, execStatus: 'passed' }; // Default to passed if node ran
-          }));
-          await new Promise(r => setTimeout(r, 100)); // Brief delay between nodes
+      console.log('[WorkflowBuilder] Animation data:', { executionOrder, nodeOutputs: Object.keys(nodeOutputs), blocks: blocks.length, nodeIds: nodes.map(n => n.id) });
+      
+      // Helper to determine node pass/fail status
+      const getNodeStatus = (nodeIdStr) => {
+        // Check unified_debug outputs first
+        const outputs = nodeOutputs[nodeIdStr] || {};
+        
+        // Check if indicator computed a value successfully
+        const hasIndicatorValue = outputs.rsi !== undefined || outputs.ema !== undefined || 
+          outputs.sma !== undefined || outputs.macd !== undefined || outputs.vwap !== undefined || 
+          outputs.stochastic_k !== undefined || outputs.atr !== undefined || outputs.upper !== undefined || 
+          outputs.histogram !== undefined || outputs.obv !== undefined || outputs.value !== undefined;
+        
+        // Check explicit signal/result flags
+        const hasPassSignal = outputs.result === true || outputs.signal === true || outputs.condition_met === true;
+        const hasFailSignal = outputs.result === false || outputs.signal === false || outputs.condition_met === false;
+        
+        // If indicator produced a value, it passed (unless signal explicitly false)
+        if (hasIndicatorValue && !hasFailSignal) return 'passed';
+        if (hasPassSignal) return 'passed';
+        if (hasFailSignal) return 'failed';
+        
+        // Check blocks array fallback
+        const block = blocks.find(b => String(b.block_id) === nodeIdStr);
+        if (block) {
+          if (block.status === 'passed') return 'passed';
+          if (block.status === 'failed') return 'failed';
         }
-      } else {
-        // Fallback: mark all nodes based on blocks array
-        const blocks = data.blocks || [];
-        for (const block of blocks) {
-          const nodeId = block.block_id;
-          setNodes(prev => prev.map(n => {
-            if (String(n.id) !== String(nodeId)) return n;
-            const status = block.status === 'passed' ? 'passed' : (block.status === 'failed' ? 'failed' : 'skipped');
-            return { ...n, execStatus: status };
-          }));
-        }
+        
+        // Default: if node was executed, consider it passed
+        return 'passed';
+      };
+      
+      // Determine animation order - prefer execution_order, fall back to nodes array
+      let animationOrder = executionOrder.length > 0 
+        ? executionOrder.map(id => String(id))
+        : nodes.map(n => String(n.id));
+      
+      // Animate each node in sequence
+      for (const nodeIdStr of animationOrder) {
+        // Skip if node doesn't exist
+        if (!nodes.find(n => String(n.id) === nodeIdStr)) continue;
+        
+        // Mark as executing
+        setNodes(prev => prev.map(n => String(n.id) === nodeIdStr ? { ...n, execStatus: 'executing' } : n));
+        await new Promise(r => setTimeout(r, 200)); // Visual delay
+        
+        // Determine and set final status
+        const status = getNodeStatus(nodeIdStr);
+        setNodes(prev => prev.map(n => String(n.id) === nodeIdStr ? { ...n, execStatus: status } : n));
+        await new Promise(r => setTimeout(r, 150)); // Brief delay between nodes
       }
       
       setResultsData(data);
