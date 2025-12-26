@@ -426,9 +426,60 @@ const WorkflowBuilder = ({ onNavigate }) => {
   const runWorkflow = async () => {
     if (!nodes || nodes.length === 0) { alert('Add blocks to create a workflow first'); return; }
     const payload = preparePayload();
+    
+    // Clear any previous execution status
+    setNodes(prev => prev.map(n => ({ ...n, execStatus: null })));
+    
     try {
       const data = await executeWorkflowOnce(payload, null);
       if (data.error) throw new Error(data.error);
+      
+      // Animate node execution based on unified_debug results
+      const nodeOutputs = data.unified_debug?.node_outputs || {};
+      const executionOrder = data.unified_debug?.execution_order || [];
+      
+      // If we have execution order from backend, animate nodes in sequence
+      if (executionOrder.length > 0) {
+        for (const nodeId of executionOrder) {
+          const nodeIdStr = String(nodeId);
+          // Mark as executing
+          setNodes(prev => prev.map(n => String(n.id) === nodeIdStr ? { ...n, execStatus: 'executing' } : n));
+          await new Promise(r => setTimeout(r, 150)); // Brief delay for visual effect
+          
+          // Determine result from outputs
+          const outputs = nodeOutputs[nodeIdStr] || {};
+          const hasPassed = outputs.result === true || outputs.signal === true || outputs.condition_met === true;
+          const hasFailed = outputs.result === false || (outputs.signal === false && outputs.rsi === undefined);
+          
+          // Update node status
+          setNodes(prev => prev.map(n => {
+            if (String(n.id) !== nodeIdStr) return n;
+            // For indicator nodes that output values, show passed if they computed successfully
+            if (outputs.rsi !== undefined || outputs.ema !== undefined || outputs.macd !== undefined || 
+                outputs.vwap !== undefined || outputs.stochastic_k !== undefined || outputs.atr !== undefined ||
+                outputs.upper !== undefined || outputs.histogram !== undefined || outputs.obv !== undefined) {
+              return { ...n, execStatus: hasPassed ? 'passed' : (hasFailed ? 'failed' : 'passed') };
+            }
+            // For logic/output nodes, check boolean result
+            if (hasPassed) return { ...n, execStatus: 'passed' };
+            if (hasFailed) return { ...n, execStatus: 'failed' };
+            return { ...n, execStatus: 'passed' }; // Default to passed if node ran
+          }));
+          await new Promise(r => setTimeout(r, 100)); // Brief delay between nodes
+        }
+      } else {
+        // Fallback: mark all nodes based on blocks array
+        const blocks = data.blocks || [];
+        for (const block of blocks) {
+          const nodeId = block.block_id;
+          setNodes(prev => prev.map(n => {
+            if (String(n.id) !== String(nodeId)) return n;
+            const status = block.status === 'passed' ? 'passed' : (block.status === 'failed' ? 'failed' : 'skipped');
+            return { ...n, execStatus: status };
+          }));
+        }
+      }
+      
       setResultsData(data);
       try { window.__monitor_resultsData = data; } catch (e) {}
       try { localStorage.setItem('monitor_results', JSON.stringify(data)); } catch (e) {}
@@ -443,6 +494,8 @@ const WorkflowBuilder = ({ onNavigate }) => {
       persistAlertEntry(data, 'manual-run');
     } catch (err) {
       console.error('runWorkflow error', err);
+      // Mark all nodes as failed on error
+      setNodes(prev => prev.map(n => ({ ...n, execStatus: 'failed' })));
       try {
         const h = await fetch('/health');
         if (h && h.ok) {

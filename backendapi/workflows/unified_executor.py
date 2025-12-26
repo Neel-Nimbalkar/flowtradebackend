@@ -1810,11 +1810,152 @@ class UnifiedStrategyExecutor:
             outputs = {}
         
         # ═══════════════════════════════════════════════════════════════════
-        # UNKNOWN NODE - Pass through
+        # PRICE_HISTORY NODE - Provides price data (alias for input)
+        # ═══════════════════════════════════════════════════════════════════
+        elif node_type == 'price_history':
+            outputs = {
+                'price': current_close,
+                'close': current_close,
+                'prices': close_history,
+                'close_history': close_history,
+                'open': self.market_data.get('open', current_close),
+                'high': self.market_data.get('high', current_close),
+                'low': self.market_data.get('low', current_close),
+                'volume': self.market_data.get('volume', 0),
+                'value': current_close
+            }
+            
+            if self.debug:
+                logger.info(f"[EXEC] Node {node_id} (price_history): price={current_close:.2f}, history_len={len(close_history)}")
+        
+        # ═══════════════════════════════════════════════════════════════════
+        # TIME FILTER NODE - Filter by time of day
+        # ═══════════════════════════════════════════════════════════════════
+        elif node_type == 'time_filter':
+            from datetime import datetime
+            
+            start_hour = int(params.get('startHour', params.get('start_hour', 9)))
+            end_hour = int(params.get('endHour', params.get('end_hour', 16)))
+            timezone_str = params.get('timezone', 'US/Eastern')
+            
+            # Get current time (or use provided timestamp)
+            now = datetime.now()
+            current_hour = now.hour
+            
+            # Check if current time is within trading window
+            in_window = start_hour <= current_hour < end_hour
+            
+            outputs = {
+                'result': in_window,
+                'signal': in_window,
+                'value': in_window,
+                'condition_met': in_window,
+                'current_hour': current_hour,
+                'in_window': in_window
+            }
+            
+            if self.debug:
+                logger.info(f"[EXEC] Node {node_id} (time_filter): hour={current_hour}, window={start_hour}-{end_hour}, in_window={in_window}")
+        
+        # ═══════════════════════════════════════════════════════════════════
+        # TREND FILTER NODE - Filter by trend direction
+        # ═══════════════════════════════════════════════════════════════════
+        elif node_type == 'trend_filter':
+            lookback = int(params.get('lookback', params.get('period', 20)))
+            min_strength = float(params.get('minStrength', params.get('min_strength', 0.0)))
+            trend_type = params.get('trendType', params.get('type', 'any')).lower()
+            
+            # Calculate trend using SMA slope
+            is_uptrend = False
+            is_downtrend = False
+            trend_strength = 0.0
+            
+            if close_history and len(close_history) >= lookback:
+                recent_prices = close_history[-lookback:]
+                # Simple trend detection: compare first half avg to second half avg
+                half = len(recent_prices) // 2
+                first_half_avg = sum(recent_prices[:half]) / half if half > 0 else 0
+                second_half_avg = sum(recent_prices[half:]) / (len(recent_prices) - half) if (len(recent_prices) - half) > 0 else 0
+                
+                if first_half_avg > 0:
+                    trend_strength = (second_half_avg - first_half_avg) / first_half_avg * 100
+                
+                is_uptrend = trend_strength > min_strength
+                is_downtrend = trend_strength < -min_strength
+            
+            # Determine if filter passes
+            if trend_type == 'up':
+                passes = is_uptrend
+            elif trend_type == 'down':
+                passes = is_downtrend
+            else:  # any
+                passes = is_uptrend or is_downtrend
+            
+            outputs = {
+                'result': passes,
+                'signal': passes,
+                'value': passes,
+                'condition_met': passes,
+                'is_uptrend': is_uptrend,
+                'is_downtrend': is_downtrend,
+                'trend_strength': round(trend_strength, 4)
+            }
+            
+            if self.debug:
+                logger.info(f"[EXEC] Node {node_id} (trend_filter): type={trend_type}, uptrend={is_uptrend}, downtrend={is_downtrend}, strength={trend_strength:.2f}%")
+        
+        # ═══════════════════════════════════════════════════════════════════
+        # VOLUME FILTER NODE - Filter by volume conditions
+        # ═══════════════════════════════════════════════════════════════════
+        elif node_type == 'volume_filter':
+            lookback = int(params.get('lookback', params.get('period', 20)))
+            min_ratio = float(params.get('minRatio', params.get('min_ratio', 1.0)))
+            
+            # Calculate average volume and compare to current
+            passes = False
+            volume_ratio = 0.0
+            current_volume = volume_history[-1] if volume_history else 0
+            
+            if volume_history and len(volume_history) >= lookback:
+                avg_volume = sum(volume_history[-lookback:]) / lookback
+                if avg_volume > 0:
+                    volume_ratio = current_volume / avg_volume
+                    passes = volume_ratio >= min_ratio
+            
+            outputs = {
+                'result': passes,
+                'signal': passes,
+                'value': passes,
+                'condition_met': passes,
+                'volume_ratio': round(volume_ratio, 4),
+                'current_volume': current_volume,
+                'passes': passes
+            }
+            
+            if self.debug:
+                logger.info(f"[EXEC] Node {node_id} (volume_filter): ratio={volume_ratio:.2f}, min={min_ratio}, passes={passes}")
+        
+        # ═══════════════════════════════════════════════════════════════════
+        # ALPACA_CREDENTIALS NODE - Pass through (credentials handled by backend)
+        # ═══════════════════════════════════════════════════════════════════
+        elif node_type == 'alpaca_credentials':
+            # This node is for frontend credential management, just pass through
+            outputs = {
+                'result': True,
+                'signal': True,
+                'value': True,
+                'configured': True
+            }
+            
+            if self.debug:
+                logger.info(f"[EXEC] Node {node_id} (alpaca_credentials): pass-through")
+        
+        # ═══════════════════════════════════════════════════════════════════
+        # UNKNOWN NODE - Pass through with warning
         # ═══════════════════════════════════════════════════════════════════
         else:
-            if self.debug:
-                logger.warning(f"[EXEC] Node {node_id}: Unknown type '{node_type}'")
+            # Always log unknown node types so users know their workflow has issues
+            logger.warning(f"[EXEC] Node {node_id}: Unknown type '{node_type}' - passing through inputs")
             # Pass through any inputs
             outputs = inputs.copy() if inputs else {}
         
