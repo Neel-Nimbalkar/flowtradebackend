@@ -44,7 +44,8 @@ const MAX_STRATEGIES = 5;
 const formatCurrency = (value, showSign = false) => {
   if (value === null || value === undefined || isNaN(value)) return '--';
   const sign = showSign && value > 0 ? '+' : '';
-  return `${sign}$${Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // Format as percentage (no dollar sign) for percentage-based P&L system
+  return `${sign}${Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
 };
 
 const formatPercent = (value, showSign = false) => {
@@ -315,7 +316,8 @@ const EquityChart = ({ data, loading, chartMode, onModeChange }) => {
     for (let i = 0; i <= 4; i++) {
       const value = maxVal - (range / 4) * i;
       const y = padding.top + (chartHeight / 4) * i;
-      ctx.fillText(`$${(value / 1000).toFixed(0)}k`, padding.left - 8, y + 3);
+      // Show as percentage (no dollar sign)
+      ctx.fillText(`${value.toFixed(1)}%`, padding.left - 8, y + 3);
     }
     
     // Draw line/area chart
