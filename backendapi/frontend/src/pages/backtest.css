@@ -1,0 +1,18 @@
+/* Simple layout for BacktestPage */
+.backtest-root{display:flex;gap:12px;padding:16px;height:100vh;box-sizing:border-box;background:transparent}
+.backtest-controls{width:360px;flex-shrink:0;display:flex;flex-direction:column;gap:12px}
+.backtest-controls h2{margin:0 0 6px 0}
+.control-row{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.control-row-right{display:flex;align-items:center;gap:8px}
+.backtest-saves{background:#0b0f14;border:1px solid #1f2937;border-radius:8px;padding:8px;max-height:50vh;overflow:auto}
+.saves-list{display:flex;flex-direction:column;gap:8px}
+.save-item{display:flex;justify-content:space-between;align-items:center;padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.02);background:transparent}
+.save-name{font-size:13px}
+.save-actions{display:flex;gap:8px}
+.backtest-viewer{flex:1;min-width:480px;overflow:auto}
+
+@media (max-width: 1000px){
+  .backtest-root{flex-direction:column}
+  .backtest-controls{width:100%}
+  .backtest-viewer{min-width:0}
+}

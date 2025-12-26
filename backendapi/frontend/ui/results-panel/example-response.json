@@ -1,0 +1,76 @@
+{
+  "summary": {
+    "strategyName": "Momentum Trend Breakout",
+    "startedAt": "2025-11-15T14:31:02Z",
+    "completedAt": "2025-11-15T14:31:03Z",
+    "status": "completed",
+    "symbol": "NVDA",
+    "timeframe": "1Min",
+    "lookbackDays": 5,
+    "startTimestamp": "2025-11-10T14:31:02Z",
+    "endTimestamp": "2025-11-15T14:31:02Z",
+    "candlesProcessed": 1245,
+    "runtimeMs": 812.5,
+    "workflowLength": 7
+  },
+  "blocks": [
+    {
+      "id": 1,
+      "type": "rsi",
+      "emoji": "⚡",
+      "name": "RSI",
+      "status": "passed",
+      "outputs": { "rsi": 28.4 },
+      "explanation": "RSI is below 30 (oversold).",
+      "executionTimeMs": 3.7
+    },
+    {
+      "id": 2,
+      "type": "ema",
+      "emoji": "⚡",
+      "name": "EMA",
+      "status": "passed",
+      "outputs": { "priceAboveEma": true, "ema": 482.12 },
+      "explanation": "Price reclaimed EMA(20).",
+      "executionTimeMs": 4.2
+    },
+    {
+      "id": 3,
+      "type": "trendline",
+      "emoji": "⚡",
+      "name": "Trendline",
+      "status": "failed",
+      "outputs": { "trend_breakout": "none" },
+      "explanation": "No breakout detected.",
+      "failReason": "Close did not exceed resistance threshold.",
+      "executionTimeMs": 2.1
+    },
+    {
+      "id": 4,
+      "type": "and",
+      "emoji": "➕",
+      "name": "AND Gate",
+      "status": "skipped",
+      "explanation": "Skipped due to previous block failure.",
+      "executionTimeMs": 0
+    },
+    {
+      "id": 5,
+      "type": "ai_agent",
+      "emoji": "🤖",
+      "name": "AI Agent",
+      "status": "passed",
+      "explanation": "Market context stable; momentum improving; watch for reclaim and volume confirmation.",
+      "executionTimeMs": 145.2
+    }
+  ],
+  "finalSignal": "HOLD",
+  "confidence": 62,
+  "aiAnalysis": "Momentum is building but not confirmed by breakout. Consider waiting for a decisive move above resistance with volume. Risk is moderate given recent volatility.",
+  "equityCurve": [
+    { "time": "2025-11-15T14:00:00Z", "value": 100000 },
+    { "time": "2025-11-15T14:10:00Z", "value": 100320 },
+    { "time": "2025-11-15T14:20:00Z", "value": 100210 },
+    { "time": "2025-11-15T14:30:00Z", "value": 100540 }
+  ]
+}

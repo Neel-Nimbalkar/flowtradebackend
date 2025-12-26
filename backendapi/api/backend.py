@@ -19,6 +19,11 @@ import subprocess
 import json
 import re
 from datetime import datetime, timedelta
+import threading
+import time
+import random
+import uuid
+import logging
 #from backendapi.integrations.alpaca_fetch import fetch_bars_full
 from integrations.alpaca_fetch import fetch_bars_full
 #from backendapi.workflows.workflow_engine import WorkflowEngine
@@ -36,7 +41,15 @@ from io import BytesIO
 from integrations.telegram_notifier import get_notifier, load_telegram_settings, save_telegram_settings
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for browser access
+# Enable CORS for Firebase and localhost
+CORS(app, origins=[
+    'https://flowtrade210.web.app',
+    'https://flowtrade210.firebaseapp.com',
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:5175',
+    'http://127.0.0.1:5173'
+])
 
 # Initialize workflow engine
 workflow_engine = WorkflowEngine()
@@ -44,6 +57,14 @@ workflow_engine = WorkflowEngine()
 # Track last sent signal per strategy to avoid spam
 # Key: f"{symbol}_{timeframe}", Value: signal_type (BUY/SELL)
 last_sent_signals = {}
+
+# Setup logging
+logger = logging.getLogger('flowgrid.backend')
+logger.setLevel(logging.INFO)
+
+# Data directory
+current_file_dir = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(os.path.dirname(current_file_dir), 'data')
 
 # Lightweight backtest manager (filesystem-backed) for local dev
 try:
@@ -899,13 +920,24 @@ def execute_strategy():
 
 @app.route('/execute_workflow', methods=['POST'])
 def execute_workflow():
-    """Execute sequential workflow with stop-on-fail logic"""
+    """Execute sequential workflow with stop-on-fail logic.
+    
+    Now supports graph-based execution via UnifiedStrategyExecutor when connections are provided.
+    """
     try:
         data = request.json
+        if not data:
+            print("❌ ERROR: request.json is None or empty")
+            return jsonify({'error': 'Empty request body'}), 400
+        
+        print(f"📥 Received request with keys: {list(data.keys())}")
+        
         symbol = data.get('symbol', 'SPY')
         timeframe = data.get('timeframe', '1Hour')
         days = parse_days(data.get('days', 7), default=7)
         workflow_blocks = data.get('workflow', [])
+        connections = data.get('connections', [])  # ✅ Get connections for graph execution
+        
         # Extract alpaca credentials and price type from request or alpaca_config block
         alpaca_key_id = data.get('alpacaKeyId')
         alpaca_secret_key = data.get('alpacaSecretKey')
@@ -921,18 +953,34 @@ def execute_workflow():
                     break
         indicator_params = data.get('indicator_params', {})
         
-        print(f"🔄 Executing workflow: {symbol} {timeframe} {days}d - {len(workflow_blocks)} blocks - Price Type: {price_type}")
+        print(f"🔄 Executing workflow: {symbol} {timeframe} {days}d - {len(workflow_blocks)} blocks, {len(connections)} connections - Price Type: {price_type}")
         
-        # Fetch data from Alpaca
+        # Fetch data from Alpaca - extend lookback for weekends/holidays
         end_date = datetime.now()
-        start_date = end_date - timedelta(days=days)
+        # Add extra days to account for weekends/holidays (markets closed Sat/Sun + holidays)
+        # For 1 day lookback, use 4 days to ensure we get data even on Monday morning
+        extended_days = max(days + 3, days * 2) if days <= 3 else days + 5
+        start_date = end_date - timedelta(days=extended_days)
         start_str = start_date.strftime('%Y-%m-%dT%H:%M:%SZ')
         end_str = end_date.strftime('%Y-%m-%dT%H:%M:%SZ')
         
         bars = fetch_bars_full(symbol, start_str, end_str, timeframe, api_key=alpaca_key_id, api_secret=alpaca_secret_key)
         
+        # If still no data, try an even longer lookback (handles long holiday weekends)
         if not bars['close']:
-            return jsonify({'error': 'No data returned from Alpaca'}), 400
+            print(f"⚠️ No data with {extended_days}d lookback, trying 14 days...")
+            start_date = end_date - timedelta(days=14)
+            start_str = start_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+            bars = fetch_bars_full(symbol, start_str, end_str, timeframe, api_key=alpaca_key_id, api_secret=alpaca_secret_key)
+        
+        if not bars['close']:
+            error_msg = f'No data returned from Alpaca for {symbol} {timeframe} ({start_str} to {end_str})'
+            if not alpaca_key_id or not alpaca_secret_key:
+                error_msg += ' - Missing Alpaca API credentials. Please configure API keys in Settings.'
+            else:
+                error_msg += ' - Check if market is open or try a different timeframe/symbol.'
+            print(f"❌ {error_msg}")
+            return jsonify({'error': error_msg}), 400
         
         # Extract OHLCV
         opens = bars['open']
@@ -974,6 +1022,8 @@ def execute_workflow():
         
         # Compute indicators based on workflow needs
         block_types = {b.get('type') for b in workflow_blocks}
+        print(f"[DEBUG] Block types detected: {block_types}")
+        print(f"[DEBUG] Volumes available: {len(volumes)} bars, sample: {volumes[-5:] if len(volumes) >= 5 else volumes}")
         
         if 'rsi' in block_types:
             period = indicator_params.get('rsi', {}).get('period', 14)
@@ -1056,15 +1106,24 @@ def execute_workflow():
             latest_data.update(tl)
 
         if 'vwap' in block_types:
+            print(f"[DEBUG] VWAP block detected! Computing VWAP...")
             # VWAP calculation
             tp = [(highs[i] + lows[i] + closes[i]) / 3.0 for i in range(len(closes))]
             total_pv = 0.0
             total_v = 0.0
             for i in range(len(closes)):
-                total_pv += tp[i] * volumes[i]
-                total_v += volumes[i]
+                vol = volumes[i] if volumes[i] is not None else 0
+                total_pv += tp[i] * vol
+                total_v += vol
             if total_v > 0:
                 latest_data['vwap'] = total_pv / total_v
+                print(f"[INFO] Computed VWAP: {latest_data['vwap']:.4f}, total_volume={total_v:.0f}")
+            else:
+                # Fallback: use simple average price if no volume data
+                latest_data['vwap'] = sum(tp) / len(tp) if tp else closes[-1]
+                print(f"[WARN] No volume data for VWAP, using avg typical price: {latest_data['vwap']:.4f}")
+        else:
+            print(f"[DEBUG] VWAP block NOT in block_types: {block_types}")
 
         if 'obv' in block_types:
             current_obv = 0.0
@@ -1089,7 +1148,107 @@ def execute_workflow():
             if k_vals[-1] is not None:
                 latest_data['stoch_k'] = k_vals[-1]
         
-        # Execute workflow sequentially (AI agent blocks are skipped here)
+        # ═══════════════════════════════════════════════════════════════════════
+        # ATR (Average True Range) calculation
+        # ═══════════════════════════════════════════════════════════════════════
+        if 'atr' in block_types:
+            atr_params = indicator_params.get('atr', {})
+            atr_period = int(atr_params.get('period', 14))
+            atr_vals = atr(highs, lows, closes, atr_period)
+            if atr_vals and atr_vals[-1] is not None:
+                latest_data['atr'] = atr_vals[-1]
+                print(f"[INFO] Computed ATR({atr_period}): {latest_data['atr']:.4f}")
+        
+        # ═══════════════════════════════════════════════════════════════════════
+        # Support/Resistance calculation (simple pivot-based levels)
+        # ═══════════════════════════════════════════════════════════════════════
+        if 'support_resistance' in block_types:
+            sr_params = indicator_params.get('support_resistance', {})
+            lookback = int(sr_params.get('lookback', 20))
+            
+            # Calculate support and resistance using recent highs/lows
+            if len(closes) >= lookback:
+                recent_highs = highs[-lookback:]
+                recent_lows = lows[-lookback:]
+                recent_closes = closes[-lookback:]
+                
+                # Resistance = highest high in lookback
+                # Support = lowest low in lookback
+                resistance = max(recent_highs) if recent_highs else None
+                support = min(recent_lows) if recent_lows else None
+                
+                # Optional: use pivot points for more sophisticated S/R
+                # Classic Pivot: PP = (H + L + C) / 3
+                if recent_highs and recent_lows and recent_closes:
+                    h = recent_highs[-1]
+                    l = recent_lows[-1]
+                    c = recent_closes[-1]
+                    pivot = (h + l + c) / 3
+                    # R1 = 2*PP - L, S1 = 2*PP - H
+                    r1 = 2 * pivot - l
+                    s1 = 2 * pivot - h
+                    
+                    latest_data['support'] = support
+                    latest_data['resistance'] = resistance
+                    latest_data['pivot'] = pivot
+                    latest_data['r1'] = r1
+                    latest_data['s1'] = s1
+                    print(f"[INFO] Computed S/R: Support=${support:.2f}, Resistance=${resistance:.2f}, Pivot=${pivot:.2f}")
+        
+        # ═══════════════════════════════════════════════════════════════════════
+        # UNIFIED EXECUTION: Use UnifiedStrategyExecutor when connections provided
+        # This ensures live signals use the SAME execution path as backtesting
+        # ═══════════════════════════════════════════════════════════════════════
+        unified_signal = None
+        unified_debug = {}
+        
+        if connections and len(connections) > 0:
+            from workflows.unified_executor import execute_unified_workflow
+            
+            # Build market_data with history for the unified executor
+            # IMPORTANT: Use 'prices' (not raw 'closes') to include current price if price_type='current'
+            # This ensures unified executor RSI matches the pre-calculated latest_data['rsi']
+            
+            # If prices has current_price appended (price_type='current'), we need to pad volume_history
+            # to match the length for VWAP calculation
+            volume_history_for_unified = volumes
+            if len(prices) > len(volumes) and volumes:
+                # Pad with the last volume value to match price array length
+                volume_history_for_unified = volumes + [volumes[-1]] * (len(prices) - len(volumes))
+            
+            market_data_for_unified = {
+                'close': latest_price,
+                'open': opens[-1] if opens else latest_price,
+                'high': highs[-1] if highs else latest_price,
+                'low': lows[-1] if lows else latest_price,
+                'volume': volumes[-1] if volumes else 0,
+                'close_history': prices,  # Use prices (includes current_price if applicable) for consistent RSI
+                'volume_history': volume_history_for_unified,  # Padded to match close_history length
+                'high_history': highs,
+                'low_history': lows
+            }
+            
+            try:
+                unified_signal, unified_debug = execute_unified_workflow(
+                    nodes=workflow_blocks,
+                    connections=connections,
+                    market_data=market_data_for_unified,
+                    debug=True
+                )
+                # ENHANCED DEBUG: Show node outputs to trace false signals
+                print(f"  [UNIFIED LIVE] Signal={unified_signal}, nodes={unified_debug.get('nodes_count')}, connections={unified_debug.get('connections_count')}")
+                print(f"  [UNIFIED DEBUG] final_condition={unified_debug.get('final_condition')}, signal_direction={unified_debug.get('signal_direction')}")
+                if unified_debug.get('node_outputs'):
+                    for nid, outputs in unified_debug.get('node_outputs', {}).items():
+                        print(f"    Node {nid}: {outputs}")
+            except Exception as ue:
+                print(f"  [UNIFIED ERROR] {ue}")
+                import traceback
+                traceback.print_exc()
+        else:
+            print(f"  [UNIFIED SKIP] No connections provided ({len(connections) if connections else 0} connections)")
+        
+        # Execute workflow sequentially (fallback / AI agent blocks are skipped here)
         workflow_result = workflow_engine.execute_workflow(workflow_blocks, latest_data)
 
         # Collect AI agent blocks (executed after core conditions regardless of pass/fail)
@@ -1439,14 +1598,94 @@ def execute_workflow():
                         if ema_vals and ema_vals[-1] is not None:
                             bar_data['ema'] = ema_vals[-1]
                     
+                    if 'vwap' in block_types:
+                        # Calculate VWAP for historical bars
+                        slice_highs = highs[:i+1]
+                        slice_lows = lows[:i+1]
+                        slice_closes = closes[:i+1]
+                        slice_volumes = volumes[:i+1]
+                        
+                        typical_prices = [(h + l + c) / 3.0 for h, l, c in zip(slice_highs, slice_lows, slice_closes)]
+                        total_v = sum(v for v in slice_volumes if v)
+                        
+                        if total_v > 0:
+                            vwap_val = sum(tp * v for tp, v in zip(typical_prices, slice_volumes)) / total_v
+                        else:
+                            vwap_val = sum(typical_prices) / len(typical_prices) if typical_prices else slice_closes[-1]
+                        
+                        bar_data['vwap'] = vwap_val
+                    
+                    if 'bollinger' in block_types:
+                        # Calculate Bollinger Bands for historical bars
+                        period = indicator_params.get('bollinger', {}).get('period', 20)
+                        num_std = indicator_params.get('bollinger', {}).get('num_std', 2)
+                        upper, middle, lower = boll_bands(closes[:i+1], period=period, num_std=num_std)
+                        if upper[-1] is not None:
+                            bar_data['boll_upper'] = upper[-1]
+                            bar_data['boll_middle'] = middle[-1]
+                            bar_data['boll_lower'] = lower[-1]
+                    
+                    if 'macd' in block_types:
+                        # Calculate MACD for historical bars
+                        fast = indicator_params.get('macd', {}).get('fast', 12)
+                        slow = indicator_params.get('macd', {}).get('slow', 26)
+                        signal = indicator_params.get('macd', {}).get('signal', 9)
+                        macd_line, macd_signal, macd_hist = compute_macd(closes[:i+1], fast=fast, slow=slow, signal=signal)
+                        if macd_line[-1] is not None:
+                            bar_data['macd_line'] = macd_line[-1]
+                            if macd_signal[-1] is not None:
+                                bar_data['macd_signal'] = macd_signal[-1]
+                            if macd_hist[-1] is not None:
+                                bar_data['macd_histogram'] = macd_hist[-1]
+                    
+                    if 'sma' in block_types:
+                        # Calculate SMA for historical bars
+                        period = indicator_params.get('sma', {}).get('period', 20)
+                        sma_vals = sma(closes[:i+1], period)
+                        if sma_vals and sma_vals[-1] is not None:
+                            bar_data['sma'] = sma_vals[-1]
+                    
                     # Evaluate strategy decision for this bar
-                    bar_result = workflow_engine.execute_workflow(workflow_blocks, bar_data)
-                    if bar_result.success and bar_result.final_decision:
-                        decision_lower = bar_result.final_decision.lower()
-                        if 'bullish' in decision_lower or 'long' in decision_lower or 'buy' in decision_lower:
-                            sentiment = 'bullish'
-                        elif 'bearish' in decision_lower or 'short' in decision_lower or 'sell' in decision_lower:
-                            sentiment = 'bearish'
+                    # ✅ FIX: Use unified executor (same as live signals) for proper block ordering
+                    if connections and len(connections) > 0:
+                        # Use unified executor with topological sorting
+                        from workflows.unified_executor import execute_unified_workflow
+                        
+                        # Build market_data with history up to this bar
+                        bar_market_data = {
+                            'close': closes[i],
+                            'open': opens[i],
+                            'high': highs[i],
+                            'low': lows[i],
+                            'volume': volumes[i],
+                            'close_history': closes[:i+1],
+                            'volume_history': volumes[:i+1],
+                            'high_history': highs[:i+1],
+                            'low_history': lows[:i+1]
+                        }
+                        
+                        bar_signal, _ = execute_unified_workflow(
+                            nodes=workflow_blocks,
+                            connections=connections,
+                            market_data=bar_market_data,
+                            debug=False  # Disable debug for performance
+                        )
+                        
+                        if bar_signal:
+                            bar_signal_lower = bar_signal.lower()
+                            if 'buy' in bar_signal_lower or 'long' in bar_signal_lower:
+                                sentiment = 'bullish'
+                            elif 'sell' in bar_signal_lower or 'short' in bar_signal_lower:
+                                sentiment = 'bearish'
+                    else:
+                        # Fallback to old engine if no connections (legacy workflows)
+                        bar_result = workflow_engine.execute_workflow(workflow_blocks, bar_data)
+                        if bar_result.success and bar_result.final_decision:
+                            decision_lower = bar_result.final_decision.lower()
+                            if 'bullish' in decision_lower or 'long' in decision_lower or 'buy' in decision_lower:
+                                sentiment = 'bullish'
+                            elif 'bearish' in decision_lower or 'short' in decision_lower or 'sell' in decision_lower:
+                                sentiment = 'bearish'
                 except Exception as bar_err:
                     print(f"⚠️ Error evaluating bar {i}: {bar_err}")
             
@@ -1490,23 +1729,29 @@ def execute_workflow():
                 'close': closes,
                 'volume': volumes
             },
-            'strategy_performance': strategy_performance
+            'strategy_performance': strategy_performance,
+            # ✅ Include unified executor signal and debug info
+            'unified_signal': unified_signal,
+            'unified_debug': unified_debug
         }
         
         print(f"✅ Workflow completed: {workflow_result.final_decision}")
         print(f"📊 latest_data keys: {list(latest_data.keys())}")
         print(f"💰 latest_data.price: {latest_data.get('price', 'MISSING')}")
+        print(f"🎯 Unified signal: {unified_signal}")
         
         # Send Telegram notification if workflow succeeded (all conditions passed)
         try:
             # Extract signal type from signal block OR infer from conditions
-            signal_type = None
+            # ✅ Use unified_signal if available (takes precedence)
+            signal_type = unified_signal
             
-            # First, try to get signal type from Signal block
-            for block in workflow_blocks:
-                if block.get('type') == 'signal':
-                    signal_type = block.get('params', {}).get('type')
-                    break
+            # Fallback: try to get signal type from Signal block
+            if not signal_type:
+                for block in workflow_blocks:
+                    if block.get('type') == 'signal':
+                        signal_type = block.get('params', {}).get('type')
+                        break
             
             # If no explicit signal type, infer from RSI conditions
             if not signal_type and workflow_result.success:
@@ -1592,29 +1837,239 @@ def _build_v2_response(symbol: str, timeframe: str, days: int, engine_resp: Dict
     start_ts = ts[0] if ts else None
     end_ts = ts[-1] if ts else None
     blocks_raw = engine_resp.get('blocks', [])
+    
+    # ═══════════════════════════════════════════════════════════════════════
+    # FIX: Sort blocks according to unified executor's topological order
+    # This ensures blocks appear in proper execution order (input → indicators → logic → output)
+    # ═══════════════════════════════════════════════════════════════════════
+    unified_debug = engine_resp.get('unified_debug', {})
+    execution_order = unified_debug.get('execution_order', [])
+    
+    if execution_order and blocks_raw:
+        # Create a map of block_id to position in topological order
+        # The execution_order contains node IDs in correct dependency order
+        order_map = {}
+        for pos, node_id in enumerate(execution_order):
+            # Handle both string and int node IDs
+            order_map[str(node_id)] = pos
+            order_map[int(node_id) if str(node_id).isdigit() else node_id] = pos
+        
+        # Type-based priority for fallback (when block_id not in execution_order)
+        type_priority = {
+            'input': 0, 'symbol': 1, 'timeframe': 2, 'config': 3, 'alpaca_config': 4,
+            'volume_history': 5,
+            'rsi': 100, 'ema': 101, 'sma': 102, 'macd': 103, 'bollinger': 104,
+            'stochastic': 105, 'vwap': 106, 'obv': 107, 'atr': 108, 'volspike': 109,
+            'volume_spike': 109, 'support_resistance': 110, 'trendline': 111,
+            'compare': 200,
+            'and': 300, 'or': 301, 'not': 302,
+            'signal': 400, 'output': 401
+        }
+        
+        # Sort blocks_raw by their position in the topological order
+        def get_sort_key(block):
+            block_id = block.get('block_id')
+            block_type = block.get('block_type', '')
+            
+            # Primary: use execution_order position if available
+            if block_id is not None:
+                if str(block_id) in order_map:
+                    return (order_map[str(block_id)], 0)  # (position, tie-breaker)
+                if block_id in order_map:
+                    return (order_map[block_id], 0)
+            
+            # Fallback: use type-based priority
+            priority = type_priority.get(block_type, 150)
+            return (priority, block_id if block_id is not None else 9999)
+        
+        blocks_raw = sorted(blocks_raw, key=get_sort_key)
+        print(f"[DIAG] Sorted blocks by topological order: {[(b.get('block_id'), b.get('block_type')) for b in blocks_raw]}")
+    
     # Map block types to friendly names/emojis
     icon_map = {
         'rsi': ('⚡', 'RSI'), 'ema': ('⚡', 'EMA'), 'sma': ('⚡', 'SMA'), 'macd': ('⚡', 'MACD'),
         'bollinger': ('⚡', 'Bollinger Bands'), 'vwap': ('⚡', 'VWAP'), 'stochastic': ('⚡', 'Stochastic'),
         'obv': ('💧', 'OBV'), 'trendline': ('⚡', 'Trendline'), 'volspike': ('💧', 'Volume Spike'),
+        'atr': ('📊', 'ATR'), 'support_resistance': ('📈', 'Support/Resistance'),
         'and': ('➕', 'AND Gate'), 'or': ('➕', 'OR Gate'), 'not': ('➕', 'NOT Gate'),
         'compare': ('➕', 'Compare'), 'ai_agent': ('🤖', 'AI Agent')
     }
+    
+    # ═══════════════════════════════════════════════════════════════════════
+    # FIX: Use unified executor's node_outputs to get correct AND/OR gate results
+    # The sequential engine doesn't understand graph connections, but unified executor does
+    # ═══════════════════════════════════════════════════════════════════════
+    node_outputs = unified_debug.get('node_outputs', {})
+    
+    # Debug: log node_outputs keys vs blocks_raw block_ids
+    print(f"[V2 DEBUG] node_outputs keys: {list(node_outputs.keys()) if node_outputs else 'EMPTY'}")
+    print(f"[V2 DEBUG] blocks_raw block_ids: {[b.get('block_id') for b in blocks_raw]}")
+    
     blocks_v2: List[Dict[str, Any]] = []
     for i, b in enumerate(blocks_raw):
-        ico, nm = icon_map.get(b.get('block_type'), ('🧩', b.get('block_type')))
+        block_id = b.get('block_id', i)
+        block_type = b.get('block_type')
+        ico, nm = icon_map.get(block_type, ('🧩', block_type))
+        
+        # Default values from sequential engine
         status = str(b.get('status', 'skipped')).lower()
+        message = b.get('message') or ''
+        block_data = b.get('data') or {}
+        
+        # ═══════════════════════════════════════════════════════════════════
+        # OVERRIDE with unified executor results for logic gates and indicators
+        # This fixes the "AND gate missing input(s)" issue
+        # ═══════════════════════════════════════════════════════════════════
+        
+        # Debug for logic gates
+        if block_type in ['and', 'or', 'not']:
+            print(f"[V2 LOGIC] block_id={block_id}, type={block_type}, checking node_outputs...")
+            print(f"[V2 LOGIC]   str(block_id) in node_outputs: {str(block_id) in node_outputs if node_outputs else 'EMPTY'}")
+        
+        # Debug for all blocks
+        print(f"[V2 DEBUG] Processing block_id={block_id}, type={block_type}, found_in_outputs={str(block_id) in node_outputs if node_outputs else False}")
+        
+        if node_outputs and str(block_id) in node_outputs:
+            unified_output = node_outputs[str(block_id)]
+            
+            if block_type in ['and', 'or', 'not']:
+                print(f"[V2 LOGIC]   FOUND! unified_output = {unified_output}")
+            
+            # Get the result from unified executor
+            result = unified_output.get('result')
+            if result is None:
+                result = unified_output.get('value')
+            if result is None:
+                result = unified_output.get('signal')
+            
+            # For AND/OR/NOT gates, use the unified executor's actual evaluation
+            if block_type in ['and', 'or', 'not']:
+                if result is True:
+                    status = 'passed'
+                    # Build message showing actual inputs
+                    a_val = unified_output.get('a', 'N/A')
+                    b_val = unified_output.get('b', 'N/A')
+                    if block_type == 'and':
+                        message = f"AND({a_val}, {b_val}) = True"
+                    elif block_type == 'or':
+                        message = f"OR({a_val}, {b_val}) = True"
+                    elif block_type == 'not':
+                        message = f"NOT({a_val}) = True"
+                elif result is False:
+                    status = 'failed'
+                    a_val = unified_output.get('a', 'N/A')
+                    b_val = unified_output.get('b', 'N/A')
+                    if block_type == 'and':
+                        message = f"AND({a_val}, {b_val}) = False"
+                    elif block_type == 'or':
+                        message = f"OR({a_val}, {b_val}) = False"
+                    elif block_type == 'not':
+                        message = f"NOT({a_val}) = False"
+                print(f"[V2 LOGIC]   OVERRIDE: status={status} message={message}")
+                block_data = {'condition_met': result, 'unified_output': unified_output}
+            
+            # For compare nodes
+            elif block_type == 'compare':
+                if result is True:
+                    status = 'passed'
+                elif result is False:
+                    status = 'failed'
+                a_val = unified_output.get('a', unified_output.get('value'))
+                b_val = unified_output.get('b', unified_output.get('threshold'))
+                op = unified_output.get('operator', '>')
+                message = f"{a_val} {op} {b_val} = {result}"
+                block_data = {'condition_met': result, 'unified_output': unified_output}
+            
+            # For indicators, include computed values AND generate proper message
+            elif block_type in ['rsi', 'ema', 'sma', 'macd', 'bollinger', 'stochastic', 'vwap', 'obv', 'atr', 'volume_spike', 'volspike']:
+                # Indicators pass if they computed a value
+                has_value = any(v is not None for k, v in unified_output.items() if k not in ['signal', 'result'])
+                if has_value:
+                    status = 'passed'
+                block_data = {'condition_met': True, 'unified_output': unified_output, **unified_output}
+                
+                # Generate descriptive message from unified output
+                if block_type == 'ema':
+                    ema_val = unified_output.get('ema', unified_output.get('value'))
+                    above = unified_output.get('above', False)
+                    if ema_val is not None:
+                        message = f"EMA({ema_val:.2f}), Price {'above' if above else 'below'} EMA"
+                elif block_type == 'sma':
+                    sma_val = unified_output.get('sma', unified_output.get('value'))
+                    above = unified_output.get('above', False)
+                    if sma_val is not None:
+                        message = f"SMA({sma_val:.2f}), Price {'above' if above else 'below'} SMA"
+                elif block_type == 'rsi':
+                    rsi_val = unified_output.get('rsi', unified_output.get('value'))
+                    oversold = unified_output.get('oversold', False)
+                    overbought = unified_output.get('overbought', False)
+                    if rsi_val is not None:
+                        state = 'oversold' if oversold else ('overbought' if overbought else 'neutral')
+                        message = f"RSI = {rsi_val:.2f} ({state})"
+                elif block_type == 'macd':
+                    hist = unified_output.get('histogram', unified_output.get('value'))
+                    bullish = unified_output.get('bullish', False)
+                    if hist is not None:
+                        message = f"MACD histogram = {hist:.4f} ({'bullish' if bullish else 'bearish'})"
+                elif block_type == 'stochastic':
+                    stoch_val = unified_output.get('stoch', unified_output.get('k', unified_output.get('value')))
+                    oversold = unified_output.get('oversold', False)
+                    overbought = unified_output.get('overbought', False)
+                    if stoch_val is not None:
+                        state = 'oversold' if oversold else ('overbought' if overbought else 'neutral')
+                        message = f"Stochastic = {stoch_val:.2f} ({state})"
+                elif block_type == 'bollinger':
+                    upper = unified_output.get('upper')
+                    lower = unified_output.get('lower')
+                    middle = unified_output.get('middle')
+                    if upper is not None and lower is not None:
+                        message = f"Bollinger: upper={upper:.2f}, lower={lower:.2f}"
+                    elif middle is not None:
+                        message = f"Bollinger middle = {middle:.2f}"
+                elif block_type == 'vwap':
+                    vwap_val = unified_output.get('vwap', unified_output.get('value'))
+                    above = unified_output.get('above', False)
+                    if vwap_val is not None:
+                        message = f"VWAP = ${vwap_val:.2f}, price {'above' if above else 'below'}"
+                    else:
+                        message = "VWAP calculation pending"
+                elif block_type == 'obv':
+                    obv_val = unified_output.get('obv', unified_output.get('value'))
+                    if obv_val is not None:
+                        message = f"OBV = {obv_val:,.0f}"
+                elif block_type == 'atr':
+                    atr_val = unified_output.get('atr', unified_output.get('value'))
+                    if atr_val is not None:
+                        message = f"ATR = {atr_val:.4f}"
+                elif block_type in ['volume_spike', 'volspike']:
+                    is_spike = unified_output.get('spike', unified_output.get('is_spike', False))
+                    ratio = unified_output.get('ratio', unified_output.get('volume_ratio', 0))
+                    message = f"Volume spike = {is_spike}, ratio = {ratio:.2f}x" if ratio else f"Volume spike = {is_spike}"
+                    
+            # For data source blocks (input, volume_history), auto-pass with descriptive message
+            elif block_type in ['input', 'volume_history', 'price_history']:
+                status = 'passed'
+                block_data = {'condition_met': True, 'unified_output': unified_output, **unified_output}
+                if block_type == 'input':
+                    price = unified_output.get('price', unified_output.get('close', 0))
+                    message = f"Input: price = ${price:.2f}" if price else "Input block (data source)"
+                elif block_type == 'volume_history':
+                    vol = unified_output.get('volume', 0)
+                    message = f"Volume history: current = {vol:,.0f}" if vol else "Volume history (data source)"
+                else:
+                    message = f"Data source block '{block_type}'"
+        
         blocks_v2.append({
-            'id': b.get('block_id', i),
-            'type': b.get('block_type'),
+            'id': block_id,
+            'type': block_type,
             'emoji': ico,
             'name': nm,
             'status': 'passed' if status == 'passed' else ('failed' if status == 'failed' else 'skipped'),
-            'outputs': b.get('data') or {},
-            'params': b.get('data') or {},
-            'logs': b.get('logs') or ([b.get('message')] if b.get('message') else []),
-            'explanation': b.get('message') or '',
-            'failReason': b.get('message') if status == 'failed' else None,
+            'outputs': block_data,
+            'params': block_data,
+            'logs': [message] if message else [],
+            'explanation': message,
+            'failReason': message if status == 'failed' else None,
             'executionTimeMs': float(b.get('execution_time_ms', 0) or 0),
             'raw': b
         })
@@ -1651,102 +2106,119 @@ def _build_v2_response(symbol: str, timeframe: str, days: int, engine_resp: Dict
         print(f"[DIAG] failed to print diagnostics: {_e}")
 
     # Decide signal mapping
-    final_decision = (engine_resp.get('final_decision') or '')
-    final_decision_up = str(final_decision).upper()
-    final_signal = 'HOLD'
-    if 'CONFIRMED' in final_decision_up:
-        # Attempt to infer BUY vs SELL from the passed condition blocks and latest_data
-        def infer_direction(blocks, latest):
-            # Prefer any passed RSI block anywhere in the workflow: explicit rsi signals should override
-            try:
-                for b in (blocks or []):
+    # ✅ Use unified_signal if available (takes precedence over inference)
+    unified_signal = engine_resp.get('unified_signal')
+    unified_debug = engine_resp.get('unified_debug', {})
+    has_connections = unified_debug.get('connections_count', 0) > 0
+    
+    if unified_signal:
+        # Unified executor returned a signal (BUY or SELL) - use it
+        final_signal = unified_signal
+        print(f"[DIAG] Using unified_signal={final_signal}")
+    elif has_connections and unified_signal is None:
+        # ✅ FIX: Unified executor was used (has connections) but returned None
+        # This means workflow conditions were NOT met (e.g., AND gate failed)
+        # Do NOT fall back to inference - respect the unified executor's decision
+        final_signal = 'HOLD'
+        print(f"[DIAG] Unified executor returned None (conditions not met) -> HOLD")
+    else:
+        # Fallback for sequential (non-graph) workflows without connections
+        final_decision = (engine_resp.get('final_decision') or '')
+        final_decision_up = str(final_decision).upper()
+        final_signal = 'HOLD'
+        if 'CONFIRMED' in final_decision_up:
+            # Attempt to infer BUY vs SELL from the passed condition blocks and latest_data
+            def infer_direction(blocks, latest):
+                # Prefer any passed RSI block anywhere in the workflow: explicit rsi signals should override
+                try:
+                    for b in (blocks or []):
+                        try:
+                            btype = b.get('block_type') or b.get('type')
+                            status = (b.get('status') or '').lower()
+                            if status != 'passed':
+                                continue
+                            params = (b.get('data') or {}).get('params') or b.get('params') or {}
+                            if btype == 'rsi':
+                                rsi_val = float(latest.get('rsi') or 0)
+                                low = float(params.get('oversold') or params.get('threshold_low') or 30)
+                                high = float(params.get('overbought') or params.get('threshold_high') or 70)
+                                cond = (params.get('rsi_condition') or params.get('condition') or 'any').lower()
+                                if cond == 'oversold':
+                                    return 'BUY'
+                                if cond == 'overbought':
+                                    return 'SELL'
+                                if rsi_val < low:
+                                    return 'BUY'
+                                if rsi_val > high:
+                                    return 'SELL'
+                        except Exception:
+                            continue
+                except Exception:
+                    pass
+
+                # Fallback to original reverse-order heuristics for other indicators
+                for b in reversed(blocks or []):
                     try:
                         btype = b.get('block_type') or b.get('type')
                         status = (b.get('status') or '').lower()
                         if status != 'passed':
                             continue
                         params = (b.get('data') or {}).get('params') or b.get('params') or {}
-                        if btype == 'rsi':
-                            rsi_val = float(latest.get('rsi') or 0)
-                            low = float(params.get('oversold') or params.get('threshold_low') or 30)
-                            high = float(params.get('overbought') or params.get('threshold_high') or 70)
-                            cond = (params.get('rsi_condition') or params.get('condition') or 'any').lower()
-                            if cond == 'oversold':
+                        if btype in ('ema', 'sma'):
+                            ema = latest.get('ema')
+                            close = latest.get('close')
+                            if ema is None or close is None:
+                                continue
+                            direction = (params.get('direction') or 'above').lower()
+                            if direction == 'above':
+                                return 'BUY' if close > ema else 'SELL'
+                            if direction == 'below':
+                                return 'SELL' if close < ema else 'BUY'
+                        if btype == 'macd':
+                            hist = latest.get('macd_hist')
+                            if hist is None:
+                                continue
+                            return 'BUY' if hist > 0 else 'SELL'
+                        if btype == 'bollinger':
+                            upper = latest.get('boll_upper')
+                            lower = latest.get('boll_lower')
+                            close = latest.get('close')
+                            # If we have an upper band and the close is above it, infer SELL.
+                            # If we only have a lower band and the close is below it, infer BUY.
+                            if upper is not None and close is not None:
+                                if close >= upper:
+                                    return 'SELL'
+                            if lower is not None and close is not None:
+                                if close <= lower:
+                                    return 'BUY'
+                        if btype == 'stochastic':
+                            k = latest.get('stoch_k')
+                            low = float(params.get('oversold') or params.get('stoch_low') or 20)
+                            high = float(params.get('overbought') or params.get('stoch_high') or 80)
+                            if k is None:
+                                continue
+                            if k < low:
                                 return 'BUY'
-                            if cond == 'overbought':
+                            if k > high:
                                 return 'SELL'
-                            if rsi_val < low:
-                                return 'BUY'
-                            if rsi_val > high:
-                                return 'SELL'
+                        if btype == 'vwap':
+                            vwap = latest.get('vwap')
+                            close = latest.get('close')
+                            if vwap is None or close is None:
+                                continue
+                            return 'BUY' if close > vwap else 'SELL'
                     except Exception:
                         continue
-            except Exception:
-                pass
 
-            # Fallback to original reverse-order heuristics for other indicators
-            for b in reversed(blocks or []):
-                try:
-                    btype = b.get('block_type') or b.get('type')
-                    status = (b.get('status') or '').lower()
-                    if status != 'passed':
-                        continue
-                    params = (b.get('data') or {}).get('params') or b.get('params') or {}
-                    if btype in ('ema', 'sma'):
-                        ema = latest.get('ema')
-                        close = latest.get('close')
-                        if ema is None or close is None:
-                            continue
-                        direction = (params.get('direction') or 'above').lower()
-                        if direction == 'above':
-                            return 'BUY' if close > ema else 'SELL'
-                        if direction == 'below':
-                            return 'SELL' if close < ema else 'BUY'
-                    if btype == 'macd':
-                        hist = latest.get('macd_hist')
-                        if hist is None:
-                            continue
-                        return 'BUY' if hist > 0 else 'SELL'
-                    if btype == 'bollinger':
-                        upper = latest.get('boll_upper')
-                        lower = latest.get('boll_lower')
-                        close = latest.get('close')
-                        # If we have an upper band and the close is above it, infer SELL.
-                        # If we only have a lower band and the close is below it, infer BUY.
-                        if upper is not None and close is not None:
-                            if close >= upper:
-                                return 'SELL'
-                        if lower is not None and close is not None:
-                            if close <= lower:
-                                return 'BUY'
-                    if btype == 'stochastic':
-                        k = latest.get('stoch_k')
-                        low = float(params.get('oversold') or params.get('stoch_low') or 20)
-                        high = float(params.get('overbought') or params.get('stoch_high') or 80)
-                        if k is None:
-                            continue
-                        if k < low:
-                            return 'BUY'
-                        if k > high:
-                            return 'SELL'
-                    if btype == 'vwap':
-                        vwap = latest.get('vwap')
-                        close = latest.get('close')
-                        if vwap is None or close is None:
-                            continue
-                        return 'BUY' if close > vwap else 'SELL'
-                except Exception:
-                    continue
+                # If we couldn't infer direction from any passed block, be conservative and HOLD
+                return 'HOLD'
 
-            # If we couldn't infer direction from any passed block, be conservative and HOLD
-            return 'HOLD'
-
-        final_signal = infer_direction(engine_resp.get('blocks', []), engine_resp.get('latest_data', {}))
-    elif 'REJECTED' in final_decision_up:
-        # If stopped/failed, treat as HOLD unless explicit sell conditions determined elsewhere
-        final_signal = 'HOLD'
-    else:
-        final_signal = 'HOLD'
+            final_signal = infer_direction(engine_resp.get('blocks', []), engine_resp.get('latest_data', {}))
+        elif 'REJECTED' in final_decision_up:
+            # If stopped/failed, treat as HOLD unless explicit sell conditions determined elsewhere
+            final_signal = 'HOLD'
+        else:
+            final_signal = 'HOLD'
     summary = {
         'strategyName': 'Flow Trades Workflow',
         'startedAt': engine_resp.get('historical_bars', {}).get('timestamps', [None])[0] or '',
@@ -1796,26 +2268,30 @@ def execute_workflow_v2():
             resp = make_response(*raw)
         else:
             resp = make_response(raw)
-            if resp.status_code != 200:
-                # Try to surface the backend response body for easier debugging
+        
+        # Check status and get response data
+        engine_resp = None
+        if resp.status_code != 200:
+            # Try to surface the backend response body for easier debugging
+            try:
+                body_text = resp.get_data(as_text=True)
+                print(f"⚠️ execute_workflow returned status {resp.status_code}: {body_text}")
+                # Try to parse JSON body
                 try:
-                    body_text = resp.get_data(as_text=True)
-                    print(f"⚠️ execute_workflow returned status {resp.status_code}: {body_text}")
-                    # Try to parse JSON body
-                    try:
-                        body_json = resp.get_json(force=True)
-                    except Exception:
-                        body_json = {'raw': body_text}
-                except Exception as e:
-                    print(f"⚠️ Failed reading wrapped response body: {e}")
-                    body_json = {'error': 'Failed to read backend response body'}
-                return make_response(jsonify({'error': 'wrapped_execute_failed', 'details': body_json}), resp.status_code)
+                    body_json = resp.get_json(force=True)
+                except Exception:
+                    body_json = {'raw': body_text}
+            except Exception as e:
+                print(f"⚠️ Failed reading wrapped response body: {e}")
+                body_json = {'error': 'Failed to read backend response body'}
+            return make_response(jsonify({'error': 'wrapped_execute_failed', 'details': body_json}), resp.status_code)
+        else:
             engine_resp = resp.get_json()
+        
         v2 = _build_v2_response(symbol, timeframe, days, engine_resp)
         return jsonify(v2)
     except Exception as e:
         print(f"❌ Error in v2 execute: {e}")
-        return jsonify({'error': str(e)}), 500
         return jsonify({'error': str(e)}), 500
 
 
@@ -1906,20 +2382,28 @@ def backtest_data():
 
 @app.route('/execute_backtest', methods=['POST'])
 def execute_backtest():
-    """Execute workflow against historical data and return signals"""
+    """
+    Execute workflow against historical data and return signals.
+    
+    Uses UnifiedStrategyExecutor for graph-based execution to ensure
+    identical signal generation between backtesting and live signals.
+    """
     try:
         req = request.json or {}
+        
+        # Debug: Log request keys
+        print(f"📥 /execute_backtest received keys: {list(req.keys())}", flush=True)
+        
         symbol = req.get('symbol', 'SPY')
         timeframe = req.get('timeframe', '1Hour')
         workflow = req.get('workflow', [])
         historical_data = req.get('historicalData', [])
-        alpaca_key_id = req.get('alpacaKeyId')
-        alpaca_secret_key = req.get('alpacaSecretKey')
+        connections = req.get('connections', [])
         
-        # Backtest configuration parameters
+        # Backtest configuration
         config = req.get('config', {})
-        take_profit_pct = float(config.get('takeProfitPct', 0))  # 0 = disabled
-        stop_loss_pct = float(config.get('stopLossPct', 0))  # 0 = disabled
+        take_profit_pct = float(config.get('takeProfitPct', 0))
+        stop_loss_pct = float(config.get('stopLossPct', 0))
         shares_per_trade = int(config.get('sharesPerTrade', 100))
         initial_capital = float(config.get('initialCapital', 10000))
         commission_per_trade = float(config.get('commissionPerTrade', 0))
@@ -1929,159 +2413,136 @@ def execute_backtest():
         if not historical_data:
             return jsonify({'error': 'historicalData required'}), 400
 
-        print(f"🔄 Executing backtest workflow: {len(workflow)} blocks, {len(historical_data)} bars")
-        print(f"⚙️  Config: TP={take_profit_pct}% SL={stop_loss_pct}% Shares={shares_per_trade} Capital=${initial_capital}")
+        print(f"🔄 Executing backtest with UnifiedStrategyExecutor: {len(workflow)} nodes, {len(historical_data)} bars, {len(connections)} connections", flush=True)
+        print(f"⚙️  Config: TP={take_profit_pct}% SL={stop_loss_pct}% Shares={shares_per_trade} Capital=${initial_capital}", flush=True)
+        
+        # Debug: Print node types
+        node_types = [n.get('type') for n in workflow]
+        print(f"📋 Node types: {node_types}", flush=True)
+        
+        # Debug: Print first few connections
+        if connections:
+            print(f"📎 First 3 connections: {connections[:3]}", flush=True)
+        else:
+            print(f"⚠️  No connections received from frontend - will use sequential fallback", flush=True)
 
-        # Convert historical_data to the format workflow_engine expects
-        bars_dict = {
-            't': [bar['t'] for bar in historical_data],
-            'o': [bar['o'] for bar in historical_data],
-            'h': [bar['h'] for bar in historical_data],
-            'l': [bar['l'] for bar in historical_data],
-            'c': [bar['c'] for bar in historical_data],
-            'v': [bar['v'] for bar in historical_data]
-        }
+        # Import the unified executor
+        from workflows.unified_executor import execute_unified_workflow
 
-        # Process each bar through the workflow to generate signals
+        # Calculate warmup period based on indicator periods
+        warmup_period = 50  # Default minimum
+        for node in workflow:
+            params = node.get('params') or node.get('configValues') or {}
+            node_type = node.get('type', '').lower()
+            
+            if node_type == 'rsi':
+                warmup_period = max(warmup_period, int(params.get('period', 14)) + 5)
+            elif node_type == 'ema':
+                warmup_period = max(warmup_period, int(params.get('period', 9)) + 5)
+            elif node_type == 'sma':
+                warmup_period = max(warmup_period, int(params.get('period', 20)) + 5)
+            elif node_type == 'macd':
+                slow = int(params.get('slow', params.get('slowPeriod', 26)))
+                signal = int(params.get('signal', params.get('signalPeriod', 9)))
+                warmup_period = max(warmup_period, slow + signal + 5)
+            elif node_type in ['bollinger', 'bollingerbands']:
+                warmup_period = max(warmup_period, int(params.get('period', 20)) + 5)
+            elif node_type == 'volume_spike':
+                warmup_period = max(warmup_period, int(params.get('period', 20)) + 5)
+        
+        print(f"📊 Calculated warmup period: {warmup_period} bars", flush=True)
+
+        # Process each bar through the workflow
         signals = []
-        for i, bar in enumerate(historical_data):
-            # Build latest_data dict with current bar and indicators
-            # We need enough history for indicators to calculate
-            latest_data = {
-                'symbol': symbol,
-                'timeframe': timeframe,
+        
+        for i in range(warmup_period, len(historical_data)):
+            bar = historical_data[i]
+            
+            # Build price/volume history arrays up to current bar
+            close_history = [historical_data[j]['c'] for j in range(max(0, i - 1000), i + 1)]
+            volume_history = [historical_data[j]['v'] for j in range(max(0, i - 1000), i + 1)]
+            high_history = [historical_data[j]['h'] for j in range(max(0, i - 1000), i + 1)]
+            low_history = [historical_data[j]['l'] for j in range(max(0, i - 1000), i + 1)]
+            
+            # Build market_data dict for UnifiedStrategyExecutor
+            market_data = {
                 'close': bar['c'],
                 'open': bar['o'],
                 'high': bar['h'],
                 'low': bar['l'],
                 'volume': bar['v'],
-                'timestamp': bar['t']
+                'timestamp': bar['t'],
+                'close_history': close_history,
+                'volume_history': volume_history,
+                'high_history': high_history,
+                'low_history': low_history
             }
-
-            # Calculate indicators if we have enough bars. Use parameters from the workflow blocks
-            # Extract arrays up to current index for indicator calculation
-            history_start = max(0, i - 1000)
-            closes_so_far = [historical_data[j]['c'] for j in range(history_start, i + 1)]
-            highs_so_far = [historical_data[j]['h'] for j in range(history_start, i + 1)]
-            lows_so_far = [historical_data[j]['l'] for j in range(history_start, i + 1)]
-            volumes_so_far = [historical_data[j]['v'] for j in range(history_start, i + 1)]
-
-            # Helper to find a block by type and return its params dict
-            def _block_params(t):
-                for b in workflow:
-                    if b.get('type') == t:
-                        return b.get('params', {}) or {}
-                return {}
-
-            block_types = {b.get('type') for b in workflow}
-
-            # Calculate RSI if needed (use user's period if provided)
-            if 'rsi' in block_types:
-                rsi_params = _block_params('rsi')
-                rsi_period = int(rsi_params.get('period', rsi_params.get('length', 14)))
-                if len(closes_so_far) >= rsi_period + 1:
-                    #from backendapi.indicators.rsiIndicator import rsi
-                    from indicators.rsiIndicator import rsi
-                    rsi_vals = rsi(closes_so_far, rsi_period)
-                    if rsi_vals and rsi_vals[-1] is not None:
-                        latest_data['rsi'] = rsi_vals[-1]
-
-            # Calculate MACD if needed (use user's fast/slow/signal if provided)
-            if 'macd' in block_types:
-                macd_params = _block_params('macd')
-                fast = int(macd_params.get('fast', macd_params.get('fastPeriod', 12)))
-                slow = int(macd_params.get('slow', macd_params.get('slowPeriod', 26)))
-                signal = int(macd_params.get('signal', macd_params.get('signalPeriod', 9)))
-                min_required = max(fast, slow) + signal
-                if len(closes_so_far) >= min_required:
-                    #from backendapi.indicators.macdIndicator import macd
-                    from indicators.macdIndicator import macd
-                    macd_line, signal_line, histogram = macd(closes_so_far, fast, slow, signal)
-                    if macd_line and macd_line[-1] is not None:
-                        latest_data['macd'] = macd_line[-1]
-                        latest_data['macd_signal'] = signal_line[-1] if signal_line else None
-                        latest_data['macd_histogram'] = histogram[-1] if histogram else None
-
-            # Calculate Bollinger Bands if needed (use user's period and std)
-            if 'bollinger' in block_types or 'bollingerBands' in block_types:
-                bb_type = 'bollinger' if 'bollinger' in block_types else 'bollingerBands'
-                bb_params = _block_params(bb_type)
-                bb_period = int(bb_params.get('period', bb_params.get('length', 20)))
-                bb_std = float(bb_params.get('numStd', bb_params.get('std', 2)))
-                if len(closes_so_far) >= bb_period:
-                    #from backendapi.indicators.bollingerBands import bollinger_bands
-                    from indicators.bollingerBands import bollinger_bands
-                    upper, middle, lower = bollinger_bands(closes_so_far, bb_period, bb_std)
-                    if upper and upper[-1] is not None:
-                        latest_data['bb_upper'] = upper[-1]
-                        latest_data['bb_middle'] = middle[-1]
-                        latest_data['bb_lower'] = lower[-1]
-
-            # Execute workflow for this bar
-            result = workflow_engine.execute_workflow(workflow, latest_data)
-
-            # Extract signal from result
-            # WorkflowResult has .success and .final_decision
-            # If workflow passes, look for signal block to determine BUY/SELL direction
-            if result and result.success:
-                signal_value = None
-                
-                # Check if final_decision already specifies BUY/SELL
-                if result.final_decision and result.final_decision.upper() in ['BUY', 'SELL', 'LONG', 'SHORT']:
-                    signal_value = result.final_decision.upper()
-                    print(f"  [SIGNAL] From final_decision: {signal_value}")
-                else:
-                    # Look for a signal block in the workflow to determine direction
-                    signal_block = next((b for b in workflow if b.get('type') == 'signal'), None)
-                    if signal_block:
-                        # Extract signal from params or data
-                        signal_value = signal_block.get('params', {}).get('signal') or signal_block.get('params', {}).get('action')
-                        if signal_value:
-                            print(f"  [SIGNAL] From signal block params: {signal_value}")
+            
+            # Execute using UnifiedStrategyExecutor
+            signal_value = None
+            
+            if connections and len(connections) > 0:
+                # Graph-based execution
+                try:
+                    signal_value, debug_info = execute_unified_workflow(
+                        nodes=workflow,
+                        connections=connections,
+                        market_data=market_data,
+                        debug=(i < warmup_period + 5)  # Debug first 5 bars after warmup
+                    )
                     
-                    # If no explicit signal yet, infer from RSI condition
-                    if not signal_value:
-                        # Check RSI block for oversold (BUY) or overbought (SELL)
-                        rsi_block = next((b for b in result.blocks if b.block_type == 'rsi' and b.status.value == 'passed'), None)
-                        if rsi_block:
-                            msg_lower = rsi_block.message.lower()
-                            if 'oversold' in msg_lower:
+                    if i < warmup_period + 5:
+                        print(f"  [UNIFIED] Bar {i}: signal={signal_value}, nodes={debug_info.get('nodes_count')}, connections={debug_info.get('connections_count')}")
+                        if signal_value:
+                            print(f"    → Output condition: {debug_info.get('final_condition')}, direction: {debug_info.get('signal_direction')}")
+                        
+                except Exception as e:
+                    if i < warmup_period + 10:
+                        print(f"  [UNIFIED ERROR] Bar {i}: {e}")
+                        import traceback
+                        traceback.print_exc()
+                    signal_value = None
+            else:
+                # Sequential fallback (no connections) - use simple RSI/EMA inference
+                result = workflow_engine.execute_workflow(workflow, {
+                    'close': bar['c'],
+                    'open': bar['o'],
+                    'high': bar['h'],
+                    'low': bar['l'],
+                    'volume': bar['v']
+                })
+                
+                if result and result.success:
+                    # Try to infer signal from result messages
+                    for block_result in result.blocks:
+                        if block_result.status.value == 'passed':
+                            msg = block_result.message.lower()
+                            if 'oversold' in msg or 'below' in msg:
                                 signal_value = 'BUY'
-                                print(f"  [RSI] Oversold detected → BUY")
-                            elif 'overbought' in msg_lower:
+                                break
+                            elif 'overbought' in msg or 'above' in msg:
                                 signal_value = 'SELL'
-                                print(f"  [RSI] Overbought detected → SELL")
-                            else:
-                                signal_value = 'BUY'  # Default fallback
-                        else:
-                            signal_value = 'BUY'  # Default fallback
-                
-                # Normalize LONG->BUY, SHORT->SELL
-                if signal_value == 'LONG':
-                    signal_value = 'BUY'
-                elif signal_value == 'SHORT':
-                    signal_value = 'SELL'
-                
-                # Only add signal if it's different from the last one (deduplication)
+                                break
+            
+            # Add signal if different from last (deduplication)
+            if signal_value:
                 last_signal = signals[-1]['signal'] if signals else None
-                if signal_value in ['BUY', 'SELL']:
-                    if signal_value != last_signal:
-                        # Signal changed - this is a valid entry/exit
-                        signals.append({
-                            'time': bar['t'],
-                            'timestamp': bar['t'],
-                            'signal': signal_value,
-                            'price': bar['c'],
-                            'close': bar['c']
-                        })
-                        print(f"  📍 Bar {i+1}/{len(historical_data)}: {signal_value} @ ${bar['c']:.2f} | time={bar['t']} [Total signals: {len(signals)}]")
-                    else:
-                        # Same signal repeated - skip it
-                        print(f"  [SKIP] Bar {i+1}/{len(historical_data)}: {signal_value} (duplicate, last was {last_signal})")
+                if signal_value != last_signal:
+                    signals.append({
+                        'time': bar['t'],
+                        'timestamp': bar['t'],
+                        'signal': signal_value,
+                        'price': bar['c'],
+                        'close': bar['c']
+                    })
+                    print(f"  📍 Bar {i+1}/{len(historical_data)}: {signal_value} @ ${bar['c']:.2f} | time={bar['t']} [Total: {len(signals)}]")
+            
+            # Progress logging every 100 bars
+            if i > 0 and i % 100 == 0:
+                print(f"  ⏳ Processed {i}/{len(historical_data)} bars, {len(signals)} signals so far")
 
-        print(f"✅ Generated {len(signals)} signals from backtest")
+        print(f"✅ Generated {len(signals)} signals from backtest using UnifiedStrategyExecutor")
         
-        # Return signals, historical data, and configuration for frontend processing
         return jsonify({
             'signals': signals,
             'historicalData': historical_data,
@@ -3120,9 +3581,1496 @@ def add_activity():
         return jsonify({'error': str(e)}), 500
 
 
+# ============================================
+# Advanced Dashboard Endpoints for Trade Analytics
+# ============================================
+
+# In-memory trade history storage (would be DB in production)
+_trade_history = []
+
+def _generate_sample_trades():
+    """Generate realistic sample trade data for demo purposes."""
+    import random
+    trades = []
+    symbols = ['AAPL', 'NVDA', 'SPY', 'TSLA', 'GOOGL', 'MSFT', 'AMD', 'META', 'QQQ', 'AMZN']
+    strategies = ['RSI Momentum', 'MACD Crossover', 'Bollinger Breakout', 'Volume Spike', 'EMA Cross']
+    
+    base_date = datetime.now() - timedelta(days=30)
+    cumulative_pnl = 0
+    equity = 100000
+    
+    for i in range(83):  # 83 trades for realistic demo
+        symbol = random.choice(symbols)
+        strategy = random.choice(strategies)
+        direction = random.choice(['LONG', 'SHORT'])
+        
+        # Entry time
+        entry_time = base_date + timedelta(
+            days=random.randint(0, 29),
+            hours=random.randint(9, 15),
+            minutes=random.randint(0, 59)
+        )
+        
+        # Hold time: 5 minutes to 4 hours
+        hold_minutes = random.randint(5, 240)
+        exit_time = entry_time + timedelta(minutes=hold_minutes)
+        
+        # Price and P&L
+        base_prices = {'AAPL': 195, 'NVDA': 140, 'SPY': 590, 'TSLA': 250, 'GOOGL': 175, 
+                       'MSFT': 430, 'AMD': 140, 'META': 580, 'QQQ': 520, 'AMZN': 225}
+        entry_price = base_prices.get(symbol, 100) * random.uniform(0.95, 1.05)
+        
+        # Win rate ~47%, average win > average loss (positive expectancy)
+        is_win = random.random() < 0.47
+        if is_win:
+            pnl_percent = random.uniform(0.5, 4.5)  # Wins: 0.5% to 4.5%
+        else:
+            pnl_percent = -random.uniform(0.3, 2.5)  # Losses: 0.3% to 2.5%
+        
+        if direction == 'SHORT':
+            pnl_percent = -pnl_percent  # Invert for short
+            exit_price = entry_price * (1 - pnl_percent / 100)
+            pnl_percent = -pnl_percent  # Calculate actual P&L
+        else:
+            exit_price = entry_price * (1 + pnl_percent / 100)
+        
+        # Position size: 1-10% of equity
+        position_size = equity * random.uniform(0.01, 0.10)
+        shares = int(position_size / entry_price)
+        if shares < 1:
+            shares = 1
+        
+        gross_pnl = (exit_price - entry_price) * shares
+        if direction == 'SHORT':
+            gross_pnl = -gross_pnl
+        
+        # Fees and commission
+        commission = shares * 0.005  # $0.005 per share
+        fees = abs(gross_pnl) * 0.001  # 0.1% SEC/TAF fees estimate
+        net_pnl = gross_pnl - commission - fees
+        
+        cumulative_pnl += net_pnl
+        equity += net_pnl
+        
+        # R-multiple (risk was 1% of equity at entry)
+        risk_amount = position_size * 0.01  # 1% stop loss
+        r_multiple = net_pnl / risk_amount if risk_amount > 0 else 0
+        
+        trades.append({
+            'id': f'trade-{i+1}',
+            'symbol': symbol,
+            'strategy': strategy,
+            'direction': direction,
+            'entryTime': entry_time.isoformat(),
+            'exitTime': exit_time.isoformat(),
+            'entryPrice': round(entry_price, 2),
+            'exitPrice': round(exit_price, 2),
+            'shares': shares,
+            'grossPnL': round(gross_pnl, 2),
+            'commission': round(commission, 2),
+            'fees': round(fees, 2),
+            'netPnL': round(net_pnl, 2),
+            'cumulativePnL': round(cumulative_pnl, 2),
+            'equity': round(equity, 2),
+            'rMultiple': round(r_multiple, 2),
+            'holdTimeMinutes': hold_minutes
+        })
+    
+    # Sort by entry time
+    trades.sort(key=lambda x: x['entryTime'])
+    
+    # Recalculate cumulative values after sorting
+    cumulative = 0
+    equity = 100000
+    for trade in trades:
+        cumulative += trade['netPnL']
+        equity += trade['netPnL']
+        trade['cumulativePnL'] = round(cumulative, 2)
+        trade['equity'] = round(equity, 2)
+    
+    return trades
+
+
+def _get_trades():
+    """Get trades, generating sample data if needed."""
+    global _trade_history
+    if not _trade_history:
+        _trade_history = _generate_sample_trades()
+    return _trade_history
+
+
+# =============================================================================
+# Real-Time Strategy Execution System
+# =============================================================================
+
+_realtime_monitoring_active = False
+_realtime_thread = None
+_realtime_stop_event = threading.Event()
+_live_signals = []  # Store live signals from enabled strategies
+_MAX_LIVE_SIGNALS = 100
+
+def _start_realtime_monitoring():
+    """Start background thread to monitor enabled strategies."""
+    global _realtime_monitoring_active, _realtime_thread
+    
+    if _realtime_monitoring_active:
+        return
+    
+    _realtime_stop_event.clear()
+    _realtime_monitoring_active = True
+    
+    def monitor_loop():
+        logger.info("🔴 Real-time monitoring started")
+        while not _realtime_stop_event.is_set():
+            try:
+                # Check enabled strategies
+                enabled = _get_enabled_strategies()
+                if not enabled:
+                    time.sleep(5)
+                    continue
+                
+                # For each enabled strategy, check if it generates a signal
+                for strategy_name in enabled:
+                    strategy = _load_strategy(strategy_name)
+                    if not strategy:
+                        continue
+                    
+                    # Execute workflow with current market data
+                    # For demo: generate synthetic signals
+                    if random.random() < 0.05:  # 5% chance per check
+                        signal = _generate_live_signal(strategy_name, strategy)
+                        _live_signals.append(signal)
+                        
+                        # Keep only last N signals
+                        if len(_live_signals) > _MAX_LIVE_SIGNALS:
+                            _live_signals.pop(0)
+                        
+                        logger.info(f"📊 Signal generated: {signal['symbol']} {signal['direction']} from {strategy_name}")
+                
+                time.sleep(10)  # Check every 10 seconds
+                
+            except Exception as e:
+                logger.error(f"Real-time monitoring error: {e}")
+                time.sleep(5)
+        
+        logger.info("🔴 Real-time monitoring stopped")
+    
+    _realtime_thread = threading.Thread(target=monitor_loop, daemon=True, name='RealtimeMonitor')
+    _realtime_thread.start()
+
+def _stop_realtime_monitoring():
+    """Stop background monitoring thread."""
+    global _realtime_monitoring_active
+    
+    if not _realtime_monitoring_active:
+        return
+    
+    _realtime_monitoring_active = False
+    _realtime_stop_event.set()
+    
+    if _realtime_thread:
+        _realtime_thread.join(timeout=3)
+
+def _generate_live_signal(strategy_name, strategy):
+    """Generate a live signal from strategy."""
+    symbols = ['AAPL', 'NVDA', 'TSLA', 'MSFT', 'GOOGL', 'AMZN', 'META']
+    symbol = random.choice(symbols)
+    direction = random.choice(['BUY', 'SELL'])
+    price = 100 + random.random() * 200
+    
+    return {
+        'id': str(uuid.uuid4())[:8],
+        'timestamp': datetime.now().isoformat(),
+        'strategy_name': strategy_name,
+        'symbol': symbol,
+        'direction': direction,
+        'type': 'entry',
+        'price': round(price, 2),
+        'quantity': random.randint(1, 10),
+        'pnl': None,  # Entry signal has no P&L yet
+        'status': 'open'
+    }
+
+def _get_enabled_strategies():
+    """Get list of currently enabled strategy names."""
+    try:
+        strategies_file = os.path.join(DATA_DIR, 'enabled_strategies.json')
+        if os.path.exists(strategies_file):
+            with open(strategies_file, 'r') as f:
+                data = json.load(f)
+                return [name for name, enabled in data.items() if enabled]
+    except:
+        pass
+    return []
+
+def _load_strategy(strategy_name):
+    """Load strategy configuration from saved_strategies.json."""
+    try:
+        strategies_file = os.path.join(DATA_DIR, 'saved_strategies.json')
+        if os.path.exists(strategies_file):
+            with open(strategies_file, 'r') as f:
+                strategies = json.load(f)
+                return strategies.get(strategy_name)
+    except:
+        pass
+    return None
+
+
+@app.route('/api/trades-legacy', methods=['GET'])
+def get_trades_legacy():
+    """Get all trades with optional filtering."""
+    try:
+        trades = _get_trades()
+        
+        # Apply filters if provided
+        strategy = request.args.get('strategy')
+        symbol = request.args.get('symbol')
+        direction = request.args.get('direction')
+        start_date = request.args.get('startDate')
+        end_date = request.args.get('endDate')
+        
+        filtered = trades
+        
+        if strategy:
+            filtered = [t for t in filtered if t['strategy'] == strategy]
+        if symbol:
+            filtered = [t for t in filtered if t['symbol'] == symbol]
+        if direction:
+            filtered = [t for t in filtered if t['direction'].upper() == direction.upper()]
+        if start_date:
+            filtered = [t for t in filtered if t['entryTime'] >= start_date]
+        if end_date:
+            filtered = [t for t in filtered if t['entryTime'] <= end_date]
+        
+        return jsonify(filtered)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/trades/recent-legacy', methods=['GET'])
+def get_recent_trades_legacy():
+    """Get most recent trades (default 5)."""
+    try:
+        limit = int(request.args.get('limit', 5))
+        trades = _get_trades()
+        recent = sorted(trades, key=lambda x: x['exitTime'], reverse=True)[:limit]
+        return jsonify(recent)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/signals/live', methods=['GET'])
+def get_live_strategy_signals():
+    """Get live signals from enabled strategies."""
+    try:
+        limit = int(request.args.get('limit', 10))
+        # Return most recent live signals
+        recent = list(reversed(_live_signals[-limit:]))
+        return jsonify(recent)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/comprehensive-metrics', methods=['GET'])
+def get_comprehensive_metrics():
+    """Get all dashboard metrics computed from trade history."""
+    try:
+        trades = _get_trades()
+        
+        if not trades:
+            return jsonify({
+                'netPnL': 0, 'netPnLPercent': 0, 'winRate': 0, 'profitFactor': 0,
+                'expectancy': 0, 'totalTrades': 0, 'maxDrawdown': 0, 'maxDrawdownPercent': 0,
+                'avgWin': 0, 'avgLoss': 0, 'largestWin': 0, 'largestLoss': 0,
+                'avgRMultiple': 0, 'winCount': 0, 'lossCount': 0, 'longPnL': 0, 'shortPnL': 0
+            })
+        
+        initial_equity = 100000
+        
+        # Basic metrics
+        wins = [t for t in trades if t['netPnL'] > 0]
+        losses = [t for t in trades if t['netPnL'] < 0]
+        
+        total_trades = len(trades)
+        win_count = len(wins)
+        loss_count = len(losses)
+        
+        net_pnl = sum(t['netPnL'] for t in trades)
+        net_pnl_percent = (net_pnl / initial_equity) * 100
+        
+        win_rate = (win_count / total_trades * 100) if total_trades > 0 else 0
+        
+        gross_profit = sum(t['netPnL'] for t in wins)
+        gross_loss = abs(sum(t['netPnL'] for t in losses))
+        profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else float('inf') if gross_profit > 0 else 0
+        
+        expectancy = net_pnl / total_trades if total_trades > 0 else 0
+        
+        avg_win = gross_profit / win_count if win_count > 0 else 0
+        avg_loss = gross_loss / loss_count if loss_count > 0 else 0
+        
+        largest_win = max((t['netPnL'] for t in trades), default=0)
+        largest_loss = min((t['netPnL'] for t in trades), default=0)
+        
+        avg_r = sum(t['rMultiple'] for t in trades) / total_trades if total_trades > 0 else 0
+        
+        # Direction breakdown
+        long_trades = [t for t in trades if t['direction'] == 'LONG']
+        short_trades = [t for t in trades if t['direction'] == 'SHORT']
+        long_pnl = sum(t['netPnL'] for t in long_trades)
+        short_pnl = sum(t['netPnL'] for t in short_trades)
+        
+        # Max drawdown calculation
+        max_drawdown = 0
+        max_drawdown_percent = 0
+        peak_equity = initial_equity
+        
+        for trade in trades:
+            current_equity = trade['equity']
+            if current_equity > peak_equity:
+                peak_equity = current_equity
+            drawdown = peak_equity - current_equity
+            drawdown_percent = (drawdown / peak_equity) * 100 if peak_equity > 0 else 0
+            if drawdown > max_drawdown:
+                max_drawdown = drawdown
+                max_drawdown_percent = drawdown_percent
+        
+        return jsonify({
+            'netPnL': round(net_pnl, 2),
+            'netPnLPercent': round(net_pnl_percent, 2),
+            'winRate': round(win_rate, 2),
+            'profitFactor': round(profit_factor, 2) if profit_factor != float('inf') else 999.99,
+            'expectancy': round(expectancy, 2),
+            'totalTrades': total_trades,
+            'maxDrawdown': round(max_drawdown, 2),
+            'maxDrawdownPercent': round(max_drawdown_percent, 2),
+            'avgWin': round(avg_win, 2),
+            'avgLoss': round(avg_loss, 2),
+            'largestWin': round(largest_win, 2),
+            'largestLoss': round(largest_loss, 2),
+            'avgRMultiple': round(avg_r, 2),
+            'winCount': win_count,
+            'lossCount': loss_count,
+            'longPnL': round(long_pnl, 2),
+            'shortPnL': round(short_pnl, 2),
+            'longTrades': len(long_trades),
+            'shortTrades': len(short_trades),
+            'longWinRate': round(len([t for t in long_trades if t['netPnL'] > 0]) / len(long_trades) * 100, 2) if long_trades else 0,
+            'shortWinRate': round(len([t for t in short_trades if t['netPnL'] > 0]) / len(short_trades) * 100, 2) if short_trades else 0
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/equity-curve', methods=['GET'])
+def get_equity_curve():
+    """Get equity curve with drawdown data for charting."""
+    try:
+        trades = _get_trades()
+        initial_equity = 100000
+        
+        if not trades:
+            return jsonify({'data': [], 'drawdown': []})
+        
+        equity_data = [{'t': None, 'equity': initial_equity, 'cumPnL': 0, 'drawdown': 0}]
+        peak = initial_equity
+        
+        for trade in trades:
+            timestamp = trade['exitTime']
+            equity = trade['equity']
+            cum_pnl = trade['cumulativePnL']
+            
+            if equity > peak:
+                peak = equity
+            drawdown = ((peak - equity) / peak) * 100 if peak > 0 else 0
+            
+            equity_data.append({
+                't': timestamp,
+                'equity': equity,
+                'cumPnL': cum_pnl,
+                'drawdown': round(drawdown, 2)
+            })
+        
+        return jsonify({
+            'data': equity_data,
+            'initialEquity': initial_equity,
+            'finalEquity': trades[-1]['equity'] if trades else initial_equity,
+            'peakEquity': peak
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/pnl-distribution', methods=['GET'])
+def get_pnl_distribution():
+    """Get P&L distribution for histogram."""
+    try:
+        trades = _get_trades()
+        
+        if not trades:
+            return jsonify({'buckets': [], 'stats': {}})
+        
+        pnls = [t['netPnL'] for t in trades]
+        
+        # Create buckets
+        min_pnl = min(pnls)
+        max_pnl = max(pnls)
+        
+        # 10 buckets
+        num_buckets = 10
+        bucket_size = (max_pnl - min_pnl) / num_buckets if max_pnl != min_pnl else 1
+        
+        buckets = []
+        for i in range(num_buckets):
+            lower = min_pnl + i * bucket_size
+            upper = min_pnl + (i + 1) * bucket_size
+            count = len([p for p in pnls if lower <= p < upper or (i == num_buckets - 1 and p == upper)])
+            buckets.append({
+                'range': f"${lower:.0f} to ${upper:.0f}",
+                'lower': round(lower, 2),
+                'upper': round(upper, 2),
+                'count': count,
+                'isProfit': (lower + upper) / 2 > 0
+            })
+        
+        # Stats
+        import statistics
+        mean = statistics.mean(pnls)
+        median = statistics.median(pnls)
+        std_dev = statistics.stdev(pnls) if len(pnls) > 1 else 0
+        
+        return jsonify({
+            'buckets': buckets,
+            'stats': {
+                'mean': round(mean, 2),
+                'median': round(median, 2),
+                'stdDev': round(std_dev, 2),
+                'min': round(min_pnl, 2),
+                'max': round(max_pnl, 2)
+            }
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/time-analysis', methods=['GET'])
+def get_time_analysis():
+    """Get performance by time of day and day of week."""
+    try:
+        trades = _get_trades()
+        
+        if not trades:
+            return jsonify({'hourly': [], 'daily': []})
+        
+        # Hourly analysis
+        hourly = {}
+        for hour in range(24):
+            hourly[hour] = {'pnl': 0, 'trades': 0, 'wins': 0}
+        
+        # Daily analysis
+        daily = {}
+        for day in range(7):  # 0=Monday, 6=Sunday
+            daily[day] = {'pnl': 0, 'trades': 0, 'wins': 0}
+        
+        for trade in trades:
+            try:
+                entry_dt = datetime.fromisoformat(trade['entryTime'].replace('Z', '+00:00'))
+                hour = entry_dt.hour
+                day = entry_dt.weekday()
+                
+                hourly[hour]['pnl'] += trade['netPnL']
+                hourly[hour]['trades'] += 1
+                if trade['netPnL'] > 0:
+                    hourly[hour]['wins'] += 1
+                
+                daily[day]['pnl'] += trade['netPnL']
+                daily[day]['trades'] += 1
+                if trade['netPnL'] > 0:
+                    daily[day]['wins'] += 1
+            except:
+                continue
+        
+        day_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+        
+        hourly_data = [
+            {'hour': h, 'label': f"{h:02d}:00", 'pnl': round(hourly[h]['pnl'], 2), 
+             'trades': hourly[h]['trades'], 'winRate': round(hourly[h]['wins'] / hourly[h]['trades'] * 100, 1) if hourly[h]['trades'] > 0 else 0}
+            for h in range(9, 17)  # Market hours only
+        ]
+        
+        daily_data = [
+            {'day': d, 'label': day_names[d], 'pnl': round(daily[d]['pnl'], 2),
+             'trades': daily[d]['trades'], 'winRate': round(daily[d]['wins'] / daily[d]['trades'] * 100, 1) if daily[d]['trades'] > 0 else 0}
+            for d in range(5)  # Weekdays only
+        ]
+        
+        return jsonify({
+            'hourly': hourly_data,
+            'daily': daily_data
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/strategy-performance', methods=['GET'])
+def get_strategy_performance():
+    """Get performance breakdown by strategy."""
+    try:
+        trades = _get_trades()
+        
+        if not trades:
+            return jsonify({'strategies': [], 'directions': {}})
+        
+        strategy_stats = {}
+        
+        for trade in trades:
+            strat = trade.get('strategy', 'Unknown')
+            if strat not in strategy_stats:
+                strategy_stats[strat] = {'pnl': 0, 'trades': 0, 'wins': 0}
+            
+            strategy_stats[strat]['pnl'] += trade['netPnL']
+            strategy_stats[strat]['trades'] += 1
+            if trade['netPnL'] > 0:
+                strategy_stats[strat]['wins'] += 1
+        
+        strategies = [
+            {
+                'name': name,
+                'pnl': round(stats['pnl'], 2),
+                'trades': stats['trades'],
+                'winRate': round(stats['wins'] / stats['trades'] * 100, 1) if stats['trades'] > 0 else 0
+            }
+            for name, stats in strategy_stats.items()
+        ]
+        strategies.sort(key=lambda x: x['pnl'], reverse=True)
+        
+        # Direction breakdown
+        long_trades = [t for t in trades if t['direction'] == 'LONG']
+        short_trades = [t for t in trades if t['direction'] == 'SHORT']
+        
+        directions = {
+            'long': {
+                'pnl': round(sum(t['netPnL'] for t in long_trades), 2),
+                'trades': len(long_trades),
+                'winRate': round(len([t for t in long_trades if t['netPnL'] > 0]) / len(long_trades) * 100, 1) if long_trades else 0
+            },
+            'short': {
+                'pnl': round(sum(t['netPnL'] for t in short_trades), 2),
+                'trades': len(short_trades),
+                'winRate': round(len([t for t in short_trades if t['netPnL'] > 0]) / len(short_trades) * 100, 1) if short_trades else 0
+            }
+        }
+        
+        return jsonify({
+            'strategies': strategies,
+            'directions': directions
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# =============================================================================
+# Dashboard API Endpoints
+# =============================================================================
+
+# Import dashboard API module
+try:
+    from dashboard_api import (
+        get_dashboard_metrics,
+        get_all_strategies,
+        save_strategies,
+        toggle_strategy,
+        get_all_trades,
+        add_trade,
+        get_account_info,
+        save_account_info,
+        calculate_equity_curve,
+        calculate_time_based_pnl,
+        get_recent_trades,
+        generate_demo_data
+    )
+    DASHBOARD_API_AVAILABLE = True
+    print('✅ Dashboard API module loaded')
+except ImportError as e:
+    print(f'⚠️ Dashboard API not available: {e}')
+    DASHBOARD_API_AVAILABLE = False
+
+
+@app.route('/api/dashboard/metrics', methods=['GET'])
+def dashboard_metrics():
+    """
+    Get all dashboard metrics in a single call.
+    Query params:
+      - enabled_only: 'true' to filter to enabled strategies only (default true)
+      - date_range: '1D', '1W', '1M', '3M', '1Y', 'ALL' (default '1M')
+    """
+    if not DASHBOARD_API_AVAILABLE:
+        return jsonify({'error': 'Dashboard API not available'}), 500
+    
+    try:
+        enabled_only = request.args.get('enabled_only', 'true').lower() == 'true'
+        date_range = request.args.get('date_range', '1M')
+        
+        metrics = get_dashboard_metrics(
+            enabled_strategies_only=enabled_only,
+            date_range=date_range
+        )
+        return jsonify(metrics)
+    except Exception as e:
+        print(f'Dashboard metrics error: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/strategies', methods=['GET'])
+def dashboard_strategies():
+    """Get all saved strategies with their states."""
+    if not DASHBOARD_API_AVAILABLE:
+        return jsonify({'error': 'Dashboard API not available'}), 500
+    
+    try:
+        strategies = get_all_strategies()
+        strategy_list = [
+            {
+                'name': name,
+                'enabled': data.get('enabled', False),
+                'created_at': data.get('created_at'),
+                'updated_at': data.get('updated_at')
+            }
+            for name, data in strategies.items()
+        ]
+        return jsonify({'strategies': strategy_list})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/strategies/<strategy_name>/toggle', methods=['POST'])
+def dashboard_toggle_strategy(strategy_name):
+    """Toggle a strategy on/off and start/stop real-time monitoring."""
+    try:
+        data = request.get_json()
+        enabled = data.get('enabled', False)
+        
+        # Update enabled_strategies.json
+        enabled_file = os.path.join(DATA_DIR, 'enabled_strategies.json')
+        enabled_map = {}
+        
+        if os.path.exists(enabled_file):
+            try:
+                with open(enabled_file, 'r') as f:
+                    enabled_map = json.load(f)
+            except:
+                enabled_map = {}
+        
+        enabled_map[strategy_name] = enabled
+        
+        try:
+            with open(enabled_file, 'w') as f:
+                json.dump(enabled_map, f, indent=2)
+        except Exception as write_err:
+            print(f"❌ Error writing enabled_strategies.json: {write_err}")
+            return jsonify({'error': f'Failed to save: {str(write_err)}'}), 500
+        
+        # Start/stop real-time monitoring based on enabled strategies
+        enabled_count = sum(1 for v in enabled_map.values() if v)
+        
+        if enabled_count > 0 and not _realtime_monitoring_active:
+            try:
+                _start_realtime_monitoring()
+                print(f"✅ Real-time monitoring started ({enabled_count} strategies enabled)")
+            except Exception as monitor_err:
+                print(f"⚠️ Failed to start monitoring: {monitor_err}")
+        elif enabled_count == 0 and _realtime_monitoring_active:
+            try:
+                _stop_realtime_monitoring()
+                print("⏸️ Real-time monitoring stopped (no strategies enabled)")
+            except Exception as stop_err:
+                print(f"⚠️ Failed to stop monitoring: {stop_err}")
+        
+        return jsonify({
+            'success': True,
+            'strategy': strategy_name,
+            'enabled': enabled,
+            'monitoring_active': _realtime_monitoring_active,
+            'enabled_count': enabled_count
+        })
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"❌ Toggle error: {error_trace}")
+        return jsonify({'error': str(e), 'trace': error_trace}), 500
+
+
+@app.route('/api/dashboard/strategies', methods=['POST'])
+def dashboard_save_strategy():
+    """Save or update a strategy."""
+    if not DASHBOARD_API_AVAILABLE:
+        return jsonify({'error': 'Dashboard API not available'}), 500
+    
+    try:
+        data = request.get_json()
+        if not data or 'name' not in data:
+            return jsonify({'error': 'Strategy name required'}), 400
+        
+        strategies = get_all_strategies()
+        name = data['name']
+        
+        strategies[name] = {
+            'enabled': data.get('enabled', False),
+            'nodes': data.get('nodes', []),
+            'connections': data.get('connections', []),
+            'created_at': strategies.get(name, {}).get('created_at', datetime.utcnow().isoformat()),
+            'updated_at': datetime.utcnow().isoformat()
+        }
+        
+        save_strategies(strategies)
+        return jsonify({'message': 'Strategy saved', 'name': name})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/equity-curve', methods=['GET'])
+def dashboard_equity_curve():
+    """
+    Get equity curve data.
+    Query params:
+      - enabled_only: filter to enabled strategies (default true)
+      - date_range: '1D', '1W', '1M', '3M', '1Y', 'ALL'
+    """
+    if not DASHBOARD_API_AVAILABLE:
+        return jsonify({'error': 'Dashboard API not available'}), 500
+    
+    try:
+        enabled_only = request.args.get('enabled_only', 'true').lower() == 'true'
+        
+        strategies = get_all_strategies()
+        enabled_names = [n for n, d in strategies.items() if d.get('enabled')] if enabled_only else None
+        
+        trades = get_all_trades(strategy_names=enabled_names)
+        curve = calculate_equity_curve(trades)
+        
+        return jsonify({'equity_curve': curve})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/time-pnl', methods=['GET'])
+def dashboard_time_pnl():
+    """
+    Get time-based P&L aggregation.
+    Query params:
+      - group_by: 'day_of_week' or 'hour_of_day' (default 'day_of_week')
+      - enabled_only: filter to enabled strategies (default true)
+    """
+    if not DASHBOARD_API_AVAILABLE:
+        return jsonify({'error': 'Dashboard API not available'}), 500
+    
+    try:
+        group_by = request.args.get('group_by', 'day_of_week')
+        enabled_only = request.args.get('enabled_only', 'true').lower() == 'true'
+        
+        strategies = get_all_strategies()
+        enabled_names = [n for n, d in strategies.items() if d.get('enabled')] if enabled_only else None
+        
+        trades = get_all_trades(strategy_names=enabled_names)
+        data = calculate_time_based_pnl(trades, group_by)
+        
+        return jsonify({'data': data, 'group_by': group_by})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/recent-trades', methods=['GET'])
+def dashboard_recent_trades():
+    """
+    Get recent trades.
+    Query params:
+      - limit: number of trades to return (default 5)
+      - enabled_only: filter to enabled strategies (default true)
+    """
+    if not DASHBOARD_API_AVAILABLE:
+        return jsonify({'error': 'Dashboard API not available'}), 500
+    
+    try:
+        limit = int(request.args.get('limit', '5'))
+        enabled_only = request.args.get('enabled_only', 'true').lower() == 'true'
+        
+        strategies = get_all_strategies()
+        enabled_names = [n for n, d in strategies.items() if d.get('enabled')] if enabled_only else None
+        
+        trades = get_recent_trades(limit, enabled_names)
+        
+        return jsonify({'trades': trades})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/trades', methods=['POST'])
+def dashboard_add_trade():
+    """Add a new executed trade."""
+    if not DASHBOARD_API_AVAILABLE:
+        return jsonify({'error': 'Dashboard API not available'}), 500
+    
+    try:
+        trade = request.get_json()
+        if not trade:
+            return jsonify({'error': 'Trade data required'}), 400
+        
+        success = add_trade(trade)
+        if success:
+            return jsonify({'message': 'Trade added', 'trade': trade})
+        return jsonify({'error': 'Failed to add trade'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/account', methods=['GET'])
+def dashboard_get_account():
+    """Get account information."""
+    if not DASHBOARD_API_AVAILABLE:
+        return jsonify({'error': 'Dashboard API not available'}), 500
+    
+    try:
+        account = get_account_info()
+        return jsonify(account)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/account', methods=['POST'])
+def dashboard_update_account():
+    """Update account information."""
+    if not DASHBOARD_API_AVAILABLE:
+        return jsonify({'error': 'Dashboard API not available'}), 500
+    
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Account data required'}), 400
+        
+        # Merge with existing
+        account = get_account_info()
+        account.update(data)
+        
+        success = save_account_info(account)
+        if success:
+            return jsonify({'message': 'Account updated', 'account': account})
+        return jsonify({'error': 'Failed to update account'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/dashboard/demo-data', methods=['POST'])
+def dashboard_generate_demo():
+    """Generate demo data for testing the dashboard."""
+    if not DASHBOARD_API_AVAILABLE:
+        return jsonify({'error': 'Dashboard API not available'}), 500
+    
+    try:
+        result = generate_demo_data()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# =============================================================================
+# Analytics API Routes
+# =============================================================================
+
+try:
+    from .analytics_api import (
+        get_analytics_overview, calculate_flow_grade, get_equity_curve_data,
+        get_trades_paginated, calculate_pnl_distribution, calculate_duration_distribution,
+        calculate_heatmap, calculate_strategy_contribution, run_monte_carlo,
+        create_recompute_job, get_recompute_job_status, get_recent_activity
+    )
+    ANALYTICS_API_AVAILABLE = True
+    print('✅ Analytics API module loaded')
+except ImportError as e:
+    ANALYTICS_API_AVAILABLE = False
+    print(f'⚠️ Analytics API not available: {e}')
+
+
+@app.route('/api/analytics/overview-legacy', methods=['GET'])
+def analytics_overview():
+    """LEGACY: Get comprehensive analytics overview with KPIs and Flow Grade."""
+    if not ANALYTICS_API_AVAILABLE:
+        return jsonify({'error': 'Analytics API not available'}), 500
+    
+    try:
+        enabled_only = request.args.get('enabled_only', 'true').lower() == 'true'
+        date_range = request.args.get('range', 'ALL')
+        
+        result = get_analytics_overview(
+            enabled_strategies_only=enabled_only,
+            date_range=date_range
+        )
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/flow-grade', methods=['GET'])
+def analytics_flow_grade():
+    """Get Flow Grade performance score with breakdown."""
+    if not ANALYTICS_API_AVAILABLE:
+        return jsonify({'error': 'Analytics API not available'}), 500
+    
+    try:
+        from .dashboard_api import get_all_trades, get_account_info
+        
+        trades = get_all_trades()
+        account = get_account_info()
+        
+        result = calculate_flow_grade(trades, account)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/equity-curve-legacy', methods=['GET'])
+def analytics_equity_curve():
+    """LEGACY: Get equity curve time-series data."""
+    if not ANALYTICS_API_AVAILABLE:
+        return jsonify({'error': 'Analytics API not available'}), 500
+    
+    try:
+        timeframe = request.args.get('timeframe', 'ALL')
+        include_drawdown = request.args.get('drawdown', 'true').lower() == 'true'
+        
+        result = get_equity_curve_data(timeframe, include_drawdown)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/trades', methods=['GET'])
+def analytics_trades():
+    """Get paginated trades list."""
+    if not ANALYTICS_API_AVAILABLE:
+        return jsonify({'error': 'Analytics API not available'}), 500
+    
+    try:
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))
+        strategy = request.args.get('strategy')
+        symbol = request.args.get('symbol')
+        sort_by = request.args.get('sort_by', 'timestamp')
+        sort_order = request.args.get('sort_order', 'desc')
+        
+        result = get_trades_paginated(
+            page=page,
+            per_page=per_page,
+            strategy_name=strategy,
+            symbol=symbol,
+            sort_by=sort_by,
+            sort_order=sort_order
+        )
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/distributions-legacy', methods=['GET'])
+def analytics_distributions():
+    """LEGACY: Get P&L and duration distributions."""
+    if not ANALYTICS_API_AVAILABLE:
+        return jsonify({'error': 'Analytics API not available'}), 500
+    
+    try:
+        from .dashboard_api import get_all_trades
+        
+        trades = get_all_trades()
+        dist_type = request.args.get('type', 'pnl')
+        bins = int(request.args.get('bins', 20))
+        
+        if dist_type == 'pnl':
+            result = calculate_pnl_distribution(trades, bins)
+        elif dist_type == 'duration':
+            result = calculate_duration_distribution(trades, bins)
+        else:
+            result = {'error': 'Invalid distribution type. Use pnl or duration.'}
+        
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/heatmap-legacy', methods=['GET'])
+def analytics_heatmap():
+    """LEGACY: Get P&L heatmap by hour/day or instrument."""
+    if not ANALYTICS_API_AVAILABLE:
+        return jsonify({'error': 'Analytics API not available'}), 500
+    
+    try:
+        from .dashboard_api import get_all_trades
+        
+        trades = get_all_trades()
+        heatmap_type = request.args.get('type', 'hour_day')
+        
+        result = calculate_heatmap(trades, heatmap_type)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/strategy-contrib', methods=['GET'])
+def analytics_strategy_contrib():
+    """Get strategy contribution analysis."""
+    if not ANALYTICS_API_AVAILABLE:
+        return jsonify({'error': 'Analytics API not available'}), 500
+    
+    try:
+        from .dashboard_api import get_all_trades
+        
+        trades = get_all_trades()
+        result = calculate_strategy_contribution(trades)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/montecarlo', methods=['GET'])
+def analytics_montecarlo():
+    """Get Monte Carlo simulation results."""
+    if not ANALYTICS_API_AVAILABLE:
+        return jsonify({'error': 'Analytics API not available'}), 500
+    
+    try:
+        from .dashboard_api import get_all_trades, get_account_info
+        
+        trades = get_all_trades()
+        account = get_account_info()
+        
+        num_sims = int(request.args.get('simulations', 1000))
+        is_premium = request.args.get('premium', 'false').lower() == 'true'
+        
+        result = run_monte_carlo(
+            trades,
+            num_simulations=num_sims,
+            starting_capital=account.get('starting_capital', 100000),
+            is_premium=is_premium
+        )
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/recompute', methods=['POST'])
+def analytics_recompute():
+    """Trigger a metrics recompute job."""
+    if not ANALYTICS_API_AVAILABLE:
+        return jsonify({'error': 'Analytics API not available'}), 500
+    
+    try:
+        data = request.get_json() or {}
+        enabled_strategies = data.get('enabled_strategies', [])
+        trigger = data.get('trigger', 'manual')
+        
+        result = create_recompute_job(enabled_strategies, trigger)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/recompute/<job_id>/status', methods=['GET'])
+def analytics_recompute_status(job_id):
+    """Get status of a recompute job."""
+    if not ANALYTICS_API_AVAILABLE:
+        return jsonify({'error': 'Analytics API not available'}), 500
+    
+    try:
+        result = get_recompute_job_status(job_id)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/recent-activity', methods=['GET'])
+def analytics_recent_activity():
+    """Get recent signals and trade events."""
+    if not ANALYTICS_API_AVAILABLE:
+        return jsonify({'error': 'Analytics API not available'}), 500
+    
+    try:
+        limit = int(request.args.get('limit', 20))
+        result = get_recent_activity(limit)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# =============================================================================
+# SSE Stream for Live Updates (Analytics)
+# =============================================================================
+
+@app.route('/api/analytics/stream')
+def analytics_stream():
+    """Server-Sent Events stream for live analytics updates."""
+    def generate():
+        """Generate SSE events."""
+        import time
+        
+        # Send initial connection event
+        yield f"event: connected\ndata: {json.dumps({'status': 'connected', 'timestamp': datetime.utcnow().isoformat()})}\n\n"
+        
+        last_trade_count = 0
+        
+        while True:
+            try:
+                # Check for new trades
+                if DASHBOARD_API_AVAILABLE:
+                    trades = get_all_trades()
+                    current_count = len(trades)
+                    
+                    if current_count != last_trade_count:
+                        # New trade detected, send update
+                        last_trade_count = current_count
+                        
+                        if ANALYTICS_API_AVAILABLE:
+                            overview = get_analytics_overview()
+                            yield f"event: metrics_update\ndata: {json.dumps(overview)}\n\n"
+                
+                # Send heartbeat every 30 seconds
+                yield f"event: heartbeat\ndata: {json.dumps({'timestamp': datetime.utcnow().isoformat()})}\n\n"
+                
+                time.sleep(5)  # Check every 5 seconds
+                
+            except GeneratorExit:
+                break
+            except Exception as e:
+                yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+                break
+    
+    response = make_response(generate())
+    response.headers['Content-Type'] = 'text/event-stream'
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['Connection'] = 'keep-alive'
+    response.headers['X-Accel-Buffering'] = 'no'
+    return response
+
+
+# =============================================================================
+# Trade Engine API Routes (Percent-Only Alternating Trades)
+# =============================================================================
+
+# Import trade engine
+try:
+    from api.trade_engine import (
+        ingest_signal, log_external_trade, get_all_percent_trades,
+        compute_analytics, get_equity_curve_pct, get_pnl_distribution,
+        get_pnl_heatmap, get_current_signals, get_position, clear_position,
+        clear_all_positions, clear_all_trades
+    )
+    TRADE_ENGINE_AVAILABLE = True
+    print('✅ Trade engine initialized')
+except ImportError as e:
+    print(f'⚠️ Trade engine not available: {e}')
+    TRADE_ENGINE_AVAILABLE = False
+
+
+@app.route('/api/signals/ingest', methods=['POST'])
+def api_ingest_signal():
+    """
+    Ingest a signal from frontend StrategyRunner.
+    
+    Body: {
+        strategy_id: str,
+        signal: BUY|SELL|HOLD,
+        price: float,
+        ts: str (optional),
+        fee_pct: float (optional),
+        slippage_pct: float (optional),
+        meta: dict (optional)
+    }
+    """
+    if not TRADE_ENGINE_AVAILABLE:
+        return jsonify({'error': 'Trade engine not available'}), 503
+    
+    try:
+        data = request.json or {}
+        
+        result = ingest_signal(
+            strategy_id=data.get('strategy_id'),
+            signal=data.get('signal'),
+            price=data.get('price'),
+            ts=data.get('ts'),
+            fee_pct=data.get('fee_pct', 0.0),
+            slippage_pct=data.get('slippage_pct', 0.0),
+            meta=data.get('meta')
+        )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f'❌ Error ingesting signal: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/trades/log', methods=['POST'])
+def api_log_trade():
+    """
+    Log an externally-sourced completed trade.
+    
+    Body: {
+        strategy_id: str,
+        open_price: float,
+        close_price: float,
+        open_ts: str,
+        close_ts: str,
+        open_side: LONG|SHORT (optional, default LONG),
+        gross_pct: float (optional, computed if missing),
+        fee_pct_total: float (optional),
+        net_pct: float (optional, computed if missing),
+        meta: dict (optional)
+    }
+    """
+    if not TRADE_ENGINE_AVAILABLE:
+        return jsonify({'error': 'Trade engine not available'}), 503
+    
+    try:
+        data = request.json or {}
+        
+        result = log_external_trade(
+            strategy_id=data.get('strategy_id'),
+            open_price=data.get('open_price'),
+            close_price=data.get('close_price'),
+            open_ts=data.get('open_ts'),
+            close_ts=data.get('close_ts'),
+            open_side=data.get('open_side', 'LONG'),
+            gross_pct=data.get('gross_pct'),
+            fee_pct_total=data.get('fee_pct_total', 0.0),
+            net_pct=data.get('net_pct'),
+            meta=data.get('meta')
+        )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f'❌ Error logging trade: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/trades', methods=['GET'])
+def api_get_trades():
+    """
+    Get completed trades (percent-based).
+    
+    Query params:
+        strategy_id: str (optional)
+        start_ts: str (optional)
+        end_ts: str (optional)
+        limit: int (default 100)
+        offset: int (default 0)
+    """
+    if not TRADE_ENGINE_AVAILABLE:
+        return jsonify({'error': 'Trade engine not available'}), 503
+    
+    try:
+        result = get_all_percent_trades(
+            strategy_id=request.args.get('strategy_id'),
+            start_ts=request.args.get('start_ts'),
+            end_ts=request.args.get('end_ts'),
+            limit=int(request.args.get('limit', 100)),
+            offset=int(request.args.get('offset', 0))
+        )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f'❌ Error getting trades: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/trades', methods=['DELETE'])
+def api_clear_trades():
+    """Clear all completed trades."""
+    if not TRADE_ENGINE_AVAILABLE:
+        return jsonify({'error': 'Trade engine not available'}), 503
+    
+    try:
+        success = clear_all_trades()
+        return jsonify({'success': success})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/overview', methods=['GET'])
+def api_analytics_overview():
+    """
+    Get analytics KPIs computed from percent trades.
+    
+    Query params:
+        strategies: comma-separated list (optional)
+        start_ts: str (optional)
+        end_ts: str (optional)
+        use_cache: bool (default true)
+    """
+    if not TRADE_ENGINE_AVAILABLE:
+        return jsonify({'error': 'Trade engine not available'}), 503
+    
+    try:
+        strategy_ids = None
+        strategies_param = request.args.get('strategies')
+        if strategies_param:
+            strategy_ids = [s.strip() for s in strategies_param.split(',') if s.strip()]
+        
+        result = compute_analytics(
+            strategy_ids=strategy_ids,
+            start_ts=request.args.get('start_ts'),
+            end_ts=request.args.get('end_ts'),
+            use_cache=request.args.get('use_cache', 'true').lower() == 'true'
+        )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f'❌ Error computing analytics: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/equity-curve', methods=['GET'])
+def api_equity_curve():
+    """
+    Get equity curve as percentage returns.
+    
+    Returns: [{ts, equity_pct, drawdown_pct}, ...]
+    """
+    if not TRADE_ENGINE_AVAILABLE:
+        return jsonify({'error': 'Trade engine not available'}), 503
+    
+    try:
+        strategy_ids = None
+        strategies_param = request.args.get('strategies')
+        if strategies_param:
+            strategy_ids = [s.strip() for s in strategies_param.split(',') if s.strip()]
+        
+        curve = get_equity_curve_pct(
+            strategy_ids=strategy_ids,
+            start_ts=request.args.get('start_ts'),
+            end_ts=request.args.get('end_ts')
+        )
+        
+        return jsonify({'curve': curve})
+        
+    except Exception as e:
+        print(f'❌ Error getting equity curve: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/distributions', methods=['GET'])
+def api_distributions():
+    """
+    Get P&L distribution histogram.
+    
+    Returns: {bins: [...], stats: {...}}
+    """
+    if not TRADE_ENGINE_AVAILABLE:
+        return jsonify({'error': 'Trade engine not available'}), 503
+    
+    try:
+        strategy_ids = None
+        strategies_param = request.args.get('strategies')
+        if strategies_param:
+            strategy_ids = [s.strip() for s in strategies_param.split(',') if s.strip()]
+        
+        result = get_pnl_distribution(
+            strategy_ids=strategy_ids,
+            bins=int(request.args.get('bins', 20))
+        )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f'❌ Error getting distributions: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analytics/heatmap', methods=['GET'])
+def api_heatmap():
+    """
+    Get P&L heatmap by day/hour.
+    
+    Returns: {by_day: [...], by_hour: [...]}
+    """
+    if not TRADE_ENGINE_AVAILABLE:
+        return jsonify({'error': 'Trade engine not available'}), 503
+    
+    try:
+        strategy_ids = None
+        strategies_param = request.args.get('strategies')
+        if strategies_param:
+            strategy_ids = [s.strip() for s in strategies_param.split(',') if s.strip()]
+        
+        result = get_pnl_heatmap(strategy_ids=strategy_ids)
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        print(f'❌ Error getting heatmap: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/signals/current', methods=['GET'])
+def api_current_signals():
+    """
+    Get current signal state for all strategies with open positions.
+    
+    Returns: [{strategy_id, position, last_signal, entry_price, entry_ts}]
+    """
+    if not TRADE_ENGINE_AVAILABLE:
+        return jsonify({'error': 'Trade engine not available'}), 503
+    
+    try:
+        signals = get_current_signals()
+        return jsonify({'signals': signals})
+    except Exception as e:
+        print(f'❌ Error getting current signals: {e}')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/positions/<strategy_id>', methods=['GET'])
+def api_get_position(strategy_id):
+    """Get position state for a specific strategy."""
+    if not TRADE_ENGINE_AVAILABLE:
+        return jsonify({'error': 'Trade engine not available'}), 503
+    
+    try:
+        position = get_position(strategy_id)
+        return jsonify(position)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/positions/<strategy_id>', methods=['DELETE'])
+def api_clear_position(strategy_id):
+    """Clear position state for a strategy (reset to NONE)."""
+    if not TRADE_ENGINE_AVAILABLE:
+        return jsonify({'error': 'Trade engine not available'}), 503
+    
+    try:
+        success = clear_position(strategy_id)
+        return jsonify({'success': success})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/positions', methods=['DELETE'])
+def api_clear_all_positions():
+    """Clear all position states."""
+    if not TRADE_ENGINE_AVAILABLE:
+        return jsonify({'error': 'Trade engine not available'}), 503
+    
+    try:
+        success = clear_all_positions()
+        return jsonify({'success': success})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     print("FlowGrid Trading Backend Server")
     print("Running on http://localhost:5000")
     print("Refresh your browser to connect the dashboard")
     print("\nPress Ctrl+C to stop\n")
     app.run(host='0.0.0.0', port=5000, debug=False)
+
