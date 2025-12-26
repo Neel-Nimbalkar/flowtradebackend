@@ -98,10 +98,17 @@ class UnifiedStrategyExecutor:
         if isinstance(value, bool):
             return value
         if isinstance(value, (int, float)):
-            # Only 1 or 1.0 is True (output of compare/logic gates)
+            # Only exactly 1 or 1.0 is True (output of compare/logic gates)
+            # AND explicitly handle 0 as False
+            if value == 0 or value == 0.0:
+                return False
+            # True only for exactly 1 or 1.0 (from logic gates)
             return value == 1 or value == 1.0
-        # For strings or other types, use standard bool
-        return bool(value)
+        # For strings, check for explicit true/false
+        if isinstance(value, str):
+            return value.lower() in ('true', '1', 'yes')
+        # Default to False for anything else (safety)
+        return False
     
     def _normalize_id(self, node_id: Any) -> int:
         """Normalize node ID to integer."""
@@ -182,6 +189,11 @@ class UnifiedStrategyExecutor:
             if source in self.nodes and target in self.nodes:
                 children[source].append(target)
                 parents[target].append((source, source_port, target_port))
+                if self.debug:
+                    logger.info(f"[GRAPH] Connection: Node {source}:{source_port} -> Node {target}:{target_port}")
+            else:
+                if self.debug:
+                    logger.warning(f"[GRAPH] Skipped connection: Node {source} or {target} not in nodes. Nodes: {list(self.nodes.keys())}")
         
         return children, parents
     
@@ -236,19 +248,37 @@ class UnifiedStrategyExecutor:
             if source_id in self.node_outputs:
                 source_outputs = self.node_outputs[source_id]
                 
+                if self.debug:
+                    logger.info(f"[INPUT] Node {node_id} <- Node {source_id}: looking for port '{source_port}', available={list(source_outputs.keys())}")
+                
                 # Try to get the specific port value
                 if source_port in source_outputs:
                     inputs[target_port] = source_outputs[source_port]
+                    if self.debug:
+                        val = source_outputs[source_port]
+                        val_preview = f"{val:.4f}" if isinstance(val, (int, float)) and not isinstance(val, bool) else str(val)[:50]
+                        logger.info(f"[INPUT] Node {node_id}: {target_port} <- {source_port} = {val_preview}")
                 # Fall back to common output names
                 elif 'value' in source_outputs:
                     inputs[target_port] = source_outputs['value']
+                    if self.debug:
+                        logger.info(f"[INPUT] Node {node_id}: {target_port} <- 'value' (fallback)")
                 elif 'result' in source_outputs:
                     inputs[target_port] = source_outputs['result']
+                    if self.debug:
+                        logger.info(f"[INPUT] Node {node_id}: {target_port} <- 'result' (fallback)")
                 elif 'signal' in source_outputs:
                     inputs[target_port] = source_outputs['signal']
+                    if self.debug:
+                        logger.info(f"[INPUT] Node {node_id}: {target_port} <- 'signal' (fallback)")
                 # For price inputs, check multiple names
                 elif target_port in ['price', 'prices', 'input'] and 'close' in source_outputs:
                     inputs[target_port] = source_outputs['close']
+                    if self.debug:
+                        logger.info(f"[INPUT] Node {node_id}: {target_port} <- 'close' (price fallback)")
+                else:
+                    if self.debug:
+                        logger.warning(f"[INPUT] Node {node_id}: No match for port '{source_port}' from node {source_id}")
         
         return inputs
     
@@ -401,16 +431,33 @@ class UnifiedStrategyExecutor:
         volumes: List[float]
     ) -> Optional[float]:
         """Calculate Volume Weighted Average Price."""
-        if not prices or not volumes or len(prices) != len(volumes):
+        if not prices or not volumes:
+            if self.debug:
+                logger.warning(f"[VWAP] Missing data: prices={len(prices) if prices else 0}, volumes={len(volumes) if volumes else 0}")
             return None
+        
+        # Handle length mismatch by using the shorter list
+        min_len = min(len(prices), len(volumes))
+        if min_len == 0:
+            return None
+            
+        prices = prices[-min_len:]
+        volumes = volumes[-min_len:]
         
         cumulative_pv = sum(p * v for p, v in zip(prices, volumes))
         cumulative_vol = sum(volumes)
         
         if cumulative_vol == 0:
+            if self.debug:
+                logger.warning(f"[VWAP] Zero cumulative volume")
             return None
         
-        return cumulative_pv / cumulative_vol
+        vwap = cumulative_pv / cumulative_vol
+        
+        if self.debug:
+            logger.info(f"[VWAP] Calculated VWAP={vwap:.4f} from {min_len} bars, total_volume={cumulative_vol:,.0f}")
+        
+        return vwap
     
     def _calculate_volume_spike(
         self,
@@ -424,17 +471,23 @@ class UnifiedStrategyExecutor:
         Returns:
             Tuple of (is_spike, ratio)
         """
-        if not volumes or len(volumes) < period:
+        if not volumes or len(volumes) < period + 1:
+            logger.debug(f"[VOLUME_SPIKE] Insufficient data: {len(volumes) if volumes else 0} bars, need {period + 1}")
             return False, 1.0
         
-        avg_vol = sum(volumes[-period-1:-1]) / period
+        # Get the previous 'period' bars (excluding current bar) for average
+        prev_volumes = volumes[-(period + 1):-1]
+        avg_vol = sum(prev_volumes) / len(prev_volumes) if prev_volumes else 0
         current_vol = volumes[-1]
         
         if avg_vol == 0:
+            logger.debug(f"[VOLUME_SPIKE] avg_vol is 0, current_vol={current_vol}")
             return False, 1.0
         
         ratio = current_vol / avg_vol
         is_spike = ratio > multiplier
+        
+        logger.debug(f"[VOLUME_SPIKE] current={current_vol:,.0f}, avg={avg_vol:,.0f}, ratio={ratio:.2f}x, spike={is_spike}")
         
         return is_spike, ratio
     
@@ -478,6 +531,42 @@ class UnifiedStrategyExecutor:
         atr = sum(true_ranges[-period:]) / period
         return atr
     
+    def _calculate_obv(
+        self,
+        closes: List[float],
+        volumes: List[int]
+    ) -> Optional[float]:
+        """
+        Calculate On-Balance Volume.
+        
+        Args:
+            closes: List of close prices
+            volumes: List of volumes
+            
+        Returns:
+            OBV value or None if insufficient data
+        """
+        if not closes or not volumes:
+            return None
+        if len(closes) < 2 or len(volumes) < 2:
+            return None
+        
+        # Ensure same length
+        min_len = min(len(closes), len(volumes))
+        closes = closes[-min_len:]
+        volumes = volumes[-min_len:]
+        
+        # Calculate OBV
+        obv = 0
+        for i in range(1, len(closes)):
+            if closes[i] > closes[i-1]:
+                obv += volumes[i]
+            elif closes[i] < closes[i-1]:
+                obv -= volumes[i]
+            # If equal, OBV unchanged
+        
+        return float(obv)
+    
     def _calculate_stochastic(
         self,
         highs: List[float],
@@ -500,11 +589,15 @@ class UnifiedStrategyExecutor:
             Dict with 'k' and 'd' values or None if insufficient data
         """
         if not highs or not lows or not closes:
+            if self.debug:
+                logger.warning(f"[STOCH] Missing data: highs={len(highs) if highs else 0}, lows={len(lows) if lows else 0}, closes={len(closes) if closes else 0}")
             return None
         if len(highs) < k_period or len(lows) < k_period or len(closes) < k_period:
+            if self.debug:
+                logger.warning(f"[STOCH] Insufficient data: have {min(len(highs), len(lows), len(closes))}, need {k_period}")
             return None
         
-        # Calculate %K
+        # Calculate %K for recent period
         recent_highs = highs[-k_period:]
         recent_lows = lows[-k_period:]
         current_close = closes[-1]
@@ -512,14 +605,40 @@ class UnifiedStrategyExecutor:
         highest_high = max(recent_highs)
         lowest_low = min(recent_lows)
         
+        if self.debug:
+            logger.info(f"[STOCH] highest_high={highest_high:.2f}, lowest_low={lowest_low:.2f}, close={current_close:.2f}")
+        
         if highest_high == lowest_low:
-            k_value = 50.0  # Neutral when no range
+            # No price range in period - return 50 (neutral) instead of 0
+            k_value = 50.0
+            if self.debug:
+                logger.info(f"[STOCH] No price range (high=low), returning neutral 50")
         else:
             k_value = ((current_close - lowest_low) / (highest_high - lowest_low)) * 100.0
         
-        # Calculate %D (SMA of %K)
-        # For simplicity, we'll just return K; proper %D would need K history
-        d_value = k_value  # Simplified - would need to track K values for proper SMA
+        # Calculate %K values for d_period to compute proper %D
+        k_values = []
+        for i in range(max(k_period, d_period), len(closes) + 1):
+            period_highs = highs[i-k_period:i]
+            period_lows = lows[i-k_period:i]
+            period_close = closes[i-1]
+            
+            hh = max(period_highs)
+            ll = min(period_lows)
+            
+            if hh == ll:
+                k_values.append(50.0)
+            else:
+                k_values.append(((period_close - ll) / (hh - ll)) * 100.0)
+        
+        # Calculate %D as SMA of last d_period %K values
+        if len(k_values) >= d_period:
+            d_value = sum(k_values[-d_period:]) / d_period
+        else:
+            d_value = k_value  # Fallback to current K
+        
+        if self.debug:
+            logger.info(f"[STOCH] Final k={k_value:.2f}, d={d_value:.2f}")
         
         return {'k': k_value, 'd': d_value}
     
@@ -795,22 +914,33 @@ class UnifiedStrategyExecutor:
             
             is_spike, ratio = self._calculate_volume_spike(volume_history, period, multiplier)
             
+            # Calculate current and average for display
+            current_vol = volume_history[-1] if volume_history else 0
+            prev_volumes = volume_history[-(period + 1):-1] if len(volume_history) >= period + 1 else []
+            avg_vol = sum(prev_volumes) / len(prev_volumes) if prev_volumes else 0
+            
             outputs = {
                 'spike': is_spike,
                 'is_spike': is_spike,
                 'signal': is_spike,
                 'result': is_spike,
                 'value': is_spike,
-                'ratio': ratio
+                'ratio': ratio,
+                'current_volume': current_vol,
+                'avg_volume': avg_vol
             }
             
             if self.debug:
-                logger.info(f"[EXEC] Node {node_id} (volume_spike): spike={is_spike}, ratio={ratio:.2f}")
+                logger.info(f"[EXEC] Node {node_id} (volume_spike): spike={is_spike}, ratio={ratio:.2f}x, current={current_vol:,.0f}, avg={avg_vol:,.0f}")
         
         # ═══════════════════════════════════════════════════════════════════
         # COMPARE NODE - Compares two numeric values
         # ═══════════════════════════════════════════════════════════════════
         elif node_type == 'compare':
+            # Debug: Log all available inputs
+            if self.debug:
+                logger.info(f"[EXEC] Node {node_id} (compare): Available inputs = {inputs}")
+            
             # Try to find values from inputs - be flexible about port names
             a_val = inputs.get('a') or inputs.get('input') or inputs.get('value')
             b_val = inputs.get('b')
@@ -842,13 +972,13 @@ class UnifiedStrategyExecutor:
                     return val[-1] if len(val) > 0 else None
                 return val
             
-            a_val = to_scalar(a_val)
-            b_val = to_scalar(b_val)
+            a_scalar = to_scalar(a_val)
+            b_scalar = to_scalar(b_val)
             
-            if a_val is not None and b_val is not None:
+            if a_scalar is not None and b_scalar is not None:
                 try:
-                    a_num = float(a_val) if not isinstance(a_val, bool) else (1.0 if a_val else 0.0)
-                    b_num = float(b_val) if not isinstance(b_val, bool) else (1.0 if b_val else 0.0)
+                    a_num = float(a_scalar) if not isinstance(a_scalar, bool) else (1.0 if a_scalar else 0.0)
+                    b_num = float(b_scalar) if not isinstance(b_scalar, bool) else (1.0 if b_scalar else 0.0)
                     
                     if operator == '>':
                         result = a_num > b_num
@@ -865,19 +995,26 @@ class UnifiedStrategyExecutor:
                     else:
                         result = False
                     
-                    outputs = {'result': result, 'value': result}
+                    # Include a, b, operator in outputs for UI display
+                    outputs = {
+                        'result': result, 
+                        'value': result,
+                        'a': a_num,
+                        'b': b_num,
+                        'operator': operator
+                    }
                     
                     if self.debug:
                         logger.info(f"[EXEC] Node {node_id} (compare): {a_num:.4f} {operator} {b_num:.4f} = {result}")
                         
                 except (ValueError, TypeError) as e:
-                    outputs = {'result': False, 'value': False}
+                    outputs = {'result': False, 'value': False, 'a': a_scalar, 'b': b_scalar, 'operator': operator}
                     if self.debug:
                         logger.warning(f"[EXEC] Node {node_id} (compare): Error - {e}")
             else:
-                outputs = {'result': False, 'value': False}
+                outputs = {'result': False, 'value': False, 'a': a_scalar, 'b': b_scalar, 'operator': operator}
                 if self.debug:
-                    logger.warning(f"[EXEC] Node {node_id} (compare): Missing inputs - a={a_val}, b={b_val}, available_ports={list(inputs.keys())}")
+                    logger.warning(f"[EXEC] Node {node_id} (compare): Missing inputs - a={a_scalar}, b={b_scalar}, available_ports={list(inputs.keys())}")
         
         # ═══════════════════════════════════════════════════════════════════
         # THRESHOLD NODE - Compares single value against threshold
@@ -1156,6 +1293,23 @@ class UnifiedStrategyExecutor:
                 outputs = {'atr': None, 'value': None}
         
         # ═══════════════════════════════════════════════════════════════════
+        # OBV (ON-BALANCE VOLUME) INDICATOR
+        # ═══════════════════════════════════════════════════════════════════
+        elif node_type == 'obv':
+            obv_value = self._calculate_obv(close_history, volume_history)
+            
+            if obv_value is not None:
+                outputs = {
+                    'obv': obv_value,
+                    'value': obv_value
+                }
+                
+                if self.debug:
+                    logger.info(f"[EXEC] Node {node_id} (obv): value={obv_value:,.0f}")
+            else:
+                outputs = {'obv': None, 'value': None}
+        
+        # ═══════════════════════════════════════════════════════════════════
         # STOCHASTIC INDICATOR
         # ═══════════════════════════════════════════════════════════════════
         elif node_type == 'stochastic':
@@ -1175,6 +1329,7 @@ class UnifiedStrategyExecutor:
                 outputs = {
                     'k': k_value,
                     'd': d_value,
+                    'stoch': k_value,  # For blockDefs.js port name
                     'stoch_k': k_value,
                     'stoch_d': d_value,
                     'value': k_value,
@@ -1186,7 +1341,7 @@ class UnifiedStrategyExecutor:
                 if self.debug:
                     logger.info(f"[EXEC] Node {node_id} (stochastic): k={k_value:.2f}, d={d_value:.2f}, oversold={is_oversold}, overbought={is_overbought}")
             else:
-                outputs = {'k': None, 'd': None, 'value': None, 'oversold': False, 'overbought': False, 'signal': False}
+                outputs = {'k': None, 'd': None, 'stoch': None, 'value': None, 'oversold': False, 'overbought': False, 'signal': False}
         
         # ═══════════════════════════════════════════════════════════════════
         # SUPPORT/RESISTANCE INDICATOR
@@ -1257,17 +1412,27 @@ class UnifiedStrategyExecutor:
     
     def _get_output_node_value(self) -> Optional[bool]:
         """Get the boolean value from the OUTPUT or SIGNAL node."""
-        # First check for explicit signal nodes
+        # First check for explicit signal nodes - find the one that fired
+        fired_signal_node = None
         for node_id, node in self.nodes.items():
             if node['type'] == 'signal':
                 outputs = self.node_outputs.get(node_id, {})
                 result = outputs.get('result')
                 if self.debug:
                     logger.info(f"[OUTPUT] Found signal node {node_id}: outputs={outputs}, result={result}")
-                if result is not None:
-                    return result
+                # Check if this signal node actually fired (result is True)
+                if result is True:
+                    fired_signal_node = node_id
+                    # Store the signal type for direction inference
+                    params = node['params']
+                    signal_type = params.get('type', params.get('direction', params.get('action', 'BUY')))
+                    self.signal_context['signal_fires'] = True
+                    self.signal_context['signal_type'] = signal_type.upper()
+                    if self.debug:
+                        logger.info(f"[OUTPUT] Signal node {node_id} FIRED with type={signal_type}")
+                    return True  # Signal node fired
         
-        # Then check for output nodes
+        # If no signal nodes fired, check for output nodes
         for node_id, node in self.nodes.items():
             if node['type'] == 'output':
                 outputs = self.node_outputs.get(node_id, {})
@@ -1275,7 +1440,8 @@ class UnifiedStrategyExecutor:
                 if self.debug:
                     logger.info(f"[OUTPUT] Found output node {node_id}: outputs={outputs}, result={result}")
                 # Return the result directly - don't use 'or' chaining which hides False values
-                return result
+                if result is True:
+                    return result
         
         # If no output/signal nodes, check if any terminal node (no outgoing connections) has a truthy result
         terminal_nodes = self._find_terminal_nodes()

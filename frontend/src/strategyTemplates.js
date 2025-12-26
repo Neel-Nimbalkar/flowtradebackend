@@ -77,28 +77,35 @@ const strategyTemplates = {
   // ═══════════════════════════════════════════════════════════════════════════
   'breakout': {
     name: 'Breakout Trading',
-    desc: 'Bollinger Band breakout with volume confirmation',
+    desc: 'Bollinger Band breakout with volume confirmation (entry + exit)',
     icon: 'arrow-up-right',
     timeframes: ['1m', '5m'],
     tags: ['breakout', 'bollinger', 'volume'],
     nodes: [
       { id: 1, type: 'input', x: 80, y: 150, title: 'Price Input', configValues: { symbol: 'SPY', timeframe: '5Min', days: 1 } },
       { id: 2, type: 'volume_history', x: 80, y: 300, title: 'Volume Data', configValues: {} },
-      { id: 3, type: 'bollinger', x: 280, y: 120, title: 'Bollinger Bands', configValues: { period: 20, num_std: 2, source: 'close', output: 'upper' } },
-      { id: 4, type: 'volume_spike', x: 280, y: 300, title: 'Volume Spike', configValues: { period: 20, multiplier: 2.0 } },
-      { id: 5, type: 'compare', x: 480, y: 150, title: 'Price > Upper BB', configValues: { operator: '>' } },
-      { id: 6, type: 'and', x: 680, y: 200, title: 'Breakout Confirm', configValues: {} },
-      { id: 7, type: 'output', x: 880, y: 200, title: 'Signal Output', configValues: {} },
-      { id: 8, type: 'note', x: 80, y: 450, title: 'Strategy Notes', configValues: { content: 'BREAKOUT TRADING\n\nEntry: Price closes above upper Bollinger Band with volume spike\nExit: Measured move target or failed continuation (close back inside bands)\nRisk: Stop below the breakout candle low\n\nKey: Wait for candle CLOSE above resistance, not just a wick' } }
+      { id: 3, type: 'bollinger', x: 280, y: 80, title: 'BB Upper', configValues: { period: 20, num_std: 2, source: 'close', output: 'upper' } },
+      { id: 4, type: 'bollinger', x: 280, y: 180, title: 'BB Lower', configValues: { period: 20, num_std: 2, source: 'close', output: 'lower' } },
+      { id: 5, type: 'volume_spike', x: 280, y: 300, title: 'Volume Spike', configValues: { period: 20, multiplier: 1.5 } },
+      { id: 6, type: 'compare', x: 480, y: 80, title: 'Price > Upper BB', configValues: { operator: '>' } },
+      { id: 7, type: 'compare', x: 480, y: 180, title: 'Price < Lower BB', configValues: { operator: '<' } },
+      { id: 8, type: 'and', x: 680, y: 100, title: 'Breakout UP', configValues: {} },
+      { id: 9, type: 'signal', x: 880, y: 100, title: 'BUY Signal', configValues: { type: 'BUY' } },
+      { id: 10, type: 'signal', x: 880, y: 200, title: 'SELL Signal', configValues: { type: 'SELL' } },
+      { id: 11, type: 'note', x: 80, y: 450, title: 'Strategy Notes', configValues: { content: 'BREAKOUT TRADING\n\nBUY: Price closes above upper BB with volume spike (1.5x avg)\nSELL: Price closes below lower BB (exit/reversal)\n\nRisk: Use stop-loss below entry candle low\nKey: Wait for candle CLOSE above resistance, not just a wick' } }
     ],
     connections: [
       { id: 'c1', from: { nodeId: 1, port: 'prices' }, to: { nodeId: 3, port: 'prices' } },
-      { id: 'c2', from: { nodeId: 2, port: 'volumes' }, to: { nodeId: 4, port: 'volumes' } },
-      { id: 'c3', from: { nodeId: 1, port: 'prices' }, to: { nodeId: 5, port: 'a' } },
-      { id: 'c4', from: { nodeId: 3, port: 'upper' }, to: { nodeId: 5, port: 'b' } },
-      { id: 'c5', from: { nodeId: 5, port: 'result' }, to: { nodeId: 6, port: 'a' } },
-      { id: 'c6', from: { nodeId: 4, port: 'spike' }, to: { nodeId: 6, port: 'b' } },
-      { id: 'c7', from: { nodeId: 6, port: 'result' }, to: { nodeId: 7, port: 'signal' } }
+      { id: 'c2', from: { nodeId: 1, port: 'prices' }, to: { nodeId: 4, port: 'prices' } },
+      { id: 'c3', from: { nodeId: 2, port: 'volumes' }, to: { nodeId: 5, port: 'volumes' } },
+      { id: 'c4', from: { nodeId: 1, port: 'prices' }, to: { nodeId: 6, port: 'a' } },
+      { id: 'c5', from: { nodeId: 3, port: 'upper' }, to: { nodeId: 6, port: 'b' } },
+      { id: 'c6', from: { nodeId: 1, port: 'prices' }, to: { nodeId: 7, port: 'a' } },
+      { id: 'c7', from: { nodeId: 4, port: 'lower' }, to: { nodeId: 7, port: 'b' } },
+      { id: 'c8', from: { nodeId: 6, port: 'result' }, to: { nodeId: 8, port: 'a' } },
+      { id: 'c9', from: { nodeId: 5, port: 'spike' }, to: { nodeId: 8, port: 'b' } },
+      { id: 'c10', from: { nodeId: 8, port: 'result' }, to: { nodeId: 9, port: 'signal' } },
+      { id: 'c11', from: { nodeId: 7, port: 'result' }, to: { nodeId: 10, port: 'signal' } }
     ]
   },
 
@@ -256,6 +263,7 @@ const strategyTemplates = {
       { id: 5, type: 'ema', x: 480, y: 80, title: 'Fast EMA (9)', configValues: { period: 9, source: 'close', output: 'value' } },
       { id: 6, type: 'compare', x: 480, y: 200, title: 'Above VWAP', configValues: { operator: '>' } },
       { id: 7, type: 'and', x: 680, y: 180, title: 'Gap Continuation', configValues: {} },
+      { id: 11, type: 'compare', x: 680, y: 80, title: 'Price > EMA', configValues: { operator: '>' } },
       { id: 8, type: 'and', x: 880, y: 240, title: 'Final Signal', configValues: {} },
       { id: 9, type: 'output', x: 1080, y: 240, title: 'Signal Output', configValues: {} },
       { id: 10, type: 'note', x: 80, y: 460, title: 'Strategy Notes', configValues: { content: 'GAP AND GO\n\nTiming: First 30-60 minutes of market open\nSetup: Gap up + high pre-market volume\nEntry: Break and hold above pre-market high / VWAP\nExit: Momentum stall or target hit\nRisk: Stop below VWAP or opening range low\n\nKey: Focus on stocks with catalyst (news, earnings)' } }
@@ -270,7 +278,9 @@ const strategyTemplates = {
       { id: 'c7', from: { nodeId: 6, port: 'result' }, to: { nodeId: 7, port: 'a' } },
       { id: 'c8', from: { nodeId: 3, port: 'spike' }, to: { nodeId: 7, port: 'b' } },
       { id: 'c9', from: { nodeId: 7, port: 'result' }, to: { nodeId: 8, port: 'a' } },
-      { id: 'c10', from: { nodeId: 5, port: 'signal' }, to: { nodeId: 8, port: 'b' } },
+      { id: 'c12', from: { nodeId: 1, port: 'prices' }, to: { nodeId: 11, port: 'a' } },
+      { id: 'c13', from: { nodeId: 5, port: 'ema' }, to: { nodeId: 11, port: 'b' } },
+      { id: 'c10', from: { nodeId: 11, port: 'result' }, to: { nodeId: 8, port: 'b' } },
       { id: 'c11', from: { nodeId: 8, port: 'result' }, to: { nodeId: 9, port: 'signal' } }
     ]
   },
@@ -289,6 +299,7 @@ const strategyTemplates = {
       { id: 2, type: 'volume_history', x: 80, y: 300, title: 'Volume Data', configValues: {} },
       { id: 3, type: 'volume_spike', x: 280, y: 300, title: 'Volume Surge', configValues: { period: 20, multiplier: 3.0 } },
       { id: 4, type: 'macd', x: 280, y: 150, title: 'MACD Momentum', configValues: { fast: 12, slow: 26, signal: 9, source: 'close', output: 'histogram' } },
+      { id: 8, type: 'compare', x: 380, y: 150, title: 'MACD > 0', configValues: { operator: '>', threshold: 0 } },
       { id: 5, type: 'and', x: 480, y: 220, title: 'News Signal', configValues: {} },
       { id: 6, type: 'output', x: 680, y: 220, title: 'Signal Output', configValues: {} },
       { id: 7, type: 'note', x: 80, y: 460, title: 'Strategy Notes', configValues: { content: 'NEWS MOMENTUM\n\nTrigger: Relative volume surge (3x+ normal)\nEntry: Direction of strong candles post-news (MACD bullish)\nExit: Momentum stall (MACD histogram shrinking)\n\nKey: Quick reaction required, use hotkeys\nCaution: Wide spreads during news events' } }
@@ -297,7 +308,8 @@ const strategyTemplates = {
       { id: 'c1', from: { nodeId: 2, port: 'volumes' }, to: { nodeId: 3, port: 'volumes' } },
       { id: 'c2', from: { nodeId: 1, port: 'prices' }, to: { nodeId: 4, port: 'prices' } },
       { id: 'c3', from: { nodeId: 3, port: 'spike' }, to: { nodeId: 5, port: 'a' } },
-      { id: 'c4', from: { nodeId: 4, port: 'signal' }, to: { nodeId: 5, port: 'b' } },
+      { id: 'c6', from: { nodeId: 4, port: 'macd' }, to: { nodeId: 8, port: 'a' } },
+      { id: 'c4', from: { nodeId: 8, port: 'result' }, to: { nodeId: 5, port: 'b' } },
       { id: 'c5', from: { nodeId: 5, port: 'result' }, to: { nodeId: 6, port: 'signal' } }
     ]
   },
@@ -355,6 +367,7 @@ const strategyTemplates = {
       { id: 2, type: 'rsi', x: 280, y: 120, title: 'RSI', configValues: { period: 14, source: 'close', overbought: 70, oversold: 30 } },
       { id: 3, type: 'stochastic', x: 280, y: 260, title: 'Stochastic', configValues: { period: 14, smooth_k: 3, smooth_d: 3, source: 'close', overbought: 80, oversold: 20 } },
       { id: 4, type: 'macd', x: 480, y: 80, title: 'MACD Confirm', configValues: { fast: 12, slow: 26, signal: 9, source: 'close', output: 'histogram' } },
+      { id: 9, type: 'compare', x: 580, y: 80, title: 'MACD > 0', configValues: { operator: '>', threshold: 0 } },
       { id: 5, type: 'and', x: 480, y: 200, title: 'RSI + Stoch', configValues: {} },
       { id: 6, type: 'and', x: 680, y: 150, title: 'Divergence Signal', configValues: {} },
       { id: 7, type: 'output', x: 880, y: 150, title: 'Signal Output', configValues: {} },
@@ -367,7 +380,8 @@ const strategyTemplates = {
       { id: 'c4', from: { nodeId: 2, port: 'signal' }, to: { nodeId: 5, port: 'a' } },
       { id: 'c5', from: { nodeId: 3, port: 'signal' }, to: { nodeId: 5, port: 'b' } },
       { id: 'c6', from: { nodeId: 5, port: 'result' }, to: { nodeId: 6, port: 'a' } },
-      { id: 'c7', from: { nodeId: 4, port: 'signal' }, to: { nodeId: 6, port: 'b' } },
+      { id: 'c9', from: { nodeId: 4, port: 'macd' }, to: { nodeId: 9, port: 'a' } },
+      { id: 'c7', from: { nodeId: 9, port: 'result' }, to: { nodeId: 6, port: 'b' } },
       { id: 'c8', from: { nodeId: 6, port: 'result' }, to: { nodeId: 7, port: 'signal' } }
     ]
   },

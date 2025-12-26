@@ -249,6 +249,33 @@ const ResultsPanel = ({ data = {}, open = true, onClose = () => {}, onRerun = ()
             {(data?.blocks || []).map((b, idx) => {
               const expanded = expandedBlocks.has(b.id);
               const status = b.status || 'skipped';
+              // Format params for display - summarize large arrays
+              const formatParams = (params) => {
+                if (!params || typeof params !== 'object') return params;
+                const formatted = {};
+                const arrayKeys = ['prices', 'volumes', 'highs', 'lows', 'opens', 'closes', 'price_series', 'volume_history', 'close_history', 'high_history', 'low_history', 'open_history'];
+                for (const [key, val] of Object.entries(params)) {
+                  if (Array.isArray(val) && (arrayKeys.includes(key) || val.length > 10)) {
+                    const last = val.length > 0 ? val[val.length - 1] : null;
+                    const lastVal = typeof last === 'number' ? last.toFixed(2) : last;
+                    formatted[key] = `[${val.length} values${last !== null ? `, last: ${lastVal}` : ''}]`;
+                  } else {
+                    formatted[key] = val;
+                  }
+                }
+                return formatted;
+              };
+              const displayParams = formatParams(b.params || b.inputs || {});
+              // Extract key values to show inline
+              const keyValues = [];
+              const rawParams = b.params || b.inputs || {};
+              if (rawParams.price !== undefined) keyValues.push({ label: 'Price', value: '$' + Number(rawParams.price).toFixed(2) });
+              else if (rawParams.close !== undefined) keyValues.push({ label: 'Close', value: '$' + Number(rawParams.close).toFixed(2) });
+              if (rawParams.rsi !== undefined) keyValues.push({ label: 'RSI', value: Number(rawParams.rsi).toFixed(2) });
+              if (rawParams.ema !== undefined) keyValues.push({ label: 'EMA', value: Number(rawParams.ema).toFixed(2) });
+              if (rawParams.macd !== undefined) keyValues.push({ label: 'MACD', value: Number(rawParams.macd).toFixed(4) });
+              if (rawParams.vwap !== undefined) keyValues.push({ label: 'VWAP', value: rawParams.vwap !== null ? '$' + Number(rawParams.vwap).toFixed(2) : 'null' });
+              if (rawParams.condition_met !== undefined) keyValues.push({ label: 'Met', value: rawParams.condition_met ? '✓' : '✗' });
               return (
                 <div key={idx} className={`block-details ${status}`}> 
                   <div className="block-header" onClick={() => toggleBlock(b.id)}>
@@ -258,8 +285,24 @@ const ResultsPanel = ({ data = {}, open = true, onClose = () => {}, onRerun = ()
                     <button className="block-expand">{expanded ? '▾' : '▸'}</button>
                   </div>
                   <div className="block-message">{b.message}</div>
-                  {/* Always show params/logs/sparkline for better visibility */}
-                  <div className="block-params"><strong>Params</strong><pre>{JSON.stringify(b.params || b.inputs || {}, null, 2)}</pre></div>
+                  {/* Key values shown inline for quick scanning */}
+                  {keyValues.length > 0 && (
+                    <div className="block-key-values" style={{ display: 'flex', gap: 16, flexWrap: 'wrap', padding: '6px 0', borderBottom: '1px solid #2a2e39' }}>
+                      {keyValues.map((kv, i) => (
+                        <span key={i} style={{ fontSize: 12 }}>
+                          <span style={{ color: '#787b86' }}>{kv.label}: </span>
+                          <span style={{ color: '#d1d4dc', fontWeight: 500 }}>{kv.value}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {/* Collapsible full params - only show when expanded */}
+                  {expanded && (
+                    <div className="block-params" style={{ maxHeight: 200, overflow: 'auto' }}>
+                      <strong>Params</strong>
+                      <pre style={{ fontSize: 11 }}>{JSON.stringify(displayParams, null, 2)}</pre>
+                    </div>
+                  )}
                   <div className="block-logs"><strong>Logs</strong><div>{(b.logs && b.logs.join('\n')) || b.output || 'No logs available'}</div></div>
                   {b.price_series && <div className="block-sparkline"><strong>Price Sparkline</strong><Sparkline series={b.price_series} width={200} height={36} /></div>}
                 </div>

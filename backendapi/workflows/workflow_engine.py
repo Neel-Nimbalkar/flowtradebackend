@@ -538,6 +538,12 @@ class ConditionEvaluator:
             return passed, f"Price ${close:.2f} {'<' if passed else '>='} VWAP ${vwap:.2f}"
         if cond in ['cross_up', 'cross_down']:
             return False, "VWAP cross detection requires previous bar (not implemented)"
+        if cond == 'near':
+            # Check if price is within threshold of VWAP (default 0.05%)
+            threshold_pct = float(params.get('threshold', params.get('near_threshold', 0.0005)))
+            pct_diff = abs(close - vwap) / vwap
+            near = pct_diff < threshold_pct
+            return near, f"Price ${close:.2f} {'near' if near else 'away from'} VWAP ${vwap:.2f} (diff={pct_diff*100:.3f}%)"
         if cond == 'any':
             near = abs(close - vwap) / vwap < 0.0005
             return near, f"Price ${close:.2f} {'near' if near else 'away from'} VWAP ${vwap:.2f}"
