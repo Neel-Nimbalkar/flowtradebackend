@@ -1825,16 +1825,16 @@ class UnifiedStrategyExecutor:
     def _get_output_node_value(self) -> Optional[bool]:
         """Get the boolean value from the OUTPUT or SIGNAL node."""
         # First check for explicit signal nodes - find the one that fired
-        fired_signal_node = None
+        has_signal_node = False
         for node_id, node in self.nodes.items():
             if node['type'] == 'signal':
+                has_signal_node = True
                 outputs = self.node_outputs.get(node_id, {})
                 result = outputs.get('result')
                 if self.debug:
                     logger.info(f"[OUTPUT] Found signal node {node_id}: outputs={outputs}, result={result}")
                 # Check if this signal node actually fired (result is True)
                 if result is True:
-                    fired_signal_node = node_id
                     # Store the signal type for direction inference
                     params = node['params']
                     signal_type = params.get('type', params.get('direction', params.get('action', 'BUY')))
@@ -1844,18 +1844,24 @@ class UnifiedStrategyExecutor:
                         logger.info(f"[OUTPUT] Signal node {node_id} FIRED with type={signal_type}")
                     return True  # Signal node fired
         
-        # If no signal nodes fired, check for output nodes
+        # If signal nodes exist but none fired, return False (explicit rejection)
+        if has_signal_node:
+            if self.debug:
+                logger.info(f"[OUTPUT] Signal node(s) exist but none fired - returning False")
+            return False
+        
+        # Check for output nodes - return the FIRST output node's result (whether True or False)
         for node_id, node in self.nodes.items():
             if node['type'] == 'output':
                 outputs = self.node_outputs.get(node_id, {})
                 result = outputs.get('result')
                 if self.debug:
                     logger.info(f"[OUTPUT] Found output node {node_id}: outputs={outputs}, result={result}")
-                # Return the result directly - don't use 'or' chaining which hides False values
-                if result is True:
-                    return result
+                # CRITICAL FIX: Return the result directly, even if False!
+                # This ensures output node False values are respected, not overridden by terminal nodes
+                return result is True  # Explicit bool conversion
         
-        # If no output/signal nodes, check if any terminal node (no outgoing connections) has a truthy result
+        # ONLY if no output/signal nodes exist, check terminal nodes as fallback
         terminal_nodes = self._find_terminal_nodes()
         if self.debug:
             logger.info(f"[OUTPUT] No output/signal nodes found, checking terminal nodes: {terminal_nodes}")
