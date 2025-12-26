@@ -1,0 +1,15 @@
+{
+  "job_id": "2ada8477-fa21-498e-8acb-986a741dcb93",
+  "status": "failed",
+  "created_at": "2025-11-26T01:56:28.006205Z",
+  "updated_at": "2025-11-26T01:56:28.911531Z",
+  "request": {
+    "days": 7,
+    "timeframe": "1Hour",
+    "symbol": "SPY",
+    "workflow": []
+  },
+  "progress": 0,
+  "result_path": null,
+  "error": "No bars returned for symbol/timeframe"
+}

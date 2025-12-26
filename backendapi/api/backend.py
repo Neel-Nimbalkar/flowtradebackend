@@ -1206,14 +1206,24 @@ def execute_workflow():
             from workflows.unified_executor import execute_unified_workflow
             
             # Build market_data with history for the unified executor
+            # IMPORTANT: Use 'prices' (not raw 'closes') to include current price if price_type='current'
+            # This ensures unified executor RSI matches the pre-calculated latest_data['rsi']
+            
+            # If prices has current_price appended (price_type='current'), we need to pad volume_history
+            # to match the length for VWAP calculation
+            volume_history_for_unified = volumes
+            if len(prices) > len(volumes) and volumes:
+                # Pad with the last volume value to match price array length
+                volume_history_for_unified = volumes + [volumes[-1]] * (len(prices) - len(volumes))
+            
             market_data_for_unified = {
                 'close': latest_price,
                 'open': opens[-1] if opens else latest_price,
                 'high': highs[-1] if highs else latest_price,
                 'low': lows[-1] if lows else latest_price,
                 'volume': volumes[-1] if volumes else 0,
-                'close_history': closes,  # Full price history
-                'volume_history': volumes,  # Full volume history
+                'close_history': prices,  # Use prices (includes current_price if applicable) for consistent RSI
+                'volume_history': volume_history_for_unified,  # Padded to match close_history length
                 'high_history': highs,
                 'low_history': lows
             }
@@ -1636,13 +1646,46 @@ def execute_workflow():
                             bar_data['sma'] = sma_vals[-1]
                     
                     # Evaluate strategy decision for this bar
-                    bar_result = workflow_engine.execute_workflow(workflow_blocks, bar_data)
-                    if bar_result.success and bar_result.final_decision:
-                        decision_lower = bar_result.final_decision.lower()
-                        if 'bullish' in decision_lower or 'long' in decision_lower or 'buy' in decision_lower:
-                            sentiment = 'bullish'
-                        elif 'bearish' in decision_lower or 'short' in decision_lower or 'sell' in decision_lower:
-                            sentiment = 'bearish'
+                    # ✅ FIX: Use unified executor (same as live signals) for proper block ordering
+                    if connections and len(connections) > 0:
+                        # Use unified executor with topological sorting
+                        from workflows.unified_executor import execute_unified_workflow
+                        
+                        # Build market_data with history up to this bar
+                        bar_market_data = {
+                            'close': closes[i],
+                            'open': opens[i],
+                            'high': highs[i],
+                            'low': lows[i],
+                            'volume': volumes[i],
+                            'close_history': closes[:i+1],
+                            'volume_history': volumes[:i+1],
+                            'high_history': highs[:i+1],
+                            'low_history': lows[:i+1]
+                        }
+                        
+                        bar_signal, _ = execute_unified_workflow(
+                            nodes=workflow_blocks,
+                            connections=connections,
+                            market_data=bar_market_data,
+                            debug=False  # Disable debug for performance
+                        )
+                        
+                        if bar_signal:
+                            bar_signal_lower = bar_signal.lower()
+                            if 'buy' in bar_signal_lower or 'long' in bar_signal_lower:
+                                sentiment = 'bullish'
+                            elif 'sell' in bar_signal_lower or 'short' in bar_signal_lower:
+                                sentiment = 'bearish'
+                    else:
+                        # Fallback to old engine if no connections (legacy workflows)
+                        bar_result = workflow_engine.execute_workflow(workflow_blocks, bar_data)
+                        if bar_result.success and bar_result.final_decision:
+                            decision_lower = bar_result.final_decision.lower()
+                            if 'bullish' in decision_lower or 'long' in decision_lower or 'buy' in decision_lower:
+                                sentiment = 'bullish'
+                            elif 'bearish' in decision_lower or 'short' in decision_lower or 'sell' in decision_lower:
+                                sentiment = 'bearish'
                 except Exception as bar_err:
                     print(f"⚠️ Error evaluating bar {i}: {bar_err}")
             
@@ -1883,6 +1926,9 @@ def _build_v2_response(symbol: str, timeframe: str, days: int, engine_resp: Dict
             print(f"[V2 LOGIC] block_id={block_id}, type={block_type}, checking node_outputs...")
             print(f"[V2 LOGIC]   str(block_id) in node_outputs: {str(block_id) in node_outputs if node_outputs else 'EMPTY'}")
         
+        # Debug for all blocks
+        print(f"[V2 DEBUG] Processing block_id={block_id}, type={block_type}, found_in_outputs={str(block_id) in node_outputs if node_outputs else False}")
+        
         if node_outputs and str(block_id) in node_outputs:
             unified_output = node_outputs[str(block_id)]
             
@@ -1934,13 +1980,84 @@ def _build_v2_response(symbol: str, timeframe: str, days: int, engine_resp: Dict
                 message = f"{a_val} {op} {b_val} = {result}"
                 block_data = {'condition_met': result, 'unified_output': unified_output}
             
-            # For indicators, include computed values
-            elif block_type in ['rsi', 'ema', 'sma', 'macd', 'bollinger', 'stochastic', 'vwap', 'obv', 'atr']:
+            # For indicators, include computed values AND generate proper message
+            elif block_type in ['rsi', 'ema', 'sma', 'macd', 'bollinger', 'stochastic', 'vwap', 'obv', 'atr', 'volume_spike', 'volspike']:
                 # Indicators pass if they computed a value
                 has_value = any(v is not None for k, v in unified_output.items() if k not in ['signal', 'result'])
                 if has_value:
                     status = 'passed'
                 block_data = {'condition_met': True, 'unified_output': unified_output, **unified_output}
+                
+                # Generate descriptive message from unified output
+                if block_type == 'ema':
+                    ema_val = unified_output.get('ema', unified_output.get('value'))
+                    above = unified_output.get('above', False)
+                    if ema_val is not None:
+                        message = f"EMA({ema_val:.2f}), Price {'above' if above else 'below'} EMA"
+                elif block_type == 'sma':
+                    sma_val = unified_output.get('sma', unified_output.get('value'))
+                    above = unified_output.get('above', False)
+                    if sma_val is not None:
+                        message = f"SMA({sma_val:.2f}), Price {'above' if above else 'below'} SMA"
+                elif block_type == 'rsi':
+                    rsi_val = unified_output.get('rsi', unified_output.get('value'))
+                    oversold = unified_output.get('oversold', False)
+                    overbought = unified_output.get('overbought', False)
+                    if rsi_val is not None:
+                        state = 'oversold' if oversold else ('overbought' if overbought else 'neutral')
+                        message = f"RSI = {rsi_val:.2f} ({state})"
+                elif block_type == 'macd':
+                    hist = unified_output.get('histogram', unified_output.get('value'))
+                    bullish = unified_output.get('bullish', False)
+                    if hist is not None:
+                        message = f"MACD histogram = {hist:.4f} ({'bullish' if bullish else 'bearish'})"
+                elif block_type == 'stochastic':
+                    stoch_val = unified_output.get('stoch', unified_output.get('k', unified_output.get('value')))
+                    oversold = unified_output.get('oversold', False)
+                    overbought = unified_output.get('overbought', False)
+                    if stoch_val is not None:
+                        state = 'oversold' if oversold else ('overbought' if overbought else 'neutral')
+                        message = f"Stochastic = {stoch_val:.2f} ({state})"
+                elif block_type == 'bollinger':
+                    upper = unified_output.get('upper')
+                    lower = unified_output.get('lower')
+                    middle = unified_output.get('middle')
+                    if upper is not None and lower is not None:
+                        message = f"Bollinger: upper={upper:.2f}, lower={lower:.2f}"
+                    elif middle is not None:
+                        message = f"Bollinger middle = {middle:.2f}"
+                elif block_type == 'vwap':
+                    vwap_val = unified_output.get('vwap', unified_output.get('value'))
+                    above = unified_output.get('above', False)
+                    if vwap_val is not None:
+                        message = f"VWAP = ${vwap_val:.2f}, price {'above' if above else 'below'}"
+                    else:
+                        message = "VWAP calculation pending"
+                elif block_type == 'obv':
+                    obv_val = unified_output.get('obv', unified_output.get('value'))
+                    if obv_val is not None:
+                        message = f"OBV = {obv_val:,.0f}"
+                elif block_type == 'atr':
+                    atr_val = unified_output.get('atr', unified_output.get('value'))
+                    if atr_val is not None:
+                        message = f"ATR = {atr_val:.4f}"
+                elif block_type in ['volume_spike', 'volspike']:
+                    is_spike = unified_output.get('spike', unified_output.get('is_spike', False))
+                    ratio = unified_output.get('ratio', unified_output.get('volume_ratio', 0))
+                    message = f"Volume spike = {is_spike}, ratio = {ratio:.2f}x" if ratio else f"Volume spike = {is_spike}"
+                    
+            # For data source blocks (input, volume_history), auto-pass with descriptive message
+            elif block_type in ['input', 'volume_history', 'price_history']:
+                status = 'passed'
+                block_data = {'condition_met': True, 'unified_output': unified_output, **unified_output}
+                if block_type == 'input':
+                    price = unified_output.get('price', unified_output.get('close', 0))
+                    message = f"Input: price = ${price:.2f}" if price else "Input block (data source)"
+                elif block_type == 'volume_history':
+                    vol = unified_output.get('volume', 0)
+                    message = f"Volume history: current = {vol:,.0f}" if vol else "Volume history (data source)"
+                else:
+                    message = f"Data source block '{block_type}'"
         
         blocks_v2.append({
             'id': block_id,

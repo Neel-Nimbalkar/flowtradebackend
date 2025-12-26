@@ -1,0 +1,42 @@
+{
+  "job_id": "7bd983c2-e6be-4b12-b2f3-9d602c214efe",
+  "status": "failed",
+  "created_at": "2025-11-28T21:22:14.063718Z",
+  "updated_at": "2025-11-28T21:22:14.401093Z",
+  "request": {
+    "symbol": "SPY",
+    "timeframe": "1Hour",
+    "days": 90,
+    "workflow": [
+      {
+        "id": 1,
+        "type": "alpaca_config",
+        "params": {
+          "keyId": "PKUGIT3UWBKBIFEJKSATXZ6CQD",
+          "secretKey": "EzjEz5kWTSogRQvzcUfF79d2UxzozKVqDMS5gRSjsE3u",
+          "symbol": "NVDA",
+          "timeframe": "1Min"
+        }
+      },
+      {
+        "id": 2,
+        "type": "input",
+        "params": {}
+      },
+      {
+        "id": 3,
+        "type": "rsi",
+        "params": {}
+      },
+      {
+        "id": 5,
+        "type": "signal",
+        "params": {}
+      }
+    ],
+    "execution": {}
+  },
+  "progress": 0,
+  "result_path": null,
+  "error": "No bars returned for symbol/timeframe"
+}

@@ -1,7 +1,7 @@
 # FlowGrid Trading - Complete System Workflow
 
 > **A percentage-based algorithmic trading platform with visual strategy builder, real-time signal generation, and comprehensive analytics.**
-
+cd "c:\Users\nimba\OneDrive\Desktop\FlowGrid Trading\backendapi\backendapi"; $env:PYTHONPATH="c:\Users\nimba\OneDrive\Desktop\FlowGrid Trading\backendapi\backendapi"; python -m api.backend
 ---
 
 ## 📖 Table of Contents
@@ -13,8 +13,11 @@
 5. [Architecture](#architecture)
 6. [Quick Start](#quick-start)
 7. [API Reference](#api-reference)
-cd backendapi
-python -m api.backend
+cd backendapi/backendapi
+$env:PYTHONPATH=$(pwd); python -m uvicorn api.backend:app --reload --host 0.0.0.0 --port 8000
+
+# Or on Windows PowerShell (one line):
+cd "c:\Users\nimba\OneDrive\Desktop\FlowGrid Trading\backendapi\backendapi"; $env:PYTHONPATH="c:\Users\nimba\OneDrive\Desktop\FlowGrid Trading\backendapi\backendapi"; python -m uvicorn api.backend:app --reload --host 0.0.0.0 --port 8000
 
 cd frontend
 npm run dev

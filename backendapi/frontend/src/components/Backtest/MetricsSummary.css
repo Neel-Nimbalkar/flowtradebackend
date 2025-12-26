@@ -1,0 +1,448 @@
+/* Enhanced Metrics Summary */
+.metrics-summary-enhanced {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Header Section */
+.summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, rgba(41, 98, 255, 0.1), rgba(139, 92, 246, 0.05));
+  border: 1px solid rgba(41, 98, 255, 0.2);
+  border-radius: 12px;
+  padding: 20px 24px;
+}
+
+.header-left h3 {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 8px;
+  color: var(--text-primary, #cfe8ff);
+}
+
+.strategy-info {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.symbol-badge, .timeframe-badge, .period-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.symbol-badge {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.timeframe-badge {
+  background: rgba(139, 92, 246, 0.2);
+  color: #a78bfa;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.period-badge {
+  background: rgba(107, 114, 128, 0.2);
+  color: #9ca3af;
+  border: 1px solid rgba(107, 114, 128, 0.3);
+}
+
+.performance-grade {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 20px;
+  border: 2px solid;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.grade-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--text-muted, #9aa6c6);
+  letter-spacing: 1px;
+}
+
+.grade-value {
+  font-size: 32px;
+  font-weight: 800;
+}
+
+/* KPI Section */
+.kpi-section {
+  margin-bottom: 8px;
+}
+
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.kpi-card {
+  background: var(--secondary-bg, #0d1117);
+  border: 1px solid var(--border, #2a2e39);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  transition: all 0.3s ease;
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  border-color: rgba(41, 98, 255, 0.3);
+}
+
+.kpi-card.primary.profit {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), transparent);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.kpi-card.primary.loss {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), transparent);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.kpi-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #3b82f6;
+  flex-shrink: 0;
+}
+
+.kpi-card.primary.loss .kpi-icon {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.kpi-icon.blue {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+.kpi-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.kpi-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kpi-label {
+  font-size: 12px;
+  color: var(--text-muted, #9aa6c6);
+  font-weight: 500;
+}
+
+.kpi-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary, #cfe8ff);
+}
+
+.kpi-change {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.kpi-change.up { color: #3b82f6; }
+.kpi-change.down { color: #ef4444; }
+
+.kpi-sub {
+  font-size: 12px;
+  color: var(--text-muted, #9aa6c6);
+}
+
+/* Metrics Grid Section */
+.metrics-grid-section {
+  background: var(--secondary-bg, #0d1117);
+  border: 1px solid var(--border, #2a2e39);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.metrics-grid-section h4 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 16px;
+  color: var(--text-primary, #cfe8ff);
+}
+
+.metrics-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.metric-card-new {
+  background: var(--card-bg, #161b22);
+  border: 1px solid var(--border, #2a2e39);
+  border-radius: 10px;
+  padding: 16px;
+  transition: all 0.2s ease;
+}
+
+.metric-card-new:hover {
+  border-color: rgba(41, 98, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+.metric-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.metric-title {
+  font-size: 13px;
+  color: var(--text-muted, #9aa6c6);
+  font-weight: 500;
+}
+
+.metric-badge {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.metric-badge.good {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+}
+
+.metric-badge.bad {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.metric-badge.neutral {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.metric-main {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.metric-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted, #9aa6c6);
+}
+
+.metric-details b {
+  font-weight: 600;
+}
+
+/* Trade Stats Section */
+.trade-stats-section {
+  background: var(--secondary-bg, #0d1117);
+  border: 1px solid var(--border, #2a2e39);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.trade-stats-section h4 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 20px;
+  color: var(--text-primary, #cfe8ff);
+}
+
+.stats-container {
+  display: flex;
+  gap: 24px;
+  align-items: stretch;
+}
+
+.stats-column {
+  flex: 1;
+  background: var(--card-bg, #161b22);
+  border-radius: 10px;
+  padding: 20px;
+  border: 1px solid var(--border, #2a2e39);
+}
+
+.stats-column.winners {
+  border-left: 3px solid #3b82f6;
+}
+
+.stats-column.losers {
+  border-left: 3px solid #ef4444;
+}
+
+.stats-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #cfe8ff);
+}
+
+.stats-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.stats-icon.win {
+  background: rgba(59, 130, 246, 0.2);
+  color: #3b82f6;
+}
+
+.stats-icon.loss {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.stats-number {
+  font-size: 42px;
+  font-weight: 800;
+  margin-bottom: 16px;
+}
+
+.stats-column.winners .stats-number { color: #3b82f6; }
+.stats-column.losers .stats-number { color: #ef4444; }
+
+.stats-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stats-breakdown .stat-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.stats-breakdown .stat-row span:first-child {
+  color: var(--text-muted, #9aa6c6);
+}
+
+.stats-breakdown .stat-row .win { color: #3b82f6; font-weight: 600; }
+.stats-breakdown .stat-row .loss { color: #ef4444; font-weight: 600; }
+
+.stats-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+}
+
+.divider-circle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--card-bg, #161b22);
+  border: 2px solid var(--border, #2a2e39);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted, #9aa6c6);
+}
+
+/* Quick Stats Bar */
+.quick-stats-bar {
+  display: flex;
+  background: var(--secondary-bg, #0d1117);
+  border: 1px solid var(--border, #2a2e39);
+  border-radius: 12px;
+  padding: 16px 24px;
+  gap: 32px;
+  justify-content: space-between;
+}
+
+.quick-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.quick-label {
+  font-size: 11px;
+  color: var(--text-muted, #9aa6c6);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.quick-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary, #cfe8ff);
+}
+
+/* Responsive Design */
+@media (max-width: 1400px) {
+  .kpi-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .metrics-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 1024px) {
+  .summary-header {
+    flex-direction: column;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .stats-container {
+    flex-direction: column;
+  }
+  .stats-divider {
+    transform: rotate(90deg);
+    padding: 16px 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .kpi-row,
+  .metrics-cards-grid {
+    grid-template-columns: 1fr;
+  }
+  .quick-stats-bar {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .quick-stat {
+    flex: 1;
+    min-width: 100px;
+  }
+}

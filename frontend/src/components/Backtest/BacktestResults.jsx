@@ -4,6 +4,7 @@ import MetricsSummary from './MetricsSummary';
 import TradesTable from './TradesTable';
 import EquityCurveChart from './EquityCurveChart';
 import PriceChart from './PriceChart';
+import TradingViewChart from './TradingViewChart';
 import DrawdownChart from './DrawdownChart';
 import StatsDistribution from './StatsDistribution';
 import AdvancedMetrics from './AdvancedMetrics';
@@ -19,6 +20,7 @@ const BacktestResults = ({ results }) => {
     { key: 'advanced', label: 'Advanced', icon: 'target' },
     { key: 'monthly', label: 'Monthly', icon: 'chart' },
     { key: 'equity', label: 'Equity Curve', icon: 'chart' },
+    { key: 'tradingview', label: 'TradingView', icon: 'bolt' },
     { key: 'price', label: 'Price Action', icon: 'bolt' },
     { key: 'drawdown', label: 'Drawdown', icon: 'drop' },
     { key: 'stats', label: 'Distribution', icon: 'search' }
@@ -89,6 +91,16 @@ const BacktestResults = ({ results }) => {
         {activeTab === 'advanced' && <AdvancedMetrics results={results} />}
         {activeTab === 'monthly' && <MonthlyReturns results={results} />}
         {activeTab === 'equity' && <EquityCurveChart data={results.equityCurve} />}
+        {activeTab === 'tradingview' && (
+          <TradingViewChart 
+            symbol={results.symbol || 'SPY'} 
+            timeframe={results.timeframe || '15Min'}
+            signals={results.signals}
+            trades={results.trades}
+            historicalData={results.historicalData}
+            theme="dark"
+          />
+        )}
         {activeTab === 'price' && <PriceChart historicalData={results.historicalData} signals={results.signals} />}
         {activeTab === 'drawdown' && <DrawdownChart data={results.drawdownData.data} />}
         {activeTab === 'stats' && <StatsDistribution trades={results.trades} />}
