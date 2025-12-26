@@ -708,22 +708,46 @@ class UnifiedStrategyExecutor:
         # ═══════════════════════════════════════════════════════════════════
         elif node_type == 'ema':
             period = int(params.get('period', params.get('length', 9)))
+            signal_mode = params.get('signalMode', 'price_above')
+            signal_direction = params.get('signalDirection', 'bullish')
             
             # Use close_history from market_data
             ema_value = self._calculate_ema(close_history, period)
             
             if ema_value is not None:
-                # Boolean signal: price above EMA = bullish
+                # Determine signal based on signalMode
                 above_ema = current_close > ema_value
+                below_ema = current_close < ema_value
+                
+                # Signal logic based on mode
+                if signal_mode == 'price_above':
+                    signal_result = above_ema
+                elif signal_mode == 'price_below':
+                    signal_result = below_ema
+                elif signal_mode == 'crossover_up':
+                    # Would need previous bar data for true crossover
+                    signal_result = above_ema
+                elif signal_mode == 'crossover_down':
+                    signal_result = below_ema
+                elif signal_mode == 'value_only':
+                    signal_result = False  # No signal, just pass value
+                else:
+                    signal_result = above_ema
+                
+                # Invert signal for bearish direction
+                if signal_direction == 'bearish' and signal_mode != 'value_only':
+                    signal_result = not signal_result
                 
                 outputs = {
                     'ema': ema_value,
-                    'ema_value': ema_value,  # Alias for common port names
+                    'ema_value': ema_value,
                     'value': ema_value,
                     'output': ema_value,
-                    'signal': above_ema,  # Boolean: True if price above EMA
+                    'signal': signal_result,
                     'above': above_ema,
-                    'below': not above_ema
+                    'below': below_ema,
+                    'signal_mode': signal_mode,
+                    'signal_direction': signal_direction
                 }
                 
                 # Track EMA relationship to price for signal inference
@@ -733,7 +757,7 @@ class UnifiedStrategyExecutor:
                     self.signal_context['ema_bearish'] = True
                 
                 if self.debug:
-                    logger.info(f"[EXEC] Node {node_id} (ema): period={period}, value={ema_value:.4f}, above={above_ema}")
+                    logger.info(f"[EXEC] Node {node_id} (ema): period={period}, value={ema_value:.4f}, mode={signal_mode}, signal={signal_result}")
             else:
                 outputs = {'ema': None, 'ema_value': None, 'value': None, 'output': None, 'signal': False, 'above': False, 'below': False}
                 if self.debug:
@@ -744,19 +768,43 @@ class UnifiedStrategyExecutor:
         # ═══════════════════════════════════════════════════════════════════
         elif node_type == 'sma':
             period = int(params.get('period', params.get('length', 20)))
+            signal_mode = params.get('signalMode', 'price_above')
+            signal_direction = params.get('signalDirection', 'bullish')
             sma_value = self._calculate_sma(close_history, period)
             
             if sma_value is not None:
                 above_sma = current_close > sma_value
+                below_sma = current_close < sma_value
+                
+                # Signal logic based on mode
+                if signal_mode == 'price_above':
+                    signal_result = above_sma
+                elif signal_mode == 'price_below':
+                    signal_result = below_sma
+                elif signal_mode == 'crossover_up':
+                    signal_result = above_sma
+                elif signal_mode == 'crossover_down':
+                    signal_result = below_sma
+                elif signal_mode == 'value_only':
+                    signal_result = False
+                else:
+                    signal_result = above_sma
+                
+                # Invert for bearish direction
+                if signal_direction == 'bearish' and signal_mode != 'value_only':
+                    signal_result = not signal_result
+                
                 outputs = {
                     'sma': sma_value, 
                     'value': sma_value,
-                    'signal': above_sma,  # Boolean: True if price above SMA
+                    'signal': signal_result,
                     'above': above_sma,
-                    'below': not above_sma
+                    'below': below_sma,
+                    'signal_mode': signal_mode,
+                    'signal_direction': signal_direction
                 }
                 if self.debug:
-                    logger.info(f"[EXEC] Node {node_id} (sma): period={period}, value={sma_value:.4f}, above={above_sma}")
+                    logger.info(f"[EXEC] Node {node_id} (sma): period={period}, value={sma_value:.4f}, mode={signal_mode}, signal={signal_result}")
             else:
                 outputs = {'sma': None, 'value': None, 'signal': False, 'above': False, 'below': False}
         
@@ -767,6 +815,8 @@ class UnifiedStrategyExecutor:
             period = int(params.get('period', params.get('length', 14)))
             oversold = float(params.get('oversold', params.get('threshold_low', 30)))
             overbought = float(params.get('overbought', params.get('threshold_high', 70)))
+            signal_mode = params.get('signalMode', 'oversold_buy')
+            signal_direction = params.get('signalDirection', 'bullish')
             
             rsi_value = self._calculate_rsi(close_history, period)
             
@@ -774,12 +824,51 @@ class UnifiedStrategyExecutor:
                 is_oversold = rsi_value < oversold
                 is_overbought = rsi_value > overbought
                 
+                # Determine signal based on signalMode
+                if signal_mode == 'oversold_buy':
+                    # RSI below oversold = bullish signal (BUY)
+                    signal_result = is_oversold
+                    inferred_direction = 'BUY' if is_oversold else None
+                elif signal_mode == 'overbought_sell':
+                    # RSI above overbought = bearish signal (SELL)
+                    signal_result = is_overbought
+                    inferred_direction = 'SELL' if is_overbought else None
+                elif signal_mode == 'oversold_signal':
+                    # Just output True when oversold
+                    signal_result = is_oversold
+                    inferred_direction = None
+                elif signal_mode == 'overbought_signal':
+                    # Just output True when overbought
+                    signal_result = is_overbought
+                    inferred_direction = None
+                elif signal_mode == 'value_only':
+                    # Pass value only, no signal
+                    signal_result = False
+                    inferred_direction = None
+                elif signal_mode == 'custom':
+                    # Use both oversold and overbought based on direction
+                    if signal_direction == 'bullish':
+                        signal_result = is_oversold
+                        inferred_direction = 'BUY' if is_oversold else None
+                    elif signal_direction == 'bearish':
+                        signal_result = is_overbought
+                        inferred_direction = 'SELL' if is_overbought else None
+                    else:  # both
+                        signal_result = is_oversold or is_overbought
+                        inferred_direction = 'BUY' if is_oversold else ('SELL' if is_overbought else None)
+                else:
+                    signal_result = is_oversold or is_overbought
+                    inferred_direction = None
+                
                 outputs = {
                     'rsi': rsi_value,
                     'value': rsi_value,
                     'oversold': is_oversold,
                     'overbought': is_overbought,
-                    'signal': is_oversold or is_overbought
+                    'signal': signal_result,
+                    'signal_mode': signal_mode,
+                    'signal_direction': signal_direction,
+                    'inferred_direction': inferred_direction
                 }
                 
                 # Track for signal inference
@@ -789,7 +878,7 @@ class UnifiedStrategyExecutor:
                     self.signal_context['rsi_overbought'] = True
                 
                 if self.debug:
-                    logger.info(f"[EXEC] Node {node_id} (rsi): period={period}, value={rsi_value:.2f}, oversold={is_oversold}, overbought={is_overbought}")
+                    logger.info(f"[EXEC] Node {node_id} (rsi): period={period}, value={rsi_value:.2f}, mode={signal_mode}, oversold={is_oversold}, overbought={is_overbought}, signal={signal_result}")
             else:
                 outputs = {'rsi': None, 'value': None, 'oversold': False, 'overbought': False, 'signal': False}
         
@@ -800,34 +889,72 @@ class UnifiedStrategyExecutor:
             fast = int(params.get('fast', params.get('fastPeriod', 12)))
             slow = int(params.get('slow', params.get('slowPeriod', 26)))
             signal_period = int(params.get('signal', params.get('signalPeriod', 9)))
+            signal_mode = params.get('signalMode', 'histogram_positive')
+            signal_direction = params.get('signalDirection', 'bullish')
             
             macd_data = self._calculate_macd(close_history, fast, slow, signal_period)
             
             if macd_data:
                 hist = macd_data['histogram']
-                is_bullish = hist > 0 if hist is not None else False
-                macd_above_signal = macd_data['macd_line'] > macd_data['signal_line'] if macd_data['signal_line'] else False
+                macd_line = macd_data['macd_line']
+                sig_line = macd_data['signal_line']
+                
+                # Calculate conditions
+                hist_positive = hist > 0 if hist is not None else False
+                hist_negative = hist < 0 if hist is not None else False
+                macd_above_signal = macd_line > sig_line if sig_line else False
+                macd_below_signal = macd_line < sig_line if sig_line else False
+                
+                # Determine signal based on signalMode
+                if signal_mode == 'histogram_positive':
+                    signal_result = hist_positive
+                    inferred_direction = 'BUY' if hist_positive else None
+                elif signal_mode == 'histogram_negative':
+                    signal_result = hist_negative
+                    inferred_direction = 'SELL' if hist_negative else None
+                elif signal_mode == 'macd_cross_up':
+                    signal_result = macd_above_signal
+                    inferred_direction = 'BUY' if macd_above_signal else None
+                elif signal_mode == 'macd_cross_down':
+                    signal_result = macd_below_signal
+                    inferred_direction = 'SELL' if macd_below_signal else None
+                elif signal_mode == 'histogram_rising':
+                    # Would need previous histogram for true rising detection
+                    signal_result = hist_positive
+                    inferred_direction = None
+                elif signal_mode == 'histogram_falling':
+                    signal_result = hist_negative
+                    inferred_direction = None
+                elif signal_mode == 'value_only':
+                    signal_result = False
+                    inferred_direction = None
+                else:
+                    signal_result = hist_positive
+                    inferred_direction = 'BUY' if hist_positive else ('SELL' if hist_negative else None)
                 
                 outputs = {
-                    'macd': macd_data['macd_line'],
-                    'macd_line': macd_data['macd_line'],
-                    'signal_line': macd_data['signal_line'],  # The actual signal line VALUE
+                    'macd': macd_line,
+                    'macd_line': macd_line,
+                    'signal_line': sig_line,
                     'histogram': hist,
                     'value': hist,
-                    'result': is_bullish,
-                    'signal': is_bullish,  # Boolean: True when histogram > 0 (bullish)
-                    'bullish': is_bullish,
-                    'bearish': not is_bullish
+                    'result': signal_result,
+                    'signal': signal_result,
+                    'bullish': hist_positive,
+                    'bearish': hist_negative,
+                    'signal_mode': signal_mode,
+                    'signal_direction': signal_direction,
+                    'inferred_direction': inferred_direction
                 }
                 
                 # Track for signal inference
-                if is_bullish:
+                if hist_positive:
                     self.signal_context['macd_bullish'] = True
                 else:
                     self.signal_context['macd_bearish'] = True
                 
                 if self.debug:
-                    logger.info(f"[EXEC] Node {node_id} (macd): histogram={hist:.4f}, bullish={is_bullish}")
+                    logger.info(f"[EXEC] Node {node_id} (macd): histogram={hist:.4f}, mode={signal_mode}, signal={signal_result}")
             else:
                 outputs = {'macd': None, 'signal_line': None, 'histogram': None, 'value': None, 'result': False, 'signal': False, 'bullish': False, 'bearish': True}
         
@@ -836,7 +963,9 @@ class UnifiedStrategyExecutor:
         # ═══════════════════════════════════════════════════════════════════
         elif node_type in ['bollinger', 'bollingerbands']:
             period = int(params.get('period', params.get('length', 20)))
-            std_dev = float(params.get('numStd', params.get('std_dev', params.get('std', 2))))
+            std_dev = float(params.get('numStd', params.get('std_dev', params.get('std', params.get('num_std', 2)))))
+            signal_mode = params.get('signalMode', 'price_below_lower')
+            signal_direction = params.get('signalDirection', 'bullish')
             
             bb_data = self._calculate_bollinger(close_history, period, std_dev)
             
@@ -844,16 +973,58 @@ class UnifiedStrategyExecutor:
                 below_lower = current_close < bb_data['lower']
                 above_upper = current_close > bb_data['upper']
                 
+                # Calculate proximity for "near" modes (within 0.5% of band)
+                band_width = bb_data['upper'] - bb_data['lower']
+                near_threshold = band_width * 0.1  # Within 10% of band width
+                near_lower = abs(current_close - bb_data['lower']) < near_threshold
+                near_upper = abs(current_close - bb_data['upper']) < near_threshold
+                
+                # Squeeze detection (narrow bands = low volatility)
+                avg_price = bb_data['middle']
+                squeeze_threshold = avg_price * 0.02  # Bands within 2% of middle
+                is_squeeze = band_width < squeeze_threshold
+                
+                # Determine signal based on signalMode
+                if signal_mode == 'price_below_lower':
+                    signal_result = below_lower
+                    inferred_direction = 'BUY' if below_lower else None  # Oversold = buy signal
+                elif signal_mode == 'price_above_upper':
+                    signal_result = above_upper
+                    inferred_direction = 'SELL' if above_upper else None  # Overbought = sell signal
+                elif signal_mode == 'price_near_lower':
+                    signal_result = near_lower
+                    inferred_direction = 'BUY' if near_lower else None
+                elif signal_mode == 'price_near_upper':
+                    signal_result = near_upper
+                    inferred_direction = 'SELL' if near_upper else None
+                elif signal_mode == 'squeeze':
+                    signal_result = is_squeeze
+                    inferred_direction = None  # Squeeze doesn't indicate direction
+                elif signal_mode == 'value_only':
+                    signal_result = False
+                    inferred_direction = None
+                else:
+                    signal_result = below_lower or above_upper
+                    inferred_direction = 'BUY' if below_lower else ('SELL' if above_upper else None)
+                
                 outputs = {
                     'upper': bb_data['upper'],
                     'middle': bb_data['middle'],
                     'lower': bb_data['lower'],
                     'value': bb_data['middle'],
-                    'signal': below_lower or above_upper
+                    'signal': signal_result,
+                    'below_lower': below_lower,
+                    'above_upper': above_upper,
+                    'near_lower': near_lower,
+                    'near_upper': near_upper,
+                    'squeeze': is_squeeze,
+                    'signal_mode': signal_mode,
+                    'signal_direction': signal_direction,
+                    'inferred_direction': inferred_direction
                 }
                 
                 if self.debug:
-                    logger.info(f"[EXEC] Node {node_id} (bollinger): upper={bb_data['upper']:.2f}, lower={bb_data['lower']:.2f}, close={current_close:.2f}")
+                    logger.info(f"[EXEC] Node {node_id} (bollinger): upper={bb_data['upper']:.2f}, lower={bb_data['lower']:.2f}, close={current_close:.2f}, mode={signal_mode}, signal={signal_result}")
             else:
                 outputs = {'upper': None, 'middle': None, 'lower': None, 'value': None, 'signal': False}
         
@@ -861,34 +1032,44 @@ class UnifiedStrategyExecutor:
         # VWAP INDICATOR
         # ═══════════════════════════════════════════════════════════════════
         elif node_type == 'vwap':
+            signal_mode = params.get('signalMode', 'price_above')
+            signal_direction = params.get('signalDirection', 'bullish')
+            near_threshold_pct = float(params.get('nearThreshold', params.get('near_threshold', 0.05))) / 100  # Convert from % to decimal
+            
             vwap_value = self._calculate_vwap(close_history, volume_history)
             
             if vwap_value is not None:
                 above_vwap = current_close > vwap_value
+                below_vwap = current_close < vwap_value
                 
-                # Check VWAP condition from params (default: 'signal' means proximity check for scalping)
-                condition = params.get('condition', params.get('vwap_condition', 'any')).lower()
-                output_type = params.get('output', 'value').lower()
+                # Calculate proximity to VWAP
+                pct_diff = abs(current_close - vwap_value) / vwap_value if vwap_value > 0 else 1
+                near_vwap = pct_diff < near_threshold_pct
                 
-                # Calculate proximity to VWAP (within 0.05% threshold)
-                threshold_pct = float(params.get('threshold', params.get('near_threshold', 0.0005)))
-                pct_diff = abs(current_close - vwap_value) / vwap_value
-                near_vwap = pct_diff < threshold_pct
-                
-                # Determine signal based on condition type
-                if condition == 'above':
+                # Determine signal based on signalMode
+                if signal_mode == 'price_above':
                     signal_result = above_vwap
-                    signal_msg = 'above' if above_vwap else 'below'
-                elif condition == 'below':
-                    signal_result = not above_vwap
-                    signal_msg = 'below' if not above_vwap else 'above'
-                elif condition in ['near', 'any'] or output_type == 'signal':
-                    # Default for scalping: price must be NEAR VWAP
+                    inferred_direction = 'BUY' if above_vwap else None
+                elif signal_mode == 'price_below':
+                    signal_result = below_vwap
+                    inferred_direction = 'SELL' if below_vwap else None
+                elif signal_mode == 'price_near':
                     signal_result = near_vwap
-                    signal_msg = f"near (diff={pct_diff*100:.3f}%)" if near_vwap else f"away (diff={pct_diff*100:.3f}%)"
+                    inferred_direction = None  # Near VWAP doesn't indicate direction
+                elif signal_mode == 'value_only':
+                    signal_result = False
+                    inferred_direction = None
                 else:
                     signal_result = above_vwap
-                    signal_msg = 'above' if above_vwap else 'below'
+                    inferred_direction = 'BUY' if above_vwap else 'SELL'
+                
+                # Invert for bearish direction
+                if signal_direction == 'bearish' and signal_mode in ['price_above', 'price_below']:
+                    signal_result = not signal_result
+                    if inferred_direction == 'BUY':
+                        inferred_direction = 'SELL'
+                    elif inferred_direction == 'SELL':
+                        inferred_direction = 'BUY'
                 
                 outputs = {
                     'vwap': vwap_value,
@@ -896,12 +1077,16 @@ class UnifiedStrategyExecutor:
                     'signal': signal_result,
                     'result': signal_result,
                     'above': above_vwap,
+                    'below': below_vwap,
                     'near': near_vwap,
-                    'pct_diff': pct_diff
+                    'pct_diff': pct_diff * 100,  # Return as percentage
+                    'signal_mode': signal_mode,
+                    'signal_direction': signal_direction,
+                    'inferred_direction': inferred_direction
                 }
                 
                 if self.debug:
-                    logger.info(f"[EXEC] Node {node_id} (vwap): value={vwap_value:.2f}, price={current_close:.2f}, signal={signal_result} ({signal_msg})")
+                    logger.info(f"[EXEC] Node {node_id} (vwap): value={vwap_value:.2f}, price={current_close:.2f}, mode={signal_mode}, signal={signal_result}")
             else:
                 outputs = {'vwap': None, 'value': None, 'signal': False, 'result': False, 'above': False, 'near': False}
         
@@ -911,6 +1096,8 @@ class UnifiedStrategyExecutor:
         elif node_type == 'volume_spike':
             period = int(params.get('period', 20))
             multiplier = float(params.get('multiplier', 1.5))
+            signal_mode = params.get('signalMode', 'spike_detected')
+            signal_direction = params.get('signalDirection', 'bullish')
             
             is_spike, ratio = self._calculate_volume_spike(volume_history, period, multiplier)
             
@@ -919,19 +1106,31 @@ class UnifiedStrategyExecutor:
             prev_volumes = volume_history[-(period + 1):-1] if len(volume_history) >= period + 1 else []
             avg_vol = sum(prev_volumes) / len(prev_volumes) if prev_volumes else 0
             
+            # Determine signal based on signalMode
+            if signal_mode == 'spike_detected':
+                signal_result = is_spike
+            elif signal_mode == 'no_spike':
+                signal_result = not is_spike
+            elif signal_mode == 'value_only':
+                signal_result = False
+            else:
+                signal_result = is_spike
+            
             outputs = {
                 'spike': is_spike,
                 'is_spike': is_spike,
-                'signal': is_spike,
-                'result': is_spike,
+                'signal': signal_result,
+                'result': signal_result,
                 'value': is_spike,
                 'ratio': ratio,
                 'current_volume': current_vol,
-                'avg_volume': avg_vol
+                'avg_volume': avg_vol,
+                'signal_mode': signal_mode,
+                'signal_direction': signal_direction
             }
             
             if self.debug:
-                logger.info(f"[EXEC] Node {node_id} (volume_spike): spike={is_spike}, ratio={ratio:.2f}x, current={current_vol:,.0f}, avg={avg_vol:,.0f}")
+                logger.info(f"[EXEC] Node {node_id} (volume_spike): spike={is_spike}, ratio={ratio:.2f}x, mode={signal_mode}, signal={signal_result}")
         
         # ═══════════════════════════════════════════════════════════════════
         # COMPARE NODE - Compares two numeric values
@@ -1278,36 +1477,90 @@ class UnifiedStrategyExecutor:
         # ═══════════════════════════════════════════════════════════════════
         elif node_type == 'atr':
             period = int(params.get('period', params.get('length', 14)))
+            signal_mode = params.get('signalMode', 'value_only')
+            threshold = float(params.get('threshold', 1.0))
             
             atr_value = self._calculate_atr(high_history, low_history, close_history, period)
             
             if atr_value is not None:
+                # ATR threshold signals for volatility filtering
+                above_threshold = atr_value > threshold
+                below_threshold = atr_value < threshold
+                
+                # Determine signal based on signalMode
+                if signal_mode == 'above_threshold':
+                    signal_result = above_threshold
+                elif signal_mode == 'below_threshold':
+                    signal_result = below_threshold
+                elif signal_mode == 'value_only':
+                    signal_result = False
+                else:
+                    signal_result = False
+                
                 outputs = {
                     'atr': atr_value,
-                    'value': atr_value
+                    'value': atr_value,
+                    'signal': signal_result,
+                    'above_threshold': above_threshold,
+                    'below_threshold': below_threshold,
+                    'signal_mode': signal_mode,
+                    'threshold': threshold
                 }
                 
                 if self.debug:
-                    logger.info(f"[EXEC] Node {node_id} (atr): period={period}, value={atr_value:.4f}")
+                    logger.info(f"[EXEC] Node {node_id} (atr): period={period}, value={atr_value:.4f}, mode={signal_mode}, signal={signal_result}")
             else:
-                outputs = {'atr': None, 'value': None}
+                outputs = {'atr': None, 'value': None, 'signal': False}
         
         # ═══════════════════════════════════════════════════════════════════
         # OBV (ON-BALANCE VOLUME) INDICATOR
         # ═══════════════════════════════════════════════════════════════════
         elif node_type == 'obv':
+            signal_mode = params.get('signalMode', 'rising')
+            signal_direction = params.get('signalDirection', 'bullish')
+            
             obv_value = self._calculate_obv(close_history, volume_history)
             
             if obv_value is not None:
+                # For trend detection, we'd need historical OBV values
+                # For now, we use a simple approximation based on recent price action
+                recent_closes = close_history[-5:] if len(close_history) >= 5 else close_history
+                is_rising = len(recent_closes) >= 2 and recent_closes[-1] > recent_closes[0]
+                is_falling = len(recent_closes) >= 2 and recent_closes[-1] < recent_closes[0]
+                
+                # Determine signal based on signalMode
+                if signal_mode == 'rising':
+                    signal_result = is_rising
+                    inferred_direction = 'BUY' if is_rising else None
+                elif signal_mode == 'falling':
+                    signal_result = is_falling
+                    inferred_direction = 'SELL' if is_falling else None
+                elif signal_mode == 'value_only':
+                    signal_result = False
+                    inferred_direction = None
+                else:
+                    signal_result = is_rising
+                    inferred_direction = None
+                
+                # Invert for bearish direction
+                if signal_direction == 'bearish' and signal_mode != 'value_only':
+                    signal_result = not signal_result
+                
                 outputs = {
                     'obv': obv_value,
-                    'value': obv_value
+                    'value': obv_value,
+                    'signal': signal_result,
+                    'rising': is_rising,
+                    'falling': is_falling,
+                    'signal_mode': signal_mode,
+                    'signal_direction': signal_direction,
+                    'inferred_direction': inferred_direction
                 }
                 
                 if self.debug:
-                    logger.info(f"[EXEC] Node {node_id} (obv): value={obv_value:,.0f}")
+                    logger.info(f"[EXEC] Node {node_id} (obv): value={obv_value:,.0f}, mode={signal_mode}, signal={signal_result}")
             else:
-                outputs = {'obv': None, 'value': None}
+                outputs = {'obv': None, 'value': None, 'signal': False}
         
         # ═══════════════════════════════════════════════════════════════════
         # STOCHASTIC INDICATOR
@@ -1317,6 +1570,8 @@ class UnifiedStrategyExecutor:
             d_period = int(params.get('dPeriod', params.get('d_period', 3)))
             oversold = float(params.get('oversold', params.get('threshold_low', 20)))
             overbought = float(params.get('overbought', params.get('threshold_high', 80)))
+            signal_mode = params.get('signalMode', 'oversold_buy')
+            signal_direction = params.get('signalDirection', 'bullish')
             
             stoch_data = self._calculate_stochastic(high_history, low_history, close_history, k_period, d_period)
             
@@ -1325,21 +1580,48 @@ class UnifiedStrategyExecutor:
                 d_value = stoch_data['d']
                 is_oversold = k_value < oversold
                 is_overbought = k_value > overbought
+                k_above_d = k_value > d_value
+                k_below_d = k_value < d_value
+                
+                # Determine signal based on signalMode
+                if signal_mode == 'oversold_buy':
+                    signal_result = is_oversold
+                    inferred_direction = 'BUY' if is_oversold else None
+                elif signal_mode == 'overbought_sell':
+                    signal_result = is_overbought
+                    inferred_direction = 'SELL' if is_overbought else None
+                elif signal_mode == 'k_cross_d_up':
+                    signal_result = k_above_d
+                    inferred_direction = 'BUY' if k_above_d else None
+                elif signal_mode == 'k_cross_d_down':
+                    signal_result = k_below_d
+                    inferred_direction = 'SELL' if k_below_d else None
+                elif signal_mode == 'value_only':
+                    signal_result = False
+                    inferred_direction = None
+                else:
+                    signal_result = is_oversold or is_overbought
+                    inferred_direction = 'BUY' if is_oversold else ('SELL' if is_overbought else None)
                 
                 outputs = {
                     'k': k_value,
                     'd': d_value,
-                    'stoch': k_value,  # For blockDefs.js port name
+                    'stoch': k_value,
                     'stoch_k': k_value,
                     'stoch_d': d_value,
                     'value': k_value,
                     'oversold': is_oversold,
                     'overbought': is_overbought,
-                    'signal': is_oversold or is_overbought
+                    'k_above_d': k_above_d,
+                    'k_below_d': k_below_d,
+                    'signal': signal_result,
+                    'signal_mode': signal_mode,
+                    'signal_direction': signal_direction,
+                    'inferred_direction': inferred_direction
                 }
                 
                 if self.debug:
-                    logger.info(f"[EXEC] Node {node_id} (stochastic): k={k_value:.2f}, d={d_value:.2f}, oversold={is_oversold}, overbought={is_overbought}")
+                    logger.info(f"[EXEC] Node {node_id} (stochastic): k={k_value:.2f}, d={d_value:.2f}, mode={signal_mode}, signal={signal_result}")
             else:
                 outputs = {'k': None, 'd': None, 'stoch': None, 'value': None, 'oversold': False, 'overbought': False, 'signal': False}
         
