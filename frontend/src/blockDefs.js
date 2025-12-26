@@ -44,7 +44,9 @@ const blockDefs = {
       { key: 'period', label: 'Period', type: 'number', value: 14 },
       { key: 'source', label: 'Source', type: 'select', options: ['current','close','open','high','low','hl2','hlc3','ohlc4'], value: 'close' },
       { key: 'overbought', label: 'Overbought Level', type: 'number', value: 70 },
-      { key: 'oversold', label: 'Oversold Level', type: 'number', value: 30 }
+      { key: 'oversold', label: 'Oversold Level', type: 'number', value: 30 },
+      { key: 'signalMode', label: 'Signal Mode', type: 'select', options: ['oversold_buy','overbought_sell','oversold_or_overbought','oversold_signal','overbought_signal','value_only','custom'], value: 'oversold_buy', group: 'Signal Configuration', tooltip: 'oversold_or_overbought: Scan for BOTH buy and sell signals at once' },
+      { key: 'signalDirection', label: 'Signal Direction', type: 'select', options: ['bullish','bearish','both'], value: 'bullish', group: 'Signal Configuration', tooltip: 'Which signal direction to output' }
     ]
   },
   ema: {
@@ -52,7 +54,9 @@ const blockDefs = {
     config: [
       { key: 'period', label: 'Period', type: 'number', value: 20 },
       { key: 'source', label: 'Source', type: 'select', options: ['current','close','open','high','low','hl2','hlc3','ohlc4'], value: 'close' },
-      { key: 'output', label: 'Output', type: 'select', options: ['value','signal'], value: 'value' }
+      { key: 'output', label: 'Output', type: 'select', options: ['value','signal'], value: 'value' },
+      { key: 'signalMode', label: 'Signal Mode', type: 'select', options: ['price_above','price_below','above_or_below','crossover_up','crossover_down','value_only'], value: 'price_above', group: 'Signal Configuration', tooltip: 'above_or_below: Signal on either condition for dual scanning' },
+      { key: 'signalDirection', label: 'Signal Direction', type: 'select', options: ['bullish','bearish','both'], value: 'bullish', group: 'Signal Configuration', tooltip: 'Which signal direction to output' }
     ]
   },
   sma: {
@@ -60,7 +64,9 @@ const blockDefs = {
     config: [
       { key: 'period', label: 'Period', type: 'number', value: 20 },
       { key: 'source', label: 'Source', type: 'select', options: ['current','close','open','high','low','hl2','hlc3','ohlc4'], value: 'close' },
-      { key: 'output', label: 'Output', type: 'select', options: ['value','signal'], value: 'value' }
+      { key: 'output', label: 'Output', type: 'select', options: ['value','signal'], value: 'value' },
+      { key: 'signalMode', label: 'Signal Mode', type: 'select', options: ['price_above','price_below','above_or_below','crossover_up','crossover_down','value_only'], value: 'price_above', group: 'Signal Configuration', tooltip: 'above_or_below: Signal on either condition for dual scanning' },
+      { key: 'signalDirection', label: 'Signal Direction', type: 'select', options: ['bullish','bearish','both'], value: 'bullish', group: 'Signal Configuration', tooltip: 'Which signal direction to output' }
     ]
   },
   macd: {
@@ -70,19 +76,26 @@ const blockDefs = {
       { key: 'slow', label: 'Slow EMA', type: 'number', value: 26 },
       { key: 'signal', label: 'Signal', type: 'number', value: 9 },
       { key: 'source', label: 'Source', type: 'select', options: ['current','close','open','high','low','hl2','hlc3','ohlc4'], value: 'close' },
-      { key: 'output', label: 'Output', type: 'select', options: ['macd','signal','histogram'], value: 'macd' }
+      { key: 'output', label: 'Output', type: 'select', options: ['macd','signal','histogram'], value: 'macd' },
+      { key: 'signalMode', label: 'Signal Mode', type: 'select', options: ['histogram_positive','histogram_negative','bullish_or_bearish','macd_cross_up','macd_cross_down','histogram_rising','histogram_falling','value_only'], value: 'histogram_positive', group: 'Signal Configuration', tooltip: 'bullish_or_bearish: Signal on either histogram direction' },
+      { key: 'signalDirection', label: 'Signal Direction', type: 'select', options: ['bullish','bearish','both'], value: 'bullish', group: 'Signal Configuration', tooltip: 'Which signal direction to output' }
     ]
   },
   atr: {
     name: 'ATR', icon: 'bolt', color: 'color-indicator', inputs: ['prices'], outputs: ['atr'],
     config: [
       { key: 'period', label: 'Period', type: 'number', value: 14 },
-      { key: 'source', label: 'Source', type: 'select', options: ['current','close','open','high','low','hl2','hlc3','ohlc4'], value: 'close' }
+      { key: 'source', label: 'Source', type: 'select', options: ['current','close','open','high','low','hl2','hlc3','ohlc4'], value: 'close' },
+      { key: 'signalMode', label: 'Signal Mode', type: 'select', options: ['value_only','above_threshold','below_threshold'], value: 'value_only', group: 'Signal Configuration', tooltip: 'ATR typically passes value for volatility filtering' },
+      { key: 'threshold', label: 'ATR Threshold', type: 'number', value: 1.0, group: 'Signal Configuration' }
     ]
   },
   obv: {
     name: 'OBV', icon: 'drop', color: 'color-volume', inputs: ['prices','volumes'], outputs: ['obv'],
-    config: []
+    config: [
+      { key: 'signalMode', label: 'Signal Mode', type: 'select', options: ['rising','falling','value_only'], value: 'rising', group: 'Signal Configuration', tooltip: 'How OBV generates trading signals' },
+      { key: 'signalDirection', label: 'Signal Direction', type: 'select', options: ['bullish','bearish'], value: 'bullish', group: 'Signal Configuration' }
+    ]
   },
   bollinger: {
     name: 'Bollinger Bands', icon: 'chart-up', color: 'color-indicator', inputs: ['prices'], outputs: ['upper','lower','middle'],
@@ -90,7 +103,9 @@ const blockDefs = {
       { key: 'period', label: 'Period', type: 'number', value: 20 },
       { key: 'num_std', label: 'Std Dev', type: 'number', value: 2 },
       { key: 'source', label: 'Source', type: 'select', options: ['current','close','open','high','low','hl2','hlc3','ohlc4'], value: 'close' },
-      { key: 'output', label: 'Output', type: 'select', options: ['upper','lower','middle','signal'], value: 'upper' }
+      { key: 'output', label: 'Output', type: 'select', options: ['upper','lower','middle','signal'], value: 'upper' },
+      { key: 'signalMode', label: 'Signal Mode', type: 'select', options: ['price_below_lower','price_above_upper','band_touch_any','price_near_lower','price_near_upper','squeeze','value_only'], value: 'price_below_lower', group: 'Signal Configuration', tooltip: 'band_touch_any: Signal on lower OR upper band touch' },
+      { key: 'signalDirection', label: 'Signal Direction', type: 'select', options: ['bullish','bearish','reversal','both'], value: 'bullish', group: 'Signal Configuration' }
     ]
   },
   stochastic: {
@@ -101,18 +116,28 @@ const blockDefs = {
       { key: 'smooth_d', label: 'Smooth D', type: 'number', value: 3 },
       { key: 'source', label: 'Source', type: 'select', options: ['close','open','high','low','hl2','hlc3','ohlc4'], value: 'close' },
       { key: 'overbought', label: 'Overbought Level', type: 'number', value: 80 },
-      { key: 'oversold', label: 'Oversold Level', type: 'number', value: 20 }
+      { key: 'oversold', label: 'Oversold Level', type: 'number', value: 20 },
+      { key: 'signalMode', label: 'Signal Mode', type: 'select', options: ['oversold_buy','overbought_sell','oversold_or_overbought','k_cross_d_up','k_cross_d_down','value_only'], value: 'oversold_buy', group: 'Signal Configuration', tooltip: 'oversold_or_overbought: Signal on either extreme' },
+      { key: 'signalDirection', label: 'Signal Direction', type: 'select', options: ['bullish','bearish','both'], value: 'bullish', group: 'Signal Configuration' }
     ]
   },
   vwap: {
     name: 'VWAP', icon: 'bolt', color: 'color-indicator', inputs: ['prices','volumes'], outputs: ['vwap'],
     config: [
-      { key: 'output', label: 'Output', type: 'select', options: ['value','signal'], value: 'value' }
+      { key: 'output', label: 'Output', type: 'select', options: ['value','signal'], value: 'value' },
+      { key: 'signalMode', label: 'Signal Mode', type: 'select', options: ['price_above','price_below','above_or_below','price_near','value_only'], value: 'price_above', group: 'Signal Configuration', tooltip: 'above_or_below: Signal on either condition' },
+      { key: 'signalDirection', label: 'Signal Direction', type: 'select', options: ['bullish','bearish','both'], value: 'bullish', group: 'Signal Configuration' },
+      { key: 'nearThreshold', label: 'Near Threshold %', type: 'number', value: 0.05, group: 'Signal Configuration', tooltip: 'How close price needs to be to VWAP for near signal (%)' }
     ]
   },
   volume_spike: {
     name: 'Volume Spike', icon: 'chart-up', color: 'color-volume', inputs: ['volumes'], outputs: ['spike'],
-    config: [ { key: 'period', label: 'Period', type: 'number', value: 20 }, { key: 'multiplier', label: 'Multiplier', type: 'number', value: 1.5 } ]
+    config: [
+      { key: 'period', label: 'Period', type: 'number', value: 20 },
+      { key: 'multiplier', label: 'Multiplier', type: 'number', value: 1.5 },
+      { key: 'signalMode', label: 'Signal Mode', type: 'select', options: ['spike_detected','no_spike','value_only'], value: 'spike_detected', group: 'Signal Configuration', tooltip: 'When to output a signal' },
+      { key: 'signalDirection', label: 'Signal Direction', type: 'select', options: ['bullish','bearish','neutral'], value: 'bullish', group: 'Signal Configuration' }
+    ]
   },
   // Price Action & Levels
   price_levels: {
