@@ -115,11 +115,50 @@ const NodeSettings = ({ node, open, onClose, onSave }) => {
   );
 
   return (
-    <div style={{ position: 'fixed', top: 0, right: 0, width: 340, height: '100%', background: '#1e222d', borderLeft: '1px solid #2a2e39', boxShadow: '-2px 0 8px rgba(0,0,0,0.3)', zIndex: 6000, pointerEvents: 'auto', display: 'flex', flexDirection: 'column', fontFamily: 'Inter, sans-serif', transition: 'transform .2s', transform: open ? 'translateX(0)' : 'translateX(100%)' }}>
-      <div style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid #2a2e39', background: '#131722' }}>
-        <div style={{ fontWeight: 600, color: '#f8f9fa', fontSize: 12, letterSpacing: '-0.1px' }}>Properties — {node.def?.name || node.type}</div>
-        <button onClick={onClose} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #2a2e39', color: '#787b86', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: 11, transition: 'all 0.15s' }}>Close</button>
-      </div>
+    <>
+      {/* Backdrop with blur */}
+      <div 
+        onClick={onClose}
+        style={{ 
+          position: 'fixed', 
+          top: 0, 
+          left: 0, 
+          right: 0, 
+          bottom: 0, 
+          background: 'rgba(0, 0, 0, 0.6)', 
+          backdropFilter: 'blur(4px)', 
+          WebkitBackdropFilter: 'blur(4px)',
+          zIndex: 5999, 
+          opacity: open ? 1 : 0,
+          transition: 'opacity 0.25s ease',
+          pointerEvents: open ? 'auto' : 'none'
+        }} 
+      />
+      {/* Centered Modal Panel */}
+      <div style={{ 
+        position: 'fixed', 
+        top: '50%', 
+        left: '50%', 
+        transform: open ? 'translate(-50%, -50%) scale(1)' : 'translate(-50%, -50%) scale(0.95)', 
+        width: 400, 
+        maxWidth: '90vw',
+        maxHeight: '80vh',
+        background: '#1e222d', 
+        border: '1px solid #2a2e39',
+        borderRadius: 12,
+        boxShadow: '0 20px 60px rgba(0,0,0,0.5)', 
+        zIndex: 6000, 
+        pointerEvents: 'auto', 
+        display: 'flex', 
+        flexDirection: 'column', 
+        fontFamily: 'Inter, sans-serif', 
+        transition: 'transform 0.25s ease, opacity 0.25s ease', 
+        opacity: open ? 1 : 0
+      }}>
+        <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid #2a2e39', background: '#131722', borderRadius: '12px 12px 0 0' }}>
+          <div style={{ fontWeight: 600, color: '#f8f9fa', fontSize: 13, letterSpacing: '-0.1px' }}>⚙️ {node.def?.name || node.type} Settings</div>
+          <button onClick={onClose} style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #2a2e39', color: '#787b86', cursor: 'pointer', padding: '4px 10px', borderRadius: 4, fontSize: 11, transition: 'all 0.15s' }}>✕</button>
+        </div>
       <div style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
         <div style={{ marginBottom: 12 }}><small style={{ color: '#9ca3af' }}>Edit configuration values for this node.</small></div>
         
@@ -230,11 +269,12 @@ const NodeSettings = ({ node, open, onClose, onSave }) => {
           </div>
         ))}
       </div>
-      <div style={{ padding: '10px 14px', borderTop: '1px solid #2a2e39', display: 'flex', gap: 8, alignItems: 'center', background: '#131722' }}>
-        <button onClick={handleSave} style={{ marginLeft: 'auto', background: '#2962ff', border: '1px solid #2962ff', color: '#fff', cursor: 'pointer', padding: '6px 16px', borderRadius: 4, fontSize: 12, fontWeight: 600, transition: 'all 0.15s' }}>Save Changes</button>
-        <button onClick={onClose} style={{ background: 'transparent', border: '1px solid #2a2e39', color: '#787b86', cursor: 'pointer', padding: '6px 16px', borderRadius: 4, fontSize: 12, fontWeight: 500, transition: 'all 0.15s' }}>Discard</button>
+      <div style={{ padding: '14px 18px', borderTop: '1px solid #2a2e39', display: 'flex', gap: 10, alignItems: 'center', background: '#131722', borderRadius: '0 0 12px 12px' }}>
+        <button onClick={onClose} style={{ background: 'transparent', border: '1px solid #2a2e39', color: '#787b86', cursor: 'pointer', padding: '8px 20px', borderRadius: 6, fontSize: 12, fontWeight: 500, transition: 'all 0.15s' }}>Cancel</button>
+        <button onClick={handleSave} style={{ marginLeft: 'auto', background: '#2962ff', border: '1px solid #2962ff', color: '#fff', cursor: 'pointer', padding: '8px 24px', borderRadius: 6, fontSize: 12, fontWeight: 600, transition: 'all 0.15s' }}>Save Changes</button>
       </div>
     </div>
+    </>
   );
 };
 
