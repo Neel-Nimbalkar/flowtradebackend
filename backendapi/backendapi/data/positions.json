@@ -1,1 +1,14 @@
-{}
+{
+  "workflow-2025-12-26T20-50-50-149Z": {
+    "position": "LONG",
+    "last_signal": "BUY",
+    "open_trade": {
+      "entry_price": 689.57,
+      "entry_ts": "2025-12-26T22:23:45.814Z",
+      "side": "LONG",
+      "meta": {
+        "source": "StrategyRunner"
+      }
+    }
+  }
+}

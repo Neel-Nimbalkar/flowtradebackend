@@ -1,3 +1,6 @@
 {
-  "tests/test_strategy_templates.py::test_strategy": true
+  "tests/test_strategy_templates.py::test_strategy": true,
+  "tests/test_no_hardcoded_logic.py::TestIndicatorPurity::test_ema_returns_only_numeric_value": true,
+  "tests/test_no_hardcoded_logic.py::TestIndicatorPurity::test_bollinger_returns_only_bands_no_signals": true,
+  "tests/test_strict_bool.py::test_boolean_rsi_signal_when_overbought": true
 }

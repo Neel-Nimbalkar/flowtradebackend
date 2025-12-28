@@ -3,6 +3,104 @@ import React from 'react';
 const GeneratedIcon = ({ name, size, className, style, title }) => {
   const commonProps = { width: size, height: size, viewBox: '0 0 24 24', xmlns: 'http://www.w3.org/2000/svg', style };
   switch (name) {
+    // Strategy template icons
+    case 'trending-up':
+      return (
+        <svg {...commonProps} className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {title && <title>{title}</title>}
+          <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+          <polyline points="17 6 23 6 23 12"/>
+        </svg>
+      );
+    case 'zap':
+      return (
+        <svg {...commonProps} className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {title && <title>{title}</title>}
+          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+        </svg>
+      );
+    case 'arrow-up-right':
+      return (
+        <svg {...commonProps} className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {title && <title>{title}</title>}
+          <line x1="7" y1="17" x2="17" y2="7"/>
+          <polyline points="7 7 17 7 17 17"/>
+        </svg>
+      );
+    case 'git-merge':
+      return (
+        <svg {...commonProps} className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {title && <title>{title}</title>}
+          <circle cx="18" cy="18" r="3"/>
+          <circle cx="6" cy="6" r="3"/>
+          <path d="M6 21V9a9 9 0 0 0 9 9"/>
+        </svg>
+      );
+    case 'corner-down-right':
+      return (
+        <svg {...commonProps} className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {title && <title>{title}</title>}
+          <polyline points="15 10 20 15 15 20"/>
+          <path d="M4 4v7a4 4 0 0 0 4 4h12"/>
+        </svg>
+      );
+    case 'refresh-cw':
+      return (
+        <svg {...commonProps} className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {title && <title>{title}</title>}
+          <polyline points="23 4 23 10 17 10"/>
+          <polyline points="1 20 1 14 7 14"/>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+        </svg>
+      );
+    case 'rotate-ccw':
+      return (
+        <svg {...commonProps} className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {title && <title>{title}</title>}
+          <polyline points="1 4 1 10 7 10"/>
+          <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+        </svg>
+      );
+    case 'sunrise':
+      return (
+        <svg {...commonProps} className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {title && <title>{title}</title>}
+          <path d="M17 18a5 5 0 0 0-10 0"/>
+          <line x1="12" y1="2" x2="12" y2="9"/>
+          <line x1="4.22" y1="10.22" x2="5.64" y2="11.64"/>
+          <line x1="1" y1="18" x2="3" y2="18"/>
+          <line x1="21" y1="18" x2="23" y2="18"/>
+          <line x1="18.36" y1="11.64" x2="19.78" y2="10.22"/>
+          <line x1="23" y1="22" x2="1" y2="22"/>
+          <polyline points="8 6 12 2 16 6"/>
+        </svg>
+      );
+    case 'radio':
+      return (
+        <svg {...commonProps} className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {title && <title>{title}</title>}
+          <circle cx="12" cy="12" r="2"/>
+          <path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/>
+        </svg>
+      );
+    case 'git-branch':
+      return (
+        <svg {...commonProps} className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {title && <title>{title}</title>}
+          <line x1="6" y1="3" x2="6" y2="15"/>
+          <circle cx="18" cy="6" r="3"/>
+          <circle cx="6" cy="18" r="3"/>
+          <path d="M18 9a9 9 0 0 1-9 9"/>
+        </svg>
+      );
+    case 'activity':
+      return (
+        <svg {...commonProps} className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {title && <title>{title}</title>}
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+      );
+    // Existing icons
     case 'chart':
       return (
         <svg {...commonProps} className={className} aria-hidden={!title} role={title ? 'img' : 'presentation'}>

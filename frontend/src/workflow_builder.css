@@ -70,22 +70,150 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
 /* App container */
 .app-container { display: flex; height: 100vh; }
 
-/* Workflow Builder Sidebar - scoped with .app-container to override dashboard sidebar */
-.app-container .sidebar { width: 200px !important; background: var(--secondary-bg); border-right: 1px solid var(--border); display:flex; flex-direction:column; overflow-y:auto; padding-bottom:80px; position:fixed; left:0; top:0; bottom:0; z-index:3000; align-items: stretch; padding: 0; }
-.app-container .sidebar::-webkit-scrollbar { width: 6px; }
-.app-container .sidebar::-webkit-scrollbar-track { background: #131722; }
-.app-container .sidebar::-webkit-scrollbar-thumb { background: #2962ff; border-radius: 3px; opacity: 0; transition: opacity 160ms ease; }
-.app-container .sidebar:hover::-webkit-scrollbar-thumb { opacity: 1; }
-.app-container .sidebar::-webkit-scrollbar-thumb:hover { background: #5e8cff; }
-.app-container .sidebar { scrollbar-width: none; }
-.app-container .sidebar:hover { scrollbar-width: thin; scrollbar-color: #2962ff #131722; }
-.sidebar-header { padding:14px 16px; background:var(--secondary-bg); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:10; }
+/* Strategy Builder Top Bar - Compact Dashboard Style */
+.builder-topbar {
+  position: fixed;
+  top: 0;
+  left: 64px;
+  right: 0;
+  height: 44px;
+  background: var(--bg, #0d1117);
+  border-bottom: 1px solid var(--border, #2a3038);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  z-index: 3050;
+}
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.topbar-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #FFFFFF;
+  letter-spacing: 0;
+}
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.topbar-btn {
+  background: transparent;
+  border: none;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary, #8b949e);
+  cursor: pointer;
+  transition: color 0.15s ease;
+  border-radius: 2px;
+}
+.topbar-btn:hover {
+  color: var(--text-primary, #e6eaf0);
+  background: rgba(255, 255, 255, 0.05);
+}
+.topbar-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border, #2a3038);
+  margin: 0 4px;
+}
+.topbar-run {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 4px;
+}
+.topbar-run span {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary, #8b949e);
+}
+
+/* Main navigation sidebar in workflow builder - fixed 64px icon sidebar */
+.app-container > .sidebar:first-child { 
+  width: 64px !important; 
+  min-width: 64px !important;
+  max-width: 64px !important;
+  background: #0a0c10; 
+  border-right: 1px solid rgba(255, 255, 255, 0.06); 
+  position: fixed; 
+  left: 0; 
+  top: 0; 
+  bottom: 0; 
+  z-index: 3100; 
+  padding: 12px 0;
+  align-items: center;
+}
+
+/* Node Palette Sidebar - detached floating panel with rounded edges */
+.app-container > .sidebar.node-palette { 
+  width: 210px !important; 
+  background: #1A1E27 !important; 
+  border: none !important;
+  border-radius: 12px !important;
+  display: flex; 
+  flex-direction: column; 
+  overflow: hidden;
+  position: fixed; 
+  left: 76px !important; 
+  top: 56px !important; 
+  bottom: 40px !important;
+  height: auto !important;
+  z-index: 3000; 
+  align-items: stretch; 
+  padding: 0;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+.app-container > .sidebar.node-palette > * {
+  flex-shrink: 0;
+}
+.app-container > .sidebar.node-palette .block-category:last-child {
+  border-bottom: none !important;
+  border-radius: 0 0 12px 12px !important;
+  padding-bottom: 16px;
+}
+/* Node palette inner scroll area */
+.node-palette-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.node-palette-scroll::-webkit-scrollbar { width: 6px; }
+.node-palette-scroll::-webkit-scrollbar-track { background: transparent; }
+.node-palette-scroll::-webkit-scrollbar-thumb { background: #2962ff; border-radius: 3px; }
+.node-palette-scroll:hover::-webkit-scrollbar-thumb { opacity: 1; }
+.node-palette-scroll { scrollbar-width: thin; scrollbar-color: #2962ff transparent; }
+
+/* Legacy sidebar rules (fallback) */
+.app-container > .sidebar:nth-child(2):not(.node-palette) { 
+  width: 210px !important; 
+  background: var(--secondary-bg); 
+  border-right: 1px solid var(--border); 
+  display: flex; 
+  flex-direction: column; 
+  overflow-y: auto; 
+  padding-bottom: 80px; 
+  position: fixed; 
+  left: 64px !important; 
+  top: 0; 
+  bottom: 0; 
+  z-index: 3000; 
+  align-items: stretch; 
+  padding: 0; 
+}
+.sidebar-header { padding:14px 16px; background:#1A1E27; border-bottom:1px solid var(--border); position:sticky; top:0; z-index:10; }
+.node-palette .sidebar-header { border-radius: 12px 12px 0 0 !important; background:#1A1E27 !important; }
 .sidebar-header h2 { font-size:14px; font-weight:600; color:var(--text-primary); margin-bottom:4px; text-transform:uppercase; }
 .sidebar-header p { font-size:11px; color:var(--text-secondary); line-height:1.3; }
 .sidebar-header h2 { font-size:14px; font-weight:600; color:var(--text-primary); margin-bottom:4px; text-transform:uppercase; }
 .sidebar-header p { font-size:11px; color:var(--text-secondary); }
 
-.category-search { width:100%; padding:6px 10px; margin-bottom:8px; background:var(--secondary-bg); border:1px solid var(--border); border-radius:8px; color:var(--text-primary); font-size:12px; }
+.category-search { width:100%; padding:6px 10px; margin-bottom:8px; background:#161922; border:1px solid var(--border); border-radius:8px; color:var(--text-primary); font-size:12px; }
 .category-search { outline:none; transition:border-color 0.15s ease; }
 .category-search::placeholder { color:#787b86; }
 .category-search:focus { border-color:#2962ff; }
@@ -111,8 +239,20 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
 .block-icon { width:16px; height:16px; display:flex; align-items:center; justify-content:center; }
 .block-name { font-size:12.5px; font-weight:500; color:#d1d4dc; }
 
-/* Canvas area */
-.canvas-container { flex:1; position:relative; overflow:hidden; background-color:var(--bg); background-image: radial-gradient(rgba(38,42,51,0.6) 1px, transparent 1px), radial-gradient(rgba(38,42,51,0.6) 1px, transparent 1px); background-position:0 0, 7.5px 7.5px; background-size:15px 15px; margin-left:200px; }
+/* Canvas area - offset to account for main nav (64px) + blocks sidebar (210px) + 12px gap + header (44px) + status bar (28px) */
+.canvas-container { 
+  flex: 1; 
+  position: relative; 
+  overflow: hidden; 
+  background-color: var(--bg); 
+  background-image: radial-gradient(rgba(38,42,51,0.6) 1px, transparent 1px), radial-gradient(rgba(38,42,51,0.6) 1px, transparent 1px); 
+  background-position: 0 0, 7.5px 7.5px; 
+  background-size: 15px 15px; 
+  margin-left: 298px; 
+  margin-top: 44px;
+  height: calc(100vh - 44px - 28px);
+  margin-bottom: 28px;
+}
 /* FLOWTRADE watermark removed from grid */
 
 /* Ensure main layers sit above background */
@@ -176,11 +316,11 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
 /* Dragging node visual */
 .node.dragging { transform:scale(1.06); box-shadow:0 8px 32px rgba(41,98,255,0.22); border-color:#60a5fa; z-index:3; user-select: none; }
 
-/* Toolbar - Unified Control Panel Design */
+/* Toolbar - Unified Control Panel Design - centered relative to canvas area */
 .toolbar {
   position:fixed;
   top:16px;
-  left: calc(200px + (100vw - 200px) / 2);
+  left: calc(274px + (100vw - 274px) / 2);
   transform: translateX(-50%);
   background: var(--secondary-bg, #1e222d);
   border: 1px solid var(--border, #2a2e39);
@@ -287,10 +427,37 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
 .run-switch.off .slider { background: #4b5563; }
 .run-switch.off .slider::after { transform: translateX(0); }
 
-/* Zoom, minimap, status bar simplified */
-.zoom-controls { position:fixed; bottom:50px; left:220px; background:var(--secondary-bg); border:1px solid var(--border); border-radius:6px; padding:8px; display:flex; flex-direction:column; gap:4px; z-index:2500; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); }
+/* Zoom controls - positioned above status bar */
+.zoom-controls { position:fixed; bottom:44px; left:310px; background:#1A1E27; border:1px solid var(--border); border-radius:6px; padding:8px; display:flex; flex-direction:column; gap:4px; z-index:2500; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); }
 .minimap { display: none !important; }
-.status-bar { position:absolute; bottom:0; left:0; right:0; height:36px; background:var(--secondary-bg); border-top:1px solid var(--border); display:flex; align-items:center; padding:0 20px; gap:20px; font-size:11px; color:var(--text-secondary); }
+
+/* IDE-style status bar - spans full width under everything */
+.builder-statusbar {
+  position: fixed;
+  bottom: 0;
+  left: 64px;
+  right: 0;
+  height: 28px;
+  background: #0a0c10;
+  border-top: 1px solid var(--border, #2a3038);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 0;
+  font-size: 11px;
+  color: var(--text-muted, #6e7681);
+  z-index: 4000;
+}
+.statusbar-item {
+  padding: 0 8px;
+}
+.statusbar-sep {
+  color: var(--border, #2a3038);
+  font-size: 10px;
+}
+
+/* Legacy status bar (deprecated) */
+.status-bar { display: none; }
 
 /* Panels */
 .output-panel { position:fixed; right:0; top:0; width:480px; height:100vh; background:var(--secondary-bg); border-left:1px solid var(--border); transform:translateX(100%); transition:transform 0.2s; z-index:5000; display:flex; flex-direction:column; }
@@ -324,7 +491,7 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
 
 /* Use sharp edges for panels/tabs in the Strategy Builder */
 /* Target common panel/card elements and node containers */
-.sidebar,
+.sidebar:not(.node-palette),
 .output-panel,
 .results-panel,
 .chart-drawer,
@@ -372,14 +539,14 @@ button,
 .results-panel { position:fixed; top:0; right:-420px; width:420px; height:100vh; background:var(--secondary-bg); border-left:1px solid var(--border); box-shadow:-4px 0 24px rgba(0,0,0,0.3); transition:right 0.35s; z-index:5000; }
 .results-panel.open { right:0; }
 
-/* Chart Drawer Bottom Popup */
+/* Chart Drawer Bottom Popup - offset to account for both sidebars + gap (64 + 12 + 210 + 12 = 298px) */
 .chart-drawer.chart-drawer-bottom {
   position: fixed;
-  left: 0;
+  left: 298px;
   right: 0;
   bottom: 0;
-  width: 100%;
-  max-width: 100vw;
+  width: calc(100% - 298px);
+  max-width: calc(100vw - 298px);
   height: 340px;
   background: var(--secondary-bg);
   border-top: 1px solid var(--border);
@@ -390,8 +557,8 @@ button,
 }
 /* Expanded drawer variant */
 .chart-drawer.chart-drawer-bottom.expanded {
-  height: calc(100vh - 80px) !important;
-  max-height: calc(100vh - 80px) !important;
+  height: calc(100vh - 100px) !important;
+  max-height: calc(100vh - 100px) !important;
   z-index: 3600;
 }
 .chart-drawer-header {
@@ -428,10 +595,13 @@ button,
 
 /* Simple responsive helper */
 @media (max-width: 900px) {
-  .sidebar { display:none; }
+  .app-container > .sidebar:first-child { display:none; }
+  .app-container > .sidebar.node-palette { left: 12px !important; }
+  .builder-topbar { left: 0; }
+  .canvas-container { margin-left: 234px; }
+  .chart-drawer.chart-drawer-bottom { left: 234px; width: calc(100% - 234px); max-width: calc(100vw - 234px); }
+  .zoom-controls { left: 246px; }
   .output-panel { width:100%; }
-  .zoom-controls { position:absolute; bottom:160px; right:16px; left:auto; top:auto; }
-  .minimap { position:absolute; bottom:160px; right:80px; left:auto; top:auto; }
 }
 
 /* Small helpers for palettes */
@@ -441,6 +611,7 @@ button,
 .color-output { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
 .color-volume { background: linear-gradient(135deg, #ec4899 0%, #db2777 100%); }
 .color-config { background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); }
+.color-strategy { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
 
 /* Keep extra specificity low — this CSS is a starting point extracted from the original file */
 

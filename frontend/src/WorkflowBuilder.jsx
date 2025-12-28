@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import './workflow_builder.css';
 import BackButton from './components/BackButton';
+import DashboardSidebar from './components/DashboardSidebar';
 import Sidebar from './components/Sidebar';
 import Toolbar from './components/Toolbar';
 import Node from './components/Node';
@@ -1242,42 +1243,38 @@ const WorkflowBuilder = ({ onNavigate }) => {
   return (
     <div className="workflow-builder-root">
       <div className="app-container">
+        {/* Main navigation sidebar - always visible */}
+        <DashboardSidebar onNavigate={onNavigate} activeRoute="builder" />
+        
+        {/* Strategy Builder Top Bar */}
+        <div className="builder-topbar">
+          <div className="topbar-left">
+            <span className="topbar-title">Strategy Builder</span>
+          </div>
+          <div className="topbar-right">
+            <button className="topbar-btn" title="Auto-arrange blocks" onClick={null}>Organize</button>
+            <button className="topbar-btn" title="Clear canvas" onClick={clearWorkflow}>Clear</button>
+            <span className="topbar-divider" />
+            <button className="topbar-btn" title="Save workflow" onClick={saveWorkflow}>Save</button>
+            <button className="topbar-btn" title="Load workflow from file" onClick={importWorkflow}>Import</button>
+            <button className="topbar-btn" title="Export workflow" onClick={exportWorkflow}>Export</button>
+            <span className="topbar-divider" />
+            <div className="topbar-run">
+              <span>Run Strategy</span>
+              <label className={`run-switch ${liveRunning ? 'on' : 'off'}`} title="Toggle continuous run">
+                <input aria-label="Run Strategy" type="checkbox" checked={liveRunning} onChange={toggleLive} />
+                <span className="slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+        
+        {/* Drag-drop blocks sidebar */}
         <Sidebar />
 
-        {/* Remove previous zoom controls from top left */}
-        {/* <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 100, display: 'flex', gap: 8 }}>
-          <button className="toolbar-btn" title="Zoom In" onClick={() => setCanvasScale(s => Math.min(2.5, +(s + 0.15).toFixed(2)))}>＋</button>
-          <button className="toolbar-btn" title="Zoom Out" onClick={() => setCanvasScale(s => Math.max(0.3, +(s - 0.15).toFixed(2)))}>－</button>
-          <button className="toolbar-btn" title="Reset Zoom" onClick={() => { setCanvasScale(1); setCanvasOffset({x:0,y:0}); }}>⦿</button>
-        </div> */}
-
-        {/* Center-top toolbar with Back to Home and other controls */}
-        <Toolbar
-          extraBefore={typeof onNavigate === 'function' ? (
-            <BackButton onBack={() => onNavigate('home')} label={'Back to Home'} />
-          ) : (
-            <BackButton onBack={() => { try { window.navigate && window.navigate('home'); } catch (e) { window.location.href = '/'; } }} label={'Back to Home'} />
-          )}
-          onNew={newWorkflow}
-          onSave={saveWorkflow}
-          onLoad={loadWorkflow}
-          onExport={exportWorkflow}
-          onImport={importWorkflow}
-          onClear={clearWorkflow}
-          onOrganize={null}
-          onRun={runWorkflow}
-          onSample={loadSampleWorkflow}
-          onToggleMonitor={() => setChartDrawerMinimized(m => !m)}
-          onRunToggle={toggleLive}
-          onBacktest={() => setBacktestOpen(true)}
-          liveRunning={liveRunning}
-        />
-
         <div className="canvas-container">
-          {/* Background logo removed */}
-          {/* Minimap and zoom controls together */}
+          {/* Zoom controls in bottom right */}
           <div style={{ position: 'absolute', bottom: 24, right: 32, zIndex: 100, display: 'flex', alignItems: 'flex-end', gap: 12 }}>
-            {/* minimap removed per request */}
             <div className="zoom-controls" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <button className="toolbar-btn" title="Zoom In" onClick={() => setCanvasScale(s => Math.min(2.5, +(s + 0.15).toFixed(2)))}>＋</button>
               <button className="toolbar-btn" title="Zoom Out" onClick={() => setCanvasScale(s => Math.max(0.3, +(s - 0.15).toFixed(2)))}>－</button>
@@ -1300,20 +1297,15 @@ const WorkflowBuilder = ({ onNavigate }) => {
           </div>
 
           <input ref={importInputRef} type="file" accept="application/json" style={{ display: 'none' }} onChange={handleImportFile} />
+        </div>
 
-          <div className="status-bar">
-            <div className="status-item">
-                <div className={`status-dot ${liveRunning ? 'live' : ''}`}></div>
-                <span>{liveRunning ? 'Live' : 'Ready'}</span>
-                {lastUpdateTs ? <span className="last-update">{new Date(lastUpdateTs).toLocaleTimeString()}</span> : null}
-            </div>
-            <div className="status-item">
-              <span id="nodeCount">0 blocks</span>
-            </div>
-            <div className="status-item">
-              <span id="connectionCount">0 connections</span>
-            </div>
-          </div>
+        {/* IDE-style status bar spanning full width */}
+        <div className="builder-statusbar">
+          <span className="statusbar-item">{liveRunning ? 'Live' : 'Ready'}</span>
+          <span className="statusbar-sep">·</span>
+          <span className="statusbar-item">{nodes.length} blocks</span>
+          <span className="statusbar-sep">·</span>
+          <span className="statusbar-item">{connections.length} connections</span>
         </div>
 
         {/* Merge any websocket node messages into resultsData.latest_data for live overlays */}

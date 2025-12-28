@@ -608,12 +608,20 @@ ALPACA_BASE_URL=https://paper-api.alpaca.markets
 
 ### Running the Application
 
-**Terminal 1: Start Backend**
+**Terminal 1: Start Backend (FastAPI - Recommended)**
+```bash
+cd backendapi
+uvicorn api.backend_fastapi:app --reload --host 0.0.0.0 --port 8000
+```
+Backend runs on: `http://127.0.0.1:8000`
+API Docs available at: `http://127.0.0.1:8000/docs`
+
+**Alternative: Start Backend (Flask - Legacy)**
 ```bash
 cd backendapi
 python -m api.backend
 ```
-Backend runs on: `http://127.0.0.1:5000`
+Legacy backend runs on: `http://127.0.0.1:5000`
 
 **Terminal 2: Start Frontend**
 ```bash
