@@ -39,7 +39,8 @@ const DASHBOARD_LAYOUT_KEY = 'flowgrid_dashboard_layout';
 const formatCurrency = (value, showSign = false) => {
   if (value === null || value === undefined || isNaN(value)) return '--';
   const sign = showSign && value > 0 ? '+' : '';
-  return `${sign}$${Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // Format as percentage (no dollar sign) for percentage-based P&L system
+  return `${sign}${Math.abs(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
 };
 
 const formatPercent = (value, showSign = false) => {
@@ -1443,8 +1444,22 @@ const Dashboard = ({ onNavigate }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchDashboardData]);
   
+  // Get list of enabled strategy names
+  const enabledStrategyNames = useMemo(() => {
+    return localStrategies
+      .filter(s => s.enabled)
+      .map(s => s.name);
+  }, [localStrategies]);
+  
   // Combine live signals with local trades and historical trades for display
+  // ONLY show trades from enabled strategies when there are enabled strategies
   const allRecentActivity = useMemo(() => {
+    // If no strategies are enabled, only show live signals (which should be empty)
+    // This prevents "ghost" trades from old data
+    if (enabledStrategyNames.length === 0 && runningCount === 0) {
+      return []; // No enabled strategies = no recent activity
+    }
+    
     // Include local trades from StrategyRunner
     const localTradeSignals = localTrades.map(t => ({
       id: t.id,
@@ -1457,7 +1472,13 @@ const Dashboard = ({ onNavigate }) => {
       pnl: t.pnl
     }));
     
-    const combined = [...liveSignals, ...localTradeSignals, ...recentTrades];
+    // Filter recentTrades to only include trades from enabled strategies
+    const filteredRecentTrades = recentTrades.filter(t => 
+      enabledStrategyNames.includes(t.strategy_name) || 
+      enabledStrategyNames.includes(t.strategy_id)
+    );
+    
+    const combined = [...liveSignals, ...localTradeSignals, ...filteredRecentTrades];
     
     // Remove duplicates by id
     const uniqueMap = new Map();
@@ -1475,7 +1496,7 @@ const Dashboard = ({ onNavigate }) => {
       return timeB.localeCompare(timeA);
     });
     return unique.slice(0, 15);
-  }, [liveSignals, localTrades, recentTrades]);
+  }, [liveSignals, localTrades, recentTrades, enabledStrategyNames, runningCount]);
   
   // Use live metrics if we have trades, otherwise fall back to backend metrics
   const metrics = useMemo(() => {
@@ -1568,10 +1589,9 @@ const Dashboard = ({ onNavigate }) => {
         <div className="metrics-row">
           <MetricCard
             label="NET P&L"
-            value={formatCurrency(metrics.net_pnl, true)}
-            subValue={formatPercent(metrics.net_pnl_percent, true)}
+            value={formatPercent(metrics.net_pnl, true)}
             delta={metrics.net_pnl}
-            tooltip="Total profit and loss after fees, commissions, and slippage"
+            tooltip="Total profit and loss percentage after fees, commissions, and slippage"
             chartType="sparkline"
             chartData={cumulativePnl}
           />
@@ -1592,8 +1612,8 @@ const Dashboard = ({ onNavigate }) => {
           />
           <MetricCard
             label="EXPECTANCY"
-            value={formatCurrency(metrics.expectancy)}
-            subValue={`Avg: +${formatCurrency(metrics.avg_win)} / -${formatCurrency(metrics.avg_loss)}`}
+            value={formatPercent(metrics.expectancy)}
+            subValue={`Avg: +${formatPercent(metrics.avg_win)} / -${formatPercent(metrics.avg_loss)}`}
             tooltip="Expected profit per trade based on win rate and average win/loss"
           />
           <MetricCard
@@ -1604,7 +1624,6 @@ const Dashboard = ({ onNavigate }) => {
           <MetricCard
             label="MAX DRAWDOWN"
             value={`-${formatPercent(metrics.max_drawdown_pct)}`}
-            subValue={formatCurrency(-metrics.max_drawdown_value)}
             isNegative={true}
             tooltip="Maximum peak-to-trough decline in account equity"
           />
