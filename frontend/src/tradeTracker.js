@@ -4,10 +4,17 @@
  * Tracks trades in real-time when strategy is ON (live running).
  * Detects signal changes (BUY/SELL/HOLD), manages positions, calculates P&L.
  * Stores trades persistently in localStorage for analytics display.
+ * 
+ * CRITICAL: Positions are now isolated per-strategy to prevent cross-contamination.
+ * Each strategy maintains its own position state and trades are tagged with strategy_id.
  */
 
 const STORAGE_KEY = 'flowgrid_live_trades_v1';
 const POSITION_KEY = 'flowgrid_live_position_v1';
+const POSITIONS_BY_STRATEGY_KEY = 'flowgrid_positions_by_strategy_v1';
+
+// Import to check if strategy is enabled before tracking
+import { getEnabledStrategies, isStrategyRunning } from './services/StrategyRunner';
 
 /**
  * Trade object structure:
@@ -58,12 +65,88 @@ export function getAllTrades() {
 }
 
 /**
- * Get current open position
+ * Get trades for a specific strategy
+ */
+export function getTradesForStrategy(strategyId) {
+  const allTrades = getAllTrades();
+  return allTrades.filter(t => t.strategyId === strategyId);
+}
+
+/**
+ * Get all positions by strategy (isolated per strategy)
+ */
+function getAllPositionsByStrategy() {
+  try {
+    const stored = localStorage.getItem(POSITIONS_BY_STRATEGY_KEY);
+    return stored ? JSON.parse(stored) : {};
+  } catch (e) {
+    console.warn('[TradeTracker] Failed to read positions by strategy', e);
+    return {};
+  }
+}
+
+/**
+ * Save all positions by strategy
+ */
+function saveAllPositionsByStrategy(positions) {
+  try {
+    localStorage.setItem(POSITIONS_BY_STRATEGY_KEY, JSON.stringify(positions));
+  } catch (e) {
+    console.warn('[TradeTracker] Failed to save positions by strategy', e);
+  }
+}
+
+/**
+ * Get current open position for a SPECIFIC strategy (isolated)
+ * @param {string} strategyId - Strategy ID to get position for
+ */
+export function getPositionForStrategy(strategyId) {
+  if (!strategyId) return null;
+  const positions = getAllPositionsByStrategy();
+  return positions[strategyId] || null;
+}
+
+/**
+ * Save position for a SPECIFIC strategy (isolated)
+ * @param {string} strategyId - Strategy ID
+ * @param {Object|null} position - Position object or null to clear
+ */
+function savePositionForStrategy(strategyId, position) {
+  if (!strategyId) return;
+  const positions = getAllPositionsByStrategy();
+  if (position === null) {
+    delete positions[strategyId];
+  } else {
+    positions[strategyId] = position;
+  }
+  saveAllPositionsByStrategy(positions);
+}
+
+/**
+ * Clear position for a specific strategy
+ */
+export function clearPositionForStrategy(strategyId) {
+  if (!strategyId) return;
+  savePositionForStrategy(strategyId, null);
+  console.log(`[TradeTracker] Cleared position for strategy: ${strategyId}`);
+}
+
+/**
+ * Get current open position (LEGACY - returns first position found for backwards compatibility)
+ * @deprecated Use getPositionForStrategy(strategyId) instead
  */
 export function getCurrentPosition() {
   try {
+    // First try legacy single position
     const stored = localStorage.getItem(POSITION_KEY);
-    return stored ? JSON.parse(stored) : null;
+    if (stored) return JSON.parse(stored);
+    // Then try first position from strategy-isolated store
+    const positions = getAllPositionsByStrategy();
+    const strategyIds = Object.keys(positions);
+    if (strategyIds.length > 0) {
+      return positions[strategyIds[0]];
+    }
+    return null;
   } catch (e) {
     console.warn('[TradeTracker] Failed to read position', e);
     return null;
@@ -112,8 +195,9 @@ export function clearAllTrades() {
   try {
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(POSITION_KEY);
+    localStorage.removeItem(POSITIONS_BY_STRATEGY_KEY);
     window.dispatchEvent(new Event('flowgrid:trades-updated'));
-    console.log('[TradeTracker] Cleared all trades and positions');
+    console.log('[TradeTracker] Cleared all trades and positions (including per-strategy positions)');
   } catch (e) {
     console.warn('[TradeTracker] Failed to clear trades', e);
   }
@@ -131,12 +215,38 @@ function calculateFees(shares, price) {
 /**
  * Main trade tracking function - call this on each workflow execution result
  * 
+ * CRITICAL: Only tracks trades when strategy is formally enabled.
+ * Uses per-strategy isolated positions to prevent cross-contamination.
+ * 
  * @param {Object} result - Workflow execution result from backend
  * @param {Object} config - Configuration { strategyId, strategyName, symbol, timeframe, shares }
  * @returns {Object|null} - Trade object if a trade was closed, null otherwise
  */
 export function trackTrade(result, config) {
   try {
+    const strategyId = config.strategyId;
+    
+    // CRITICAL CHECK: Only track trades for enabled strategies
+    if (!strategyId) {
+      console.warn('[TradeTracker] No strategyId provided - trade not tracked');
+      return null;
+    }
+    
+    // Check if this strategy is enabled/running
+    try {
+      const enabledStrategies = getEnabledStrategies();
+      const running = isStrategyRunning(strategyId);
+      const enabled = enabledStrategies[strategyId];
+      
+      if (!enabled && !running) {
+        console.log(`[TradeTracker] Strategy "${strategyId}" is not enabled - trade not tracked`);
+        return null;
+      }
+    } catch (e) {
+      // If we can't check, proceed cautiously but log warning
+      console.warn('[TradeTracker] Could not verify strategy enabled state:', e);
+    }
+    
     // Extract signal from result
     const signal = normalizeSignal(
       result.finalSignal || 
@@ -156,17 +266,19 @@ export function trackTrade(result, config) {
     }
 
     const now = new Date().toISOString();
-    const openPosition = getCurrentPosition();
+    
+    // Use strategy-isolated position (not global)
+    const openPosition = getPositionForStrategy(strategyId);
 
     // Default shares if not provided
     const shares = config.shares || 100;
 
-    // No position open
+    // No position open for THIS strategy
     if (!openPosition) {
       if (signal === 'BUY') {
         // Open LONG position
         const newPosition = {
-          strategyId: config.strategyId,
+          strategyId: strategyId,
           type: 'LONG',
           entryTime: now,
           entryPrice: currentPrice,
@@ -175,13 +287,13 @@ export function trackTrade(result, config) {
           timeframe: config.timeframe,
           shares: shares
         };
-        savePosition(newPosition);
-        console.log(`[TradeTracker] Opened LONG position: ${config.symbol} @ ${currentPrice}`);
+        savePositionForStrategy(strategyId, newPosition);
+        console.log(`[TradeTracker] Opened LONG position for ${strategyId}: ${config.symbol} @ ${currentPrice}`);
         return null; // No trade closed yet
       } else if (signal === 'SELL') {
         // Open SHORT position
         const newPosition = {
-          strategyId: config.strategyId,
+          strategyId: strategyId,
           type: 'SHORT',
           entryTime: now,
           entryPrice: currentPrice,
@@ -190,15 +302,21 @@ export function trackTrade(result, config) {
           timeframe: config.timeframe,
           shares: shares
         };
-        savePosition(newPosition);
-        console.log(`[TradeTracker] Opened SHORT position: ${config.symbol} @ ${currentPrice}`);
+        savePositionForStrategy(strategyId, newPosition);
+        console.log(`[TradeTracker] Opened SHORT position for ${strategyId}: ${config.symbol} @ ${currentPrice}`);
         return null; // No trade closed yet
       }
       // HOLD signal with no position - do nothing
       return null;
     }
+    
+    // CRITICAL: Verify open position belongs to THIS strategy
+    if (openPosition.strategyId !== strategyId) {
+      console.warn(`[TradeTracker] Position belongs to different strategy (${openPosition.strategyId}), not ${strategyId}`);
+      return null;
+    }
 
-    // Position is open - check for exit
+    // Position is open for THIS strategy - check for exit
     if (openPosition.type === 'LONG') {
       if (signal === 'SELL' || signal === 'HOLD') {
         // Close LONG position
@@ -233,10 +351,10 @@ export function trackTrade(result, config) {
 
         saveTrade(trade);
         
-        // If signal is SELL, open opposite SHORT position
+        // If signal is SELL, open opposite SHORT position for THIS strategy
         if (signal === 'SELL') {
           const newPosition = {
-            strategyId: config.strategyId,
+            strategyId: strategyId,
             type: 'SHORT',
             entryTime: now,
             entryPrice: currentPrice,
@@ -245,12 +363,12 @@ export function trackTrade(result, config) {
             timeframe: config.timeframe,
             shares: shares
           };
-          savePosition(newPosition);
-          console.log(`[TradeTracker] Reversed: LONG → SHORT @ ${currentPrice}`);
+          savePositionForStrategy(strategyId, newPosition);
+          console.log(`[TradeTracker] ${strategyId}: Reversed LONG → SHORT @ ${currentPrice}`);
         } else {
-          // HOLD - just close position
-          savePosition(null);
-          console.log(`[TradeTracker] Closed LONG position @ ${currentPrice}`);
+          // HOLD - just close position for THIS strategy
+          savePositionForStrategy(strategyId, null);
+          console.log(`[TradeTracker] ${strategyId}: Closed LONG position @ ${currentPrice}`);
         }
 
         return trade;
@@ -289,10 +407,10 @@ export function trackTrade(result, config) {
 
         saveTrade(trade);
 
-        // If signal is BUY, open opposite LONG position
+        // If signal is BUY, open opposite LONG position for THIS strategy
         if (signal === 'BUY') {
           const newPosition = {
-            strategyId: config.strategyId,
+            strategyId: strategyId,
             type: 'LONG',
             entryTime: now,
             entryPrice: currentPrice,
@@ -301,12 +419,12 @@ export function trackTrade(result, config) {
             timeframe: config.timeframe,
             shares: shares
           };
-          savePosition(newPosition);
-          console.log(`[TradeTracker] Reversed: SHORT → LONG @ ${currentPrice}`);
+          savePositionForStrategy(strategyId, newPosition);
+          console.log(`[TradeTracker] ${strategyId}: Reversed SHORT → LONG @ ${currentPrice}`);
         } else {
-          // HOLD - just close position
-          savePosition(null);
-          console.log(`[TradeTracker] Closed SHORT position @ ${currentPrice}`);
+          // HOLD - just close position for THIS strategy
+          savePositionForStrategy(strategyId, null);
+          console.log(`[TradeTracker] ${strategyId}: Closed SHORT position @ ${currentPrice}`);
         }
 
         return trade;

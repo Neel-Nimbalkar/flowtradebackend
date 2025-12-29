@@ -31,6 +31,12 @@
   transition: opacity 0.15s ease;
 }
 
+.sidebar-logo svg {
+  display: block;
+  width: 36px;
+  height: 36px;
+}
+
 .sidebar-logo:hover {
   opacity: 0.8;
 }

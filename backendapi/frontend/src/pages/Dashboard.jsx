@@ -146,7 +146,7 @@ const WinRateRing = ({ winRate = 0, wins = 0, losses = 0, neutral = 0 }) => {
           strokeDashoffset={offset}
         />
       </svg>
-      <div className="metric-trade-badges" style={{ position: 'absolute', bottom: '-28px', left: '50%', transform: 'translateX(-50%)' }}>
+      <div className="metric-trade-badges">
         <span className="trade-badge wins">{wins}</span>
         {neutral > 0 && <span className="trade-badge neutral">{neutral}</span>}
         <span className="trade-badge losses">{losses}</span>
@@ -918,6 +918,11 @@ const RecentTradesPanel = ({ trades, activityLog, onTradeClick }) => {
         const direction = (item.direction || (item.type === 'entry' ? 'BUY' : 'SELL')).toLowerCase();
         const isBuy = direction === 'buy' || direction === 'long';
         
+        // Extract symbol from strategy config or parse from strategy name as fallback
+        const displaySymbol = item.symbol && item.symbol !== 'SPY' 
+          ? item.symbol 
+          : (item.strategy_name?.split(' ')[0] || item.symbol || 'SPY');
+        
         return (
           <div
             key={item.id || i}
@@ -926,14 +931,14 @@ const RecentTradesPanel = ({ trades, activityLog, onTradeClick }) => {
           >
             <span className={`trade-direction ${direction}`}>
               {item.direction || (item.type === 'entry' ? 'BUY' : 'SELL')}
-              {isLiveSignal && <span className={`signal-badge ${isBuy ? 'buy' : 'sell'}`}>LIVE</span>}
             </span>
             <div className="trade-info">
-              <span className="trade-symbol">{item.symbol}</span>
               <span className="trade-strategy">{item.strategy_name}</span>
+              {item.confidence && <span className="trade-node-info">{item.confidence}</span>}
               {timeStr && <span className="trade-time">{timeStr}</span>}
             </div>
             <span className={`trade-pnl ${isLiveSignal ? 'live-price' : ((item.pnl || 0) >= 0 ? 'positive' : 'negative')}`}>
+              <span className="trade-symbol-inline">{displaySymbol}</span>
               {item.pnl !== undefined && item.pnl !== null 
                 ? formatCurrency(item.pnl, true) 
                 : (item.price ? `@${item.price.toFixed(2)}` : '--')}
@@ -1787,7 +1792,7 @@ const Dashboard = ({ onNavigate }) => {
               )}
               <div className="panel-header">
                 <span className="panel-title">
-                  Current Signals
+                  Latest Signal
                 </span>
                 {liveSignals.length > 0 && (
                   <button className="clear-signals-btn" onClick={handleClearSignals} title="Clear all signals">

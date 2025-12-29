@@ -5,7 +5,32 @@ from typing import Any, Callable, Dict, List
 Pure backtest runner: extracts the core loop from BacktestManager so it can be
 unit-tested and reused by other runners. It accepts a callable `execute_fn`
 that evaluates the workflow for a given bar (to allow mocking in tests).
+
+PnL Calculation (UNIFIED with trade_engine.py):
+- gross_pct: ((exit_price / entry_price) - 1) * 100 for LONG
+- net_pct: gross_pct - fee_pct_total
+- pnl: dollar amount = (exit_price - entry_price) * position
 """
+
+
+def calculate_gross_pct(entry_price: float, exit_price: float, side: str = 'LONG') -> float:
+    """
+    Calculate gross percentage P&L using the SAME formula as trade_engine.py.
+    LONG: ((exit / entry) - 1) * 100
+    SHORT: ((entry / exit) - 1) * 100
+    """
+    if entry_price <= 0:
+        return 0.0
+    
+    if side == 'LONG':
+        return ((exit_price / entry_price) - 1) * 100
+    else:  # SHORT
+        return ((entry_price / exit_price) - 1) * 100
+
+
+def calculate_net_pct(gross_pct: float, fee_pct_total: float) -> float:
+    """Calculate net percentage P&L after fees (SAME as trade_engine.py)."""
+    return gross_pct - fee_pct_total
 
 def run_backtest(symbol: str, timeframe: str, bars: Dict[str, List[Any]], workflow_blocks: List[Any], execute_fn: Callable[[List[Any], Dict[str, Any]], Any], initial_cash: float = 100000.0, execution_config: Dict[str, Any] = None) -> Dict[str, Any]:
     opens = bars.get('open', [])
@@ -104,8 +129,30 @@ def run_backtest(symbol: str, timeframe: str, bars: Dict[str, List[Any]], workfl
                 fee = commission_fixed + (commission_pct * trade_value)
                 # credit proceeds minus commission
                 cash += (trade_value - fee)
+                
+                # Calculate dollar PnL
                 pnl = (exit_price - entry_price) * position if entry_price is not None else None
-                trades.append({'type': 'exit', 'time': timestamps[i] if i < len(timestamps) else None, 'price': exit_price, 'qty': position, 'pnl': pnl, 'commission': fee})
+                
+                # Calculate percentage PnL (UNIFIED with trade_engine.py)
+                gross_pct = calculate_gross_pct(entry_price, exit_price, 'LONG') if entry_price else 0.0
+                # Fee as percentage of trade value
+                fee_pct_total = ((fee / trade_value) * 100) if trade_value > 0 else 0.0
+                net_pct = calculate_net_pct(gross_pct, fee_pct_total)
+                
+                trades.append({
+                    'type': 'exit',
+                    'time': timestamps[i] if i < len(timestamps) else None,
+                    'price': exit_price,
+                    'qty': position,
+                    'pnl': pnl,
+                    'commission': fee,
+                    # Add percentage fields for unified analytics
+                    'gross_pct': round(gross_pct, 4),
+                    'fee_pct_total': round(fee_pct_total, 4),
+                    'net_pct': round(net_pct, 4),
+                    'entry_price': entry_price,
+                    'side': 'LONG'
+                })
                 position = 0
                 entry_price = None
 
@@ -120,9 +167,32 @@ def run_backtest(symbol: str, timeframe: str, bars: Dict[str, List[Any]], workfl
     # close remaining position at last price
     if position > 0 and entry_price is not None and len(closes):
         exit_price = closes[-1]
-        cash += exit_price * position
+        trade_value = exit_price * position
+        fee = commission_fixed + (commission_pct * trade_value)
+        cash += (trade_value - fee)
+        
+        # Calculate dollar PnL
         pnl = (exit_price - entry_price) * position
-        trades.append({'type': 'exit', 'time': timestamps[-1] if timestamps else None, 'price': exit_price, 'qty': position, 'pnl': pnl})
+        
+        # Calculate percentage PnL (UNIFIED with trade_engine.py)
+        gross_pct = calculate_gross_pct(entry_price, exit_price, 'LONG')
+        fee_pct_total = ((fee / trade_value) * 100) if trade_value > 0 else 0.0
+        net_pct = calculate_net_pct(gross_pct, fee_pct_total)
+        
+        trades.append({
+            'type': 'exit',
+            'time': timestamps[-1] if timestamps else None,
+            'price': exit_price,
+            'qty': position,
+            'pnl': pnl,
+            'commission': fee,
+            # Add percentage fields for unified analytics
+            'gross_pct': round(gross_pct, 4),
+            'fee_pct_total': round(fee_pct_total, 4),
+            'net_pct': round(net_pct, 4),
+            'entry_price': entry_price,
+            'side': 'LONG'
+        })
         position = 0
         equity = cash
 
@@ -132,6 +202,19 @@ def run_backtest(symbol: str, timeframe: str, bars: Dict[str, List[Any]], workfl
     win_trades = [t for t in trades if t.get('type') == 'exit' and t.get('pnl', 0) > 0]
     exit_trades = [t for t in trades if t.get('type') == 'exit']
     win_rate = (len(win_trades) / len(exit_trades)) if exit_trades else 0.0
+    
+    # Aggregate percentage metrics (UNIFIED with trade_engine.py)
+    total_gross_pct = sum(t.get('gross_pct', 0) for t in exit_trades)
+    total_net_pct = sum(t.get('net_pct', 0) for t in exit_trades)
+    total_fees_pct = sum(t.get('fee_pct_total', 0) for t in exit_trades)
+    avg_win_pct = (sum(t.get('net_pct', 0) for t in win_trades) / len(win_trades)) if win_trades else 0.0
+    loss_trades = [t for t in exit_trades if t.get('net_pct', 0) <= 0]
+    avg_loss_pct = (sum(t.get('net_pct', 0) for t in loss_trades) / len(loss_trades)) if loss_trades else 0.0
+    
+    # Profit factor (sum of wins / abs(sum of losses))
+    win_sum = sum(t.get('net_pct', 0) for t in win_trades)
+    loss_sum = abs(sum(t.get('net_pct', 0) for t in loss_trades))
+    profit_factor = (win_sum / loss_sum) if loss_sum > 0 else float('inf') if win_sum > 0 else 0.0
 
     result = {
         'symbol': symbol,
@@ -145,6 +228,14 @@ def run_backtest(symbol: str, timeframe: str, bars: Dict[str, List[Any]], workfl
             'annualized_return': annualized_return,
             'max_drawdown': max_drawdown,
             'win_rate': win_rate,
+            # Percentage-based metrics (UNIFIED with trade_engine.py)
+            'total_gross_pct': round(total_gross_pct, 4),
+            'total_net_pct': round(total_net_pct, 4),
+            'total_fees_pct': round(total_fees_pct, 4),
+            'avg_win_pct': round(avg_win_pct, 4),
+            'avg_loss_pct': round(avg_loss_pct, 4),
+            'profit_factor': round(profit_factor, 4) if profit_factor != float('inf') else 'inf',
+            'trade_count': len(exit_trades),
         },
         'equity_curve': equity_curve,
         'created_at': datetime.utcnow().isoformat() + 'Z'

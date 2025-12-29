@@ -283,23 +283,27 @@
 
 .metrics-row {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 8px;
   margin-bottom: 16px;
   flex-shrink: 0;
   background: transparent;
   border-radius: 0;
   overflow: visible;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .metric-card {
   background: var(--card-bg);
   border-radius: 6px;
-  padding: 14px 16px;
+  padding: 12px 14px;
   border: none;
   transition: background 0.15s ease;
   position: relative;
   overflow: hidden;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .metric-card:nth-child(1) { }
@@ -395,13 +399,16 @@
 }
 
 .metric-value {
-  font-size: 22px;
+  font-size: clamp(16px, 2vw, 22px);
   font-weight: 600;
   font-family: var(--font-mono);
   color: var(--text-primary);
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .metric-value.dimmed {
@@ -1734,6 +1741,15 @@
   text-overflow: ellipsis;
 }
 
+.trade-node-info {
+  font-size: 9px;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.8;
+}
+
 .trade-time {
   font-size: 10px;
   font-family: var(--font-mono);
@@ -1756,6 +1772,17 @@
   padding: 0;
   border-radius: 0;
   background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.trade-symbol-inline {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
 }
 
 .trade-pnl.positive {
@@ -1811,9 +1838,29 @@
    Responsive Adjustments - Premium
    ======================================== */
 
+@media (max-width: 1600px) {
+  .metrics-row {
+    grid-template-columns: repeat(6, 1fr);
+    gap: 6px;
+  }
+  
+  .metric-card {
+    padding: 10px 12px;
+  }
+  
+  .metric-label {
+    font-size: 9px;
+  }
+}
+
 @media (max-width: 1400px) {
   .metrics-row {
     grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  
+  .metric-card {
+    padding: 12px 14px;
   }
   
   .dashboard-grid {
@@ -2145,14 +2192,17 @@
 /* Win Rate Ring Chart */
 .metric-ring-chart {
   width: 48px;
-  height: 48px;
   flex-shrink: 0;
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
 }
 
 .metric-ring-chart svg {
-  width: 100%;
-  height: 100%;
+  width: 48px;
+  height: 48px;
   transform: rotate(-90deg);
 }
 
@@ -2191,8 +2241,11 @@
 /* Trade Count Badges */
 .metric-trade-badges {
   display: flex;
+  flex-direction: row;
   gap: 4px;
-  margin-top: 6px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: nowrap;
 }
 
 .trade-badge {
@@ -2248,6 +2301,21 @@
 .profit-factor-ring.neutral {
   border-color: var(--text-tertiary);
   color: var(--text-tertiary);
+}
+
+/* Confidence badge in signal row */
+.trade-confidence {
+  font-size: 9px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-top: 2px;
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .strategy-control-panel::-webkit-scrollbar-thumb {

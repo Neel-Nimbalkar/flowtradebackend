@@ -3568,118 +3568,39 @@ def add_activity():
 # Advanced Dashboard Endpoints for Trade Analytics
 # ============================================
 
-# In-memory trade history storage (would be DB in production)
+# In-memory trade history storage - LEGACY (deprecated, use trade_engine.py instead)
+# This was used for sample/demo data but polluted real trade tracking
 _trade_history = []
 
 def _generate_sample_trades():
-    """Generate realistic sample trade data for demo purposes."""
-    import random
-    trades = []
-    symbols = ['AAPL', 'NVDA', 'SPY', 'TSLA', 'GOOGL', 'MSFT', 'AMD', 'META', 'QQQ', 'AMZN']
-    strategies = ['RSI Momentum', 'MACD Crossover', 'Bollinger Breakout', 'Volume Spike', 'EMA Cross']
+    """
+    DEPRECATED: Sample trade generation disabled.
     
-    base_date = datetime.now() - timedelta(days=30)
-    cumulative_pnl = 0
-    equity = 100000
+    This function previously generated fake trades for demo purposes,
+    but it polluted real trade data and caused confusion.
     
-    for i in range(83):  # 83 trades for realistic demo
-        symbol = random.choice(symbols)
-        strategy = random.choice(strategies)
-        direction = random.choice(['LONG', 'SHORT'])
-        
-        # Entry time
-        entry_time = base_date + timedelta(
-            days=random.randint(0, 29),
-            hours=random.randint(9, 15),
-            minutes=random.randint(0, 59)
-        )
-        
-        # Hold time: 5 minutes to 4 hours
-        hold_minutes = random.randint(5, 240)
-        exit_time = entry_time + timedelta(minutes=hold_minutes)
-        
-        # Price and P&L
-        base_prices = {'AAPL': 195, 'NVDA': 140, 'SPY': 590, 'TSLA': 250, 'GOOGL': 175, 
-                       'MSFT': 430, 'AMD': 140, 'META': 580, 'QQQ': 520, 'AMZN': 225}
-        entry_price = base_prices.get(symbol, 100) * random.uniform(0.95, 1.05)
-        
-        # Win rate ~47%, average win > average loss (positive expectancy)
-        is_win = random.random() < 0.47
-        if is_win:
-            pnl_percent = random.uniform(0.5, 4.5)  # Wins: 0.5% to 4.5%
-        else:
-            pnl_percent = -random.uniform(0.3, 2.5)  # Losses: 0.3% to 2.5%
-        
-        if direction == 'SHORT':
-            pnl_percent = -pnl_percent  # Invert for short
-            exit_price = entry_price * (1 - pnl_percent / 100)
-            pnl_percent = -pnl_percent  # Calculate actual P&L
-        else:
-            exit_price = entry_price * (1 + pnl_percent / 100)
-        
-        # Position size: 1-10% of equity
-        position_size = equity * random.uniform(0.01, 0.10)
-        shares = int(position_size / entry_price)
-        if shares < 1:
-            shares = 1
-        
-        gross_pnl = (exit_price - entry_price) * shares
-        if direction == 'SHORT':
-            gross_pnl = -gross_pnl
-        
-        # Fees and commission
-        commission = shares * 0.005  # $0.005 per share
-        fees = abs(gross_pnl) * 0.001  # 0.1% SEC/TAF fees estimate
-        net_pnl = gross_pnl - commission - fees
-        
-        cumulative_pnl += net_pnl
-        equity += net_pnl
-        
-        # R-multiple (risk was 1% of equity at entry)
-        risk_amount = position_size * 0.01  # 1% stop loss
-        r_multiple = net_pnl / risk_amount if risk_amount > 0 else 0
-        
-        trades.append({
-            'id': f'trade-{i+1}',
-            'symbol': symbol,
-            'strategy': strategy,
-            'direction': direction,
-            'entryTime': entry_time.isoformat(),
-            'exitTime': exit_time.isoformat(),
-            'entryPrice': round(entry_price, 2),
-            'exitPrice': round(exit_price, 2),
-            'shares': shares,
-            'grossPnL': round(gross_pnl, 2),
-            'commission': round(commission, 2),
-            'fees': round(fees, 2),
-            'netPnL': round(net_pnl, 2),
-            'cumulativePnL': round(cumulative_pnl, 2),
-            'equity': round(equity, 2),
-            'rMultiple': round(r_multiple, 2),
-            'holdTimeMinutes': hold_minutes
-        })
+    Real trades are now ONLY created through:
+    1. Signal ingestion via /api/signals/ingest from enabled strategies
+    2. External trade logging via /api/trades/log
     
-    # Sort by entry time
-    trades.sort(key=lambda x: x['entryTime'])
-    
-    # Recalculate cumulative values after sorting
-    cumulative = 0
-    equity = 100000
-    for trade in trades:
-        cumulative += trade['netPnL']
-        equity += trade['netPnL']
-        trade['cumulativePnL'] = round(cumulative, 2)
-        trade['equity'] = round(equity, 2)
-    
-    return trades
+    Returns empty list to prevent any sample data pollution.
+    """
+    logger.warning("[DEPRECATED] _generate_sample_trades called - returning empty list. Use real strategy signals instead.")
+    return []
 
 
 def _get_trades():
-    """Get trades, generating sample data if needed."""
-    global _trade_history
-    if not _trade_history:
-        _trade_history = _generate_sample_trades()
-    return _trade_history
+    """
+    LEGACY trade getter - returns empty list.
+    
+    For real trades, use the trade_engine.py functions:
+    - get_all_percent_trades() for completed trades
+    - get_all_positions() for open positions
+    
+    This function no longer generates sample data to prevent pollution.
+    """
+    # Return empty - real trades come from trade_engine.py
+    return []
 
 
 # =============================================================================
@@ -3693,86 +3614,46 @@ _live_signals = []  # Store live signals from enabled strategies
 _MAX_LIVE_SIGNALS = 100
 
 def _start_realtime_monitoring():
-    """Start background thread to monitor enabled strategies."""
-    global _realtime_monitoring_active, _realtime_thread
+    """
+    DISABLED: Background monitoring is now handled by frontend StrategyRunner.
     
-    if _realtime_monitoring_active:
-        return
+    The frontend StrategyRunner.js polls /execute_workflow_v2 for each enabled
+    strategy and calls /api/signals/ingest when signals change.
     
-    _realtime_stop_event.clear()
-    _realtime_monitoring_active = True
+    This server-side monitoring is disabled to prevent:
+    1. Random signal generation that pollutes real trade data
+    2. Duplicate signal processing (frontend + backend)
+    3. Race conditions between frontend and backend polling
     
-    def monitor_loop():
-        logger.info("🔴 Real-time monitoring started")
-        while not _realtime_stop_event.is_set():
-            try:
-                # Check enabled strategies
-                enabled = _get_enabled_strategies()
-                if not enabled:
-                    time.sleep(5)
-                    continue
-                
-                # For each enabled strategy, check if it generates a signal
-                for strategy_name in enabled:
-                    strategy = _load_strategy(strategy_name)
-                    if not strategy:
-                        continue
-                    
-                    # Execute workflow with current market data
-                    # For demo: generate synthetic signals
-                    if random.random() < 0.05:  # 5% chance per check
-                        signal = _generate_live_signal(strategy_name, strategy)
-                        _live_signals.append(signal)
-                        
-                        # Keep only last N signals
-                        if len(_live_signals) > _MAX_LIVE_SIGNALS:
-                            _live_signals.pop(0)
-                        
-                        logger.info(f"📊 Signal generated: {signal['symbol']} {signal['direction']} from {strategy_name}")
-                
-                time.sleep(10)  # Check every 10 seconds
-                
-            except Exception as e:
-                logger.error(f"Real-time monitoring error: {e}")
-                time.sleep(5)
-        
-        logger.info("🔴 Real-time monitoring stopped")
-    
-    _realtime_thread = threading.Thread(target=monitor_loop, daemon=True, name='RealtimeMonitor')
-    _realtime_thread.start()
+    Signal flow is now:
+    1. Frontend enables strategy → StrategyRunner.startStrategy()
+    2. StrategyRunner polls /execute_workflow_v2 every 1 second
+    3. On signal change, calls /api/signals/ingest with strategy_id
+    4. Backend trade_engine.py processes signal and manages trades
+    """
+    logger.info("[DISABLED] Backend realtime monitoring disabled - use frontend StrategyRunner instead")
+    return
 
 def _stop_realtime_monitoring():
-    """Stop background monitoring thread."""
+    """Stop background monitoring thread (NOOP - monitoring is disabled)."""
     global _realtime_monitoring_active
-    
-    if not _realtime_monitoring_active:
-        return
-    
     _realtime_monitoring_active = False
-    _realtime_stop_event.set()
-    
-    if _realtime_thread:
-        _realtime_thread.join(timeout=3)
+    logger.info("[DISABLED] Backend realtime monitoring stop (was already disabled)")
 
 def _generate_live_signal(strategy_name, strategy):
-    """Generate a live signal from strategy."""
-    symbols = ['AAPL', 'NVDA', 'TSLA', 'MSFT', 'GOOGL', 'AMZN', 'META']
-    symbol = random.choice(symbols)
-    direction = random.choice(['BUY', 'SELL'])
-    price = 100 + random.random() * 200
+    """
+    DEPRECATED: Random signal generation disabled.
     
-    return {
-        'id': str(uuid.uuid4())[:8],
-        'timestamp': datetime.now().isoformat(),
-        'strategy_name': strategy_name,
-        'symbol': symbol,
-        'direction': direction,
-        'type': 'entry',
-        'price': round(price, 2),
-        'quantity': random.randint(1, 10),
-        'pnl': None,  # Entry signal has no P&L yet
-        'status': 'open'
-    }
+    Signals should ONLY come from:
+    1. Real strategy execution via /execute_workflow_v2
+    2. Signal ingestion via /api/signals/ingest
+    
+    This function previously generated random signals which polluted
+    real trade data and caused phantom trades.
+    """
+    logger.warning(f"[DEPRECATED] _generate_live_signal called for {strategy_name} - returning None. Use real execution instead.")
+    return None
+
 
 def _get_enabled_strategies():
     """Get list of currently enabled strategy names."""
@@ -5048,6 +4929,15 @@ def api_clear_all_positions():
         return jsonify({'success': success})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# Register AI Agent Blueprint
+try:
+    from api.ai_agent import ai_bp
+    app.register_blueprint(ai_bp, url_prefix='/api/ai')
+    print('✅ AI Agent API registered at /api/ai')
+except Exception as e:
+    print(f'⚠️ AI Agent API not available: {e}')
 
 
 if __name__ == '__main__':

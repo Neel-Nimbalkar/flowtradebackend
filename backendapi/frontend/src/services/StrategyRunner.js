@@ -620,8 +620,20 @@ export async function startStrategy(strategyName) {
   console.log(`[StrategyRunner] ▶️ Starting ${strategyName}...`);
   
   const abortController = new AbortController();
-  const triggerNode = (strategy.nodes || []).find(n => n.type === 'trigger');
-  const symbol = triggerNode?.data?.symbol || 'SPY';
+  
+  // Extract symbol from strategy nodes - check multiple sources
+  const priceInputTypes = new Set(['input', 'price_history', 'volume_history', 'trigger']);
+  const nodes = strategy.nodes || [];
+  
+  // Find node with symbol config (check configValues and data fields)
+  const nodeWithSymbol = nodes.find(n => 
+    priceInputTypes.has(n.type) && 
+    (n.configValues?.symbol || n.data?.symbol)
+  );
+  
+  const symbol = nodeWithSymbol?.configValues?.symbol || 
+                 nodeWithSymbol?.data?.symbol || 
+                 'SPY';
   
   // Create the polling loop
   const runLoop = async () => {

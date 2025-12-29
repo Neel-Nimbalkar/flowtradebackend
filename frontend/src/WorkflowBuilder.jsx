@@ -7,7 +7,7 @@ import Toolbar from './components/Toolbar';
 import Node from './components/Node';
 import blockDefs from './blockDefs';
 import Connections from './components/Connections';
-import ResultsPanel from './components/ResultsPanel';
+import RightPanelContainer from './components/RightPanelContainer';
 import NodeSettings from './components/NodeSettings';
 import PastDataViewer from './components/StrategyResults/PastDataViewer';
 import BacktestModal from './components/BacktestModal';
@@ -554,21 +554,12 @@ const WorkflowBuilder = ({ onNavigate }) => {
             else setPastOpen(false);
             persistAlertEntry(data, 'live-tick');
 
-            // Track live trades when strategy is running
-            try {
-              const strategyName = localStorage.getItem('workflow_active_id') || 'Unnamed Strategy';
-              const symbol = payload.symbol || 'SPY';
-              const timeframe = payload.timeframe || '1Hour';
-              trackTrade(data, {
-                strategyId: strategyName,
-                strategyName: strategyName,
-                symbol: symbol,
-                timeframe: timeframe,
-                shares: 100 // Could make configurable
-              });
-            } catch (err) {
-              console.warn('[WorkflowBuilder] Trade tracking error', err);
-            }
+            // NOTE: Trade tracking is handled by StrategyRunner for ENABLED strategies only.
+            // WorkflowBuilder live mode is for testing/preview and should NOT create trades.
+            // This prevents "phantom trades" when no strategy is formally enabled.
+            // 
+            // To track trades: Save the strategy, then enable it via the Dashboard toggle.
+            // The StrategyRunner will then poll and track trades correctly.
           } else {
             console.warn('Live run returned error payload', data);
           }
@@ -1239,6 +1230,7 @@ const WorkflowBuilder = ({ onNavigate }) => {
   const [chartDrawerMinimized, setChartDrawerMinimized] = useState(false);
   const [chartDrawerExpanded, setChartDrawerExpanded] = useState(false);
   const [backtestOpen, setBacktestOpen] = useState(false);
+  const [aiAgentOpen, setAIAgentOpen] = useState(true);
 
   return (
     <div className="workflow-builder-root">
@@ -1258,6 +1250,8 @@ const WorkflowBuilder = ({ onNavigate }) => {
             <button className="topbar-btn" title="Save workflow" onClick={saveWorkflow}>Save</button>
             <button className="topbar-btn" title="Load workflow from file" onClick={importWorkflow}>Import</button>
             <button className="topbar-btn" title="Export workflow" onClick={exportWorkflow}>Export</button>
+            <span className="topbar-divider" />
+            <button className={`topbar-btn ${aiAgentOpen ? 'active' : ''}`} title="Toggle AI Agent" onClick={() => setAIAgentOpen(!aiAgentOpen)}>🤖 AI Agent</button>
             <span className="topbar-divider" />
             <div className="topbar-run">
               <span>Run Strategy</span>
@@ -1308,7 +1302,7 @@ const WorkflowBuilder = ({ onNavigate }) => {
           <span className="statusbar-item">{connections.length} connections</span>
         </div>
 
-        {/* Merge any websocket node messages into resultsData.latest_data for live overlays */}
+        {/* Right Panel Container - Results (top) + AI Agent (bottom) */}
         {(() => {
           const merged = resultsData ? { ...resultsData } : {};
           merged.latest_data = { ...(resultsData && resultsData.latest_data ? resultsData.latest_data : {}) };
@@ -1318,8 +1312,58 @@ const WorkflowBuilder = ({ onNavigate }) => {
               if (key) merged.latest_data[key] = m.last;
             });
           } catch (e) {}
-          return <ResultsPanel data={merged} open={resultsOpen} onClose={() => setResultsOpen(false)} onRerun={runWorkflow} onDownload={downloadResults} />;
-          })()}
+          
+          // AI action handlers
+          const handleAddNode = ({ type, params, x, y }) => {
+            const def = blockDefs[type] || { name: type, icon: '◼', inputs: [], outputs: [] };
+            const id = nextNodeId.current++;
+            const newNode = { id, type, x, y, title: def.name, def, params: params || {} };
+            setNodes(prev => [...prev, newNode]);
+            console.log('[AI] Added node:', newNode);
+          };
+          
+          const handleConnectNodes = ({ fromNodeId, fromPort, toNodeId, toPort }) => {
+            const newConn = {
+              id: `ai-conn-${Date.now()}`,
+              from: { nodeId: fromNodeId, port: fromPort || 'output' },
+              to: { nodeId: toNodeId, port: toPort || 'input' }
+            };
+            setConnections(prev => [...prev, newConn]);
+            console.log('[AI] Connected nodes:', newConn);
+          };
+          
+          const handleUpdateNode = (nodeId, params) => {
+            setNodes(prev => prev.map(n => 
+              n.id === nodeId ? { ...n, params: { ...n.params, ...params } } : n
+            ));
+            console.log('[AI] Updated node:', nodeId, params);
+          };
+          
+          const handleRemoveNode = (nodeId) => {
+            setNodes(prev => prev.filter(n => n.id !== nodeId));
+            setConnections(prev => prev.filter(c => 
+              c.from?.nodeId !== nodeId && c.to?.nodeId !== nodeId
+            ));
+            console.log('[AI] Removed node:', nodeId);
+          };
+          
+          return (
+            <RightPanelContainer 
+              resultsOpen={resultsOpen} 
+              resultsData={merged} 
+              onCloseResults={() => setResultsOpen(false)} 
+              onRerun={runWorkflow}
+              nodes={nodes}
+              connections={connections}
+              onAddNode={handleAddNode}
+              onConnectNodes={handleConnectNodes}
+              onUpdateNode={handleUpdateNode}
+              onRemoveNode={handleRemoveNode}
+              aiAgentOpen={aiAgentOpen}
+              onCloseAIAgent={() => setAIAgentOpen(false)}
+            />
+          );
+        })()}
           <NodeSettings node={settingsNode} open={settingsOpen} onClose={closeNodeSettings} onSave={saveNodeSettings} />
 
           {/* PastDataViewer is embedded into the chart drawer below */}

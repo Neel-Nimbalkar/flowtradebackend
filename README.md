@@ -23,6 +23,10 @@ cd frontend
 npm run dev
 ---
 
+cd /Users/neelnimbalkar/Documents/Flowtrade/FlowGrid-Trading && chmod +x start.sh stop.sh && ./stop.sh && sleep 1 && ./start.sh
+
+sleep 2 && lsof -i :8000 -i :5174 | grep LISTEN
+
 ## 🎯 System Overview
 
 FlowGrid Trading is a complete algorithmic trading workflow that takes you from strategy design to live execution and analytics—all using **percentage-based P&L** (no dollar amounts).

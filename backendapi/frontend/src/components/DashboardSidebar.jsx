@@ -3,18 +3,18 @@ import './sidebar.css';
 
 // FlowGrid Logo Component - Modern gradient logo
 const FlowGridLogo = ({ size = 36 }) => (
-  <svg width={size} height={size} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <svg width={size} height={size} viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" style={{ display: 'block' }} preserveAspectRatio="xMidYMid meet">
     <defs>
-      <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <linearGradient id="flowGridLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stopColor="#3B82F6" />
         <stop offset="100%" stopColor="#8B5CF6" />
       </linearGradient>
     </defs>
-    <rect x="2" y="6" width="12" height="4" rx="1" fill="url(#logoGrad)" opacity="0.85"/>
-    <rect x="2" y="13" width="28" height="5" rx="1.5" fill="url(#logoGrad)"/>
-    <rect x="2" y="21" width="20" height="4" rx="1" fill="url(#logoGrad)" opacity="0.7"/>
-    <circle cx="26" cy="8" r="2.5" fill="#8B5CF6"/>
-    <circle cx="24" cy="23" r="2" fill="#3B82F6"/>
+    <rect x="4" y="6" width="10" height="4" rx="1" fill="url(#flowGridLogoGrad)" opacity="0.85"/>
+    <rect x="4" y="13" width="24" height="5" rx="1.5" fill="url(#flowGridLogoGrad)"/>
+    <rect x="4" y="21" width="18" height="4" rx="1" fill="url(#flowGridLogoGrad)" opacity="0.7"/>
+    <circle cx="24" cy="8" r="2.5" fill="#8B5CF6"/>
+    <circle cx="22" cy="23" r="2" fill="#3B82F6"/>
   </svg>
 );
 
