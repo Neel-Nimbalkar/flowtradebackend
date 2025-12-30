@@ -50,7 +50,5 @@ Procfile
 backend.py
 PROJECT_STRUCTURE.md
 
-# Firebase
+# Firebase debug logs (not config)
 firebase-debug.log
-.firebaserc
-firebase.json
