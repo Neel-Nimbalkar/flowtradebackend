@@ -1,24 +1,25 @@
 // Firebase initialization
-// Replace the values below with your Firebase project config or set them
-// in environment variables (VITE_FIREBASE_API_KEY, etc.) for production.
-
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getAnalytics } from 'firebase/analytics';
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "REPLACE_WITH_API_KEY",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "REPLACE_WITH_AUTH_DOMAIN",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "REPLACE_WITH_PROJECT_ID",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "REPLACE_WITH_STORAGE_BUCKET",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "REPLACE_WITH_MESSAGING_SENDER_ID",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "REPLACE_WITH_APP_ID",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyAhIJaE5znNp8X3_ZWsuK1RWn1PpMQY1Rw",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "flowtrade210.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "flowtrade210",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "flowtrade210.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "924867520326",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:924867520326:web:fcf9cf14fc1649c5f6e747",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-ELDLV9CN3G"
 };
 
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+export const analytics = getAnalytics(app);
 export const googleProvider = new GoogleAuthProvider();
 
-// Optionally set provider custom parameters
+// Set provider custom parameters
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 export default app;
