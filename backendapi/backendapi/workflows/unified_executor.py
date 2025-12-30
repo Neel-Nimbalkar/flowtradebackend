@@ -1394,105 +1394,225 @@ class UnifiedStrategyExecutor:
         # AND NODE - Logical AND of all inputs
         # ═══════════════════════════════════════════════════════════════════
         elif node_type == 'and':
-            # CRITICAL: Use strict bool conversion to prevent raw indicator values
-            # from being treated as True (e.g., RSI=52 should NOT be True)
-            a_val = inputs.get('a')
-            b_val = inputs.get('b')
+            # ─────────────────────────────────────────────────────────────────
+            # CONFIGURABLE AND GATE
+            # Modes:
+            #   - 'strict' (default): Only True/1/1.0 values are True
+            #   - 'truthy': Any non-zero, non-empty value is True (Python truthy)
+            #   - 'threshold': Values above threshold are True
+            #   - 'nonzero': Any non-zero value is True
+            # ─────────────────────────────────────────────────────────────────
+            mode = params.get('mode', 'strict')
+            threshold = float(params.get('threshold', 0))
             
-            # Also check for generic 'input' ports if a/b not connected
-            if a_val is None:
-                a_val = inputs.get('input')
-            if b_val is None:
-                # Check for any other input port
-                for port, val in inputs.items():
-                    if port not in ['a', 'input'] and val is not None and b_val is None:
-                        b_val = val
-                        break
+            def to_bool_by_mode(val, mode, threshold):
+                """Convert value to bool based on configured mode."""
+                if val is None:
+                    return False
+                if isinstance(val, bool):
+                    return val
+                if mode == 'strict':
+                    return self._to_strict_bool(val)
+                elif mode == 'truthy':
+                    return bool(val)
+                elif mode == 'threshold':
+                    try:
+                        return float(val) > threshold
+                    except (ValueError, TypeError):
+                        return False
+                elif mode == 'nonzero':
+                    try:
+                        return float(val) != 0
+                    except (ValueError, TypeError):
+                        return bool(val)
+                else:
+                    return self._to_strict_bool(val)
             
-            if a_val is not None and b_val is not None:
-                a_bool = self._to_strict_bool(a_val)
-                b_bool = self._to_strict_bool(b_val)
+            # Collect ALL inputs from any port
+            all_inputs = []
+            for port, val in inputs.items():
+                if val is not None:
+                    all_inputs.append((port, val))
+            
+            # Also try standard port names explicitly
+            a_val = inputs.get('a') or inputs.get('input') or inputs.get('value')
+            b_val = inputs.get('b') or inputs.get('input2')
+            
+            # If we didn't find inputs via standard ports, use the collected inputs
+            if not all_inputs and a_val is None:
+                result = False
+                a_bool = None
+                b_bool = None
+            elif len(all_inputs) >= 2:
+                # Convert all to bool and AND them
+                bool_values = [to_bool_by_mode(v, mode, threshold) for _, v in all_inputs]
+                result = all(bool_values)
+                a_bool = bool_values[0] if len(bool_values) > 0 else None
+                b_bool = bool_values[1] if len(bool_values) > 1 else None
+                a_val = all_inputs[0][1] if len(all_inputs) > 0 else None
+                b_val = all_inputs[1][1] if len(all_inputs) > 1 else None
+            elif a_val is not None and b_val is not None:
+                a_bool = to_bool_by_mode(a_val, mode, threshold)
+                b_bool = to_bool_by_mode(b_val, mode, threshold)
                 result = a_bool and b_bool
+            elif a_val is not None:
+                # Only one input - pass through its bool value
+                a_bool = to_bool_by_mode(a_val, mode, threshold)
+                b_bool = None
+                result = a_bool  # Single input just passes through
             else:
-                # Collect all input values
-                all_values = []
-                for port, val in inputs.items():
-                    if val is not None:
-                        all_values.append(self._to_strict_bool(val))
-                result = all(all_values) if all_values else False
-                a_bool = all_values[0] if len(all_values) > 0 else None
-                b_bool = all_values[1] if len(all_values) > 1 else None
+                result = False
+                a_bool = None
+                b_bool = None
             
-            # Include input values in outputs for debugging in Results Panel
             outputs = {
                 'result': result, 
                 'value': result,
                 'a': a_val,
                 'b': b_val,
-                'a_bool': a_bool if 'a_bool' in dir() else self._to_strict_bool(a_val) if a_val is not None else None,
-                'b_bool': b_bool if 'b_bool' in dir() else self._to_strict_bool(b_val) if b_val is not None else None
+                'a_bool': a_bool,
+                'b_bool': b_bool,
+                'mode': mode,
+                'threshold': threshold if mode == 'threshold' else None
             }
             
             if self.debug:
-                logger.info(f"[EXEC] Node {node_id} (and): a={a_val}, b={b_val}, result={result}")
+                logger.info(f"[EXEC] Node {node_id} (and): mode={mode}, a={a_val}(→{a_bool}), b={b_val}(→{b_bool}), result={result}")
         
         # ═══════════════════════════════════════════════════════════════════
         # OR NODE - Logical OR of all inputs
         # ═══════════════════════════════════════════════════════════════════
         elif node_type == 'or':
-            a_val = inputs.get('a')
-            b_val = inputs.get('b')
+            # ─────────────────────────────────────────────────────────────────
+            # CONFIGURABLE OR GATE
+            # Same modes as AND gate
+            # ─────────────────────────────────────────────────────────────────
+            mode = params.get('mode', 'strict')
+            threshold = float(params.get('threshold', 0))
             
-            # Also check for generic 'input' ports if a/b not connected
-            if a_val is None:
-                a_val = inputs.get('input')
-            if b_val is None:
-                for port, val in inputs.items():
-                    if port not in ['a', 'input'] and val is not None and b_val is None:
-                        b_val = val
-                        break
+            def to_bool_by_mode_or(val, mode, threshold):
+                """Convert value to bool based on configured mode."""
+                if val is None:
+                    return False
+                if isinstance(val, bool):
+                    return val
+                if mode == 'strict':
+                    return self._to_strict_bool(val)
+                elif mode == 'truthy':
+                    return bool(val)
+                elif mode == 'threshold':
+                    try:
+                        return float(val) > threshold
+                    except (ValueError, TypeError):
+                        return False
+                elif mode == 'nonzero':
+                    try:
+                        return float(val) != 0
+                    except (ValueError, TypeError):
+                        return bool(val)
+                else:
+                    return self._to_strict_bool(val)
             
-            if a_val is not None and b_val is not None:
-                a_bool = self._to_strict_bool(a_val)
-                b_bool = self._to_strict_bool(b_val)
+            # Collect ALL inputs from any port
+            all_inputs = []
+            for port, val in inputs.items():
+                if val is not None:
+                    all_inputs.append((port, val))
+            
+            a_val = inputs.get('a') or inputs.get('input') or inputs.get('value')
+            b_val = inputs.get('b') or inputs.get('input2')
+            
+            if not all_inputs and a_val is None:
+                result = False
+                a_bool = None
+                b_bool = None
+            elif len(all_inputs) >= 2:
+                bool_values = [to_bool_by_mode_or(v, mode, threshold) for _, v in all_inputs]
+                result = any(bool_values)
+                a_bool = bool_values[0] if len(bool_values) > 0 else None
+                b_bool = bool_values[1] if len(bool_values) > 1 else None
+                a_val = all_inputs[0][1] if len(all_inputs) > 0 else None
+                b_val = all_inputs[1][1] if len(all_inputs) > 1 else None
+            elif a_val is not None and b_val is not None:
+                a_bool = to_bool_by_mode_or(a_val, mode, threshold)
+                b_bool = to_bool_by_mode_or(b_val, mode, threshold)
                 result = a_bool or b_bool
+            elif a_val is not None:
+                a_bool = to_bool_by_mode_or(a_val, mode, threshold)
+                b_bool = None
+                result = a_bool
             else:
-                all_values = []
-                for port, val in inputs.items():
-                    if val is not None:
-                        all_values.append(self._to_strict_bool(val))
-                result = any(all_values) if all_values else False
-                a_bool = all_values[0] if len(all_values) > 0 else None
-                b_bool = all_values[1] if len(all_values) > 1 else None
+                result = False
+                a_bool = None
+                b_bool = None
             
-            # Include input values in outputs for debugging in Results Panel
             outputs = {
                 'result': result, 
                 'value': result,
                 'a': a_val,
                 'b': b_val,
-                'a_bool': a_bool if 'a_bool' in dir() else self._to_strict_bool(a_val) if a_val is not None else None,
-                'b_bool': b_bool if 'b_bool' in dir() else self._to_strict_bool(b_val) if b_val is not None else None
+                'a_bool': a_bool,
+                'b_bool': b_bool,
+                'mode': mode,
+                'threshold': threshold if mode == 'threshold' else None
             }
             
             if self.debug:
-                logger.info(f"[EXEC] Node {node_id} (or): a={a_val}, b={b_val}, result={result}")
+                logger.info(f"[EXEC] Node {node_id} (or): mode={mode}, a={a_val}(→{a_bool}), b={b_val}(→{b_bool}), result={result}")
         
         # ═══════════════════════════════════════════════════════════════════
         # NOT NODE - Logical NOT
         # ═══════════════════════════════════════════════════════════════════
         elif node_type == 'not':
+            # ─────────────────────────────────────────────────────────────────
+            # CONFIGURABLE NOT GATE
+            # Same modes as AND/OR gates
+            # ─────────────────────────────────────────────────────────────────
+            mode = params.get('mode', 'strict')
+            threshold = float(params.get('threshold', 0))
+            
+            def to_bool_by_mode_not(val, mode, threshold):
+                """Convert value to bool based on configured mode."""
+                if val is None:
+                    return False
+                if isinstance(val, bool):
+                    return val
+                if mode == 'strict':
+                    return self._to_strict_bool(val)
+                elif mode == 'truthy':
+                    return bool(val)
+                elif mode == 'threshold':
+                    try:
+                        return float(val) > threshold
+                    except (ValueError, TypeError):
+                        return False
+                elif mode == 'nonzero':
+                    try:
+                        return float(val) != 0
+                    except (ValueError, TypeError):
+                        return bool(val)
+                else:
+                    return self._to_strict_bool(val)
+            
             input_val = inputs.get('input') or inputs.get('a') or inputs.get('value')
             
             if input_val is not None:
-                result = not self._to_strict_bool(input_val)
+                input_bool = to_bool_by_mode_not(input_val, mode, threshold)
+                result = not input_bool
             else:
+                input_bool = None
                 result = True  # NOT(nothing) = True
             
-            outputs = {'result': result, 'value': result}
+            outputs = {
+                'result': result, 
+                'value': result, 
+                'input': input_val,
+                'input_bool': input_bool,
+                'mode': mode
+            }
             
             if self.debug:
-                logger.info(f"[EXEC] Node {node_id} (not): input={input_val}, result={result}")
+                logger.info(f"[EXEC] Node {node_id} (not): mode={mode}, input={input_val}(→{input_bool}), result={result}")
         
         # ═══════════════════════════════════════════════════════════════════
         # OUTPUT NODE - Final signal output
@@ -1949,6 +2069,66 @@ class UnifiedStrategyExecutor:
             
             if self.debug:
                 logger.info(f"[EXEC] Node {node_id} (alpaca_credentials): pass-through")
+        
+        # ═══════════════════════════════════════════════════════════════════
+        # CONSTANT NODE - Outputs a fixed value (numeric or boolean)
+        # ═══════════════════════════════════════════════════════════════════
+        elif node_type == 'constant':
+            # Get value from params
+            const_value = params.get('value', 0)
+            
+            # Try to interpret the value type
+            if isinstance(const_value, bool):
+                outputs = {'value': const_value, 'result': const_value, 'output': const_value}
+            elif isinstance(const_value, str):
+                # Check for boolean strings
+                if const_value.lower() in ('true', '1', 'yes'):
+                    outputs = {'value': True, 'result': True, 'output': True}
+                elif const_value.lower() in ('false', '0', 'no'):
+                    outputs = {'value': False, 'result': False, 'output': False}
+                else:
+                    # Try numeric conversion
+                    try:
+                        num_val = float(const_value)
+                        outputs = {'value': num_val, 'result': num_val, 'output': num_val}
+                    except ValueError:
+                        outputs = {'value': const_value, 'result': const_value, 'output': const_value}
+            else:
+                # Numeric value
+                outputs = {'value': const_value, 'result': const_value, 'output': const_value}
+            
+            if self.debug:
+                logger.info(f"[EXEC] Node {node_id} (constant): value={const_value}, type={type(const_value).__name__}")
+        
+        # ═══════════════════════════════════════════════════════════════════
+        # NUMBER NODE - Alias for constant (outputs a numeric value)
+        # ═══════════════════════════════════════════════════════════════════
+        elif node_type == 'number':
+            num_value = params.get('value', params.get('number', 0))
+            try:
+                num_value = float(num_value)
+            except (ValueError, TypeError):
+                num_value = 0
+            
+            outputs = {'value': num_value, 'result': num_value, 'output': num_value, 'number': num_value}
+            
+            if self.debug:
+                logger.info(f"[EXEC] Node {node_id} (number): value={num_value}")
+        
+        # ═══════════════════════════════════════════════════════════════════
+        # BOOLEAN NODE - Outputs a boolean value (true/false)
+        # ═══════════════════════════════════════════════════════════════════
+        elif node_type == 'boolean':
+            bool_value = params.get('value', False)
+            if isinstance(bool_value, str):
+                bool_value = bool_value.lower() in ('true', '1', 'yes')
+            else:
+                bool_value = bool(bool_value)
+            
+            outputs = {'value': bool_value, 'result': bool_value, 'output': bool_value}
+            
+            if self.debug:
+                logger.info(f"[EXEC] Node {node_id} (boolean): value={bool_value}")
         
         # ═══════════════════════════════════════════════════════════════════
         # UNKNOWN NODE - Pass through with warning
