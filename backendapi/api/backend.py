@@ -6,6 +6,12 @@ Executes trading strategies and returns results to the browser dashboard
 import sys
 import os
 
+# Add the backendapi/backendapi directory to the Python path for module imports
+# This is where integrations, workflows, and other modules live
+_backend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backendapi')
+if _backend_dir not in sys.path:
+    sys.path.insert(0, _backend_dir)
+
 # Set UTF-8 encoding for Windows console to handle emoji characters
 if sys.platform == 'win32':
     import io
@@ -24,9 +30,7 @@ import time
 import random
 import uuid
 import logging
-#from backendapi.integrations.alpaca_fetch import fetch_bars_full
 from integrations.alpaca_fetch import fetch_bars_full
-#from backendapi.workflows.workflow_engine import WorkflowEngine
 from workflows.workflow_engine import WorkflowEngine
 from typing import List, Dict, Any
 from math import floor
@@ -37,7 +41,6 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import FuncFormatter
 import matplotlib.dates as mdates
 from io import BytesIO
-#from backendapi.integrations.telegram_notifier import get_notifier, load_telegram_settings, save_telegram_settings
 from integrations.telegram_notifier import get_notifier, load_telegram_settings, save_telegram_settings
 
 app = Flask(__name__)
